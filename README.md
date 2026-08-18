@@ -8,7 +8,7 @@
 
 > **"The complete readable examination paper must not exist anywhere before the authorized examination release time."**
 
-Everything in this project — every design decision, every protocol, every line of code — traces back to this single sentence. **Do not just protect the final paper; eliminate its pre-exam existence.**
+Everything in this project traces back to this single sentence: **Do not just protect the final paper; eliminate its pre-exam existence.**
 
 ### End-to-End Flow
 ```
@@ -19,65 +19,117 @@ Everything in this project — every design decision, every protocol, every line
 
 ## 🚨 The Problem
 
-Exam paper leaks happen because a fully readable paper exists in some form — a physical file, a leak from a printer, an insecure staging server, or a photo taken of a printout — hours or days before the exam starts. This vulnerable time window is where virtually every leak originates.
+Exam paper leaks happen because a fully readable paper exists in some form — a file, a physical printout, or a photo — hours or days before the exam begins. That window is where every leak originates.
 
-**Bharat AI eliminates this window entirely:**
-- The paper is assembled and encrypted centrally under multi-party human authorization.
+**Bharat AI removes that window entirely:**
+- The paper is assembled and encrypted centrally under human authorization.
 - The decryption key is locked on the server and only released at the exact authorized release time to authenticated centres.
-- The examination paper is only decrypted in memory at the edge examination centre moments before printing.
-- Every single action, request, authorization, and decryption is recorded in an immutable, tamper-evident hash-chain audit log.
+- The examination paper is only decrypted in memory at the edge centre moments before printing.
+- Every single action is recorded in an immutable, tamper-evident hash-chain audit log.
 - Every printed physical copy contains unique forensic watermarking (QR / micro-serial) mapping back to the exact centre, candidate room, and timestamp.
 
 ---
 
-## 🏛️ Target Architecture vs. Prototype Scope
+## 👥 Team Responsibilities & Work Allocation
 
-### Full Target Architecture (Production Vision)
+---
 
-1. **Tier 1 — Central AI Engine**: Encrypted question bank $\rightarrow$ AI-assisted selection & Bloom's taxonomy difficulty balancing (human-in-the-loop approval) $\rightarrow$ automated paper assembly $\rightarrow$ SHA-256 signing $\rightarrow$ AES-256-GCM encryption.
-2. **Tier 2 — Cloud Infrastructure**: High-availability cloud infrastructure with zero-trust networking and hardware-level isolation.
-3. **Tier 3 — Kubernetes Orchestration**: Containerized microservices (`auth`, `paper`, `crypto`, `time-lock`, `centre-mgmt`, `audit`, `key-release`), Calico CNI, zero-trust micro-segmentation, Prometheus/Grafana observability.
-4. **Tier 4 — Edge Examination Centre**: Mutual TLS (mTLS) with hardware root of trust (HSM/biometrics) $\rightarrow$ time-locked key release verification $\rightarrow$ in-memory decryption $\rightarrow$ automated verified quota printing with forensic watermarks.
+### 1. Nupur — Question Bank & AI Selection Engine
+**Focus:** Central AI Engine, Question Bank & Dynamic Assembly  
+**Tools:** Python, SQLite / MongoDB, `sentence-transformers` / LLM API
 
-### Prototype Scope (10-Day Hackathon Implementation)
+- **Question Schema & Seeding:** Design comprehensive schema (`topic`, `subtopic`, `difficulty`, `marks`, `bloom_taxonomy`, `tags`, `last_used_year`, `embedding_vector`) and seed realistic question sets across subjects.
+- **Paper Assembly Engine:** Develop `assemble_paper(subject, difficulty_distribution, total_marks)` to dynamically generate balanced exam sets.
+- **AI Deduplication & Validation:** Implement embedding vector similarity matching against previous exam papers to detect duplicates or near-duplicates (> 0.85 cosine similarity).
+- **Human-in-the-Loop Authorization:** Build human approval/rejection endpoints so AI assists selection while authorized officials give final approval.
+- **Difficulty Balancing & Analytics:** Bloom's taxonomy weighted balancing and question bank coverage gap analytics.
+- **Handoff:** Standardized paper JSON structure passed to crypto and backend services.
 
-| Architecture Tier | Production Vision | 10-Day Prototype Scope |
-| :--- | :--- | :--- |
-| **Cloud Infrastructure** | Multi-region OpenStack / Cloud | **Terraform**-provisioned cloud infrastructure (AWS/GCP Free Tier or local libvirt) |
-| **Orchestration** | Full multi-node K8s Cluster | **k3s / Docker Compose** (lightweight, real Kubernetes manifests & self-healing) |
-| **Centre Hardware Auth** | HSM / Biometric hardware | **Mutual TLS (mTLS) with self-signed CA** + Scoped JWT RBAC |
-| **Physical Separation** | Data Centre $\leftrightarrow$ Edge Centres | **Two physical devices** (Authority Host $\leftrightarrow$ Edge Laptop/Raspberry Pi) |
-| **Paper Delivery** | Secure Print Network | In-memory decryption $\rightarrow$ **ReportLab/FPDF watermarked PDF** |
+---
+
+### 2. Parth — Crypto Core & Zero-Trust Authentication
+**Focus:** Cryptographic Engine, PKI Infrastructure & Authorization  
+**Tools:** Python `cryptography` library, OpenSSL, `PyJWT`
+
+- **Symmetric Encryption & Signing:** Implement `sign_and_encrypt(paper)` and `decrypt_and_verify(package, key)` using SHA-256 (integrity/signature) and AES-256-GCM (authenticated encryption).
+- **Public Key Infrastructure & Mutual TLS (mTLS):** Build a self-signed Root CA, issue X.509 certificates to authority and edge centre nodes, and enforce bidirectional TLS encryption.
+- **Scoped JWT Role-Based Access Control:** Granular token validation enforcing least privilege for `centre-role`, `authority-role`, and `invigilator-role`.
+- **Adversarial Security Testing:** Test and defend against replay attacks, pre-release decryption attempts, forged JWTs, and tampered ciphertext packages.
+- **Handoff:** Importable crypto/auth module and verified certificate authority configurations.
+
+---
+
+### 3. Janaki — Backend Microservices & Infrastructure as Code (IaC)
+**Focus:** Microservice Architecture, Containerization & Cloud Infrastructure  
+**Tools:** FastAPI, Uvicorn, Docker Compose, k3s, Terraform
+
+- **FastAPI Microservices:** Design and scaffold modular backend services (`auth_service`, `paper_service`, `timelock_service`, `key_release_service`).
+- **Core Pipeline Wiring:** Integrate question engine, crypto core, and audit hooks into a seamless end-to-end API lifecycle.
+- **Container Orchestration (Docker & k3s):** Provide local multi-container `docker-compose.yml` and Kubernetes (`k3s`) manifests demonstrating pod self-healing and zero-trust networking.
+- **Terraform Infrastructure as Code (IaC):** Write Terraform scripts (`main.tf`, `variables.tf`) to provision cloud nodes/VMs, enabling demoable `terraform apply` and `terraform destroy`.
+- **Production Hardening:** Implement API rate limiting, retries, structured error handling, and health-check monitoring.
+- **Handoff:** Stable, documented REST and WebSocket API endpoints.
+
+---
+
+### 4. Vaibhav — Edge Centre Client & Physical Demonstration
+**Focus:** Edge Centre Deployment, In-Memory Decryption & Secure Printing  
+**Tools:** Python, ReportLab / FPDF, QRCode, Physical Laptop / Raspberry Pi
+
+- **Edge Client Lifecycle:** Walk full sequence: Authenticate (mTLS + JWT) $\rightarrow$ Poll release time $\rightarrow$ Request decryption key $\rightarrow$ In-memory decryption $\rightarrow$ Print buffer.
+- **Dual-Device Physical Setup:** Run the edge client on a separate physical device on the local network (laptop or Raspberry Pi) making genuine network calls to the authority server.
+- **Forensic Per-Copy Watermarking:** Generate dynamically watermarked PDFs where each copy contains a unique QR code and micro-serial tracking `Centre ID + Room + Candidate ID + Timestamp`.
+- **Zero-Footprint Print Execution:** Ensure decrypted plaintext never persists to the client disk and is wiped immediately after generating the print stream.
+- **Handoff:** Live edge client application, verified printing pipeline, and distinct physical print samples.
+
+---
+
+### 5. Chhavi — Immutable Audit Trail & Hash-Chain Engine
+**Focus:** Tamper-Evident Logging & Standalone Verification  
+**Tools:** Python, Hashlib, SQLite / MongoDB, WebSockets
+
+- **Cryptographic Hash-Chain Ledger:** Implement the hash-chain algorithm where each entry records $\text{Hash} = \text{SHA-256}(\text{Previous Hash} + \text{Event Data})$.
+- **Middleware Audit Hooks:** Instrument every backend microservice to record auth attempts, key queries, paper assembly, print requests, and unauthorized accesses.
+- **Standalone Verification CLI:** Build an independent verification command-line tool that anyone (including evaluators) can run to mathematically audit the entire event ledger.
+- **Live Tamper-Detection Demo:** Demonstrate live tampering resistance by altering a database row directly and showing how `verify_chain()` immediately flags the exact corrupted block.
+- **Handoff:** Standalone audit verification utility and real-time event streaming interface.
+
+---
+
+### 6. Vaibhav — Real-Time Dashboard, Integration & Documentation
+**Focus:** Live Monitoring Interface, Full-Pipeline Integration & SIH Deliverables  
+**Tools:** Streamlit / React + Tailwind, WebSockets, Prometheus / Grafana, Canva / PowerPoint
+
+- **Real-Time Web Dashboard:** Build the centralized monitoring UI displaying live exam countdown timers, edge node connectivity, key release status, and WebSocket audit event feeds.
+- **End-to-End System Integration:** Coordinate daily end-to-end pipeline execution runs across all modules to identify and resolve integration bottlenecks early.
+- **SIH Submission Deliverables:** Author the comprehensive SIH technical report, presentation pitch deck, and architecture diagrams.
+- **Demonstration Rehearsal & Backup:** Direct end-to-end dry runs and produce a high-fidelity backup video demonstration.
+- **Handoff:** Central dashboard interface, finalized report, presentation slides, and backup demonstration recording.
 
 ---
 
 ## 🌟 The Two Headline Differentiators
 
-### 1. Hash-Chained, Tamper-Evident Audit Log
-Every audit event stores:
+### 1. Hash-Chained, Tamper-Evident Audit Log (Led by Chhavi)
+Every single system event is cryptographically sealed into a sequential hash chain:
 $$\text{Current Hash} = \text{SHA-256}(\text{Previous Hash} + \text{Timestamp} + \text{Actor} + \text{Action} + \text{Payload Digest})$$
-- A standalone verification CLI (`python -m audit_service.verify`) recomputes the chain.
-- **Live Hackathon Demo:** Manually modify a row in the audit database; the verification tool flags the exact broken block and timestamp immediately.
+A standalone verification CLI recomputes the chain from genesis and instantly flags any manual alteration or deleted row.
 
-### 2. Forensic Per-Copy Watermarking & Leak Traceability
-- Every printed copy is injected with a cryptographically signed, steganographic / QR watermark encoding:
-  - Centre ID
-  - Room / Candidate ID
-  - Print Timestamp & Batch Sequence
-- If an unauthorized photo or paper leak occurs post-printing, the physical leak is forensically traceable to the exact centre, room, and minute.
+### 2. Forensic Per-Copy Watermarking & Leak Traceability (Led by Vaibhav)
+Every printed physical exam paper is dynamically injected with unique, verifiable metadata (Centre ID, Room No., Candidate ID, Timestamp) via embedded QR codes and micro-serials, making any post-print paper photo forensically traceable to its exact origin.
 
 ---
 
-## 👥 Team & Ownership
+## 🏛️ Target Architecture vs. Prototype Scope
 
-| Person | Team Member | Vertical Slice Ownership | Key Deliverables |
-| :--- | :--- | :--- | :--- |
-| **Person 1** | **Nupur** | **Question Bank + AI Selection Engine** (Tier 1 Front-Half) | Question schema, embedding duplicate detection, difficulty balancing, human-in-the-loop approval endpoint |
-| **Person 2** | **Parth** | **Crypto Core + Zero-Trust Auth** | AES-256-GCM + SHA-256 signing, OpenSSL PKI / mTLS, Scoped JWT auth, adversarial security testing |
-| **Person 3** | **Janaki** | **Backend Services + IaC** (Tiers 2 & 3) | FastAPI microservices, Docker Compose, k3s manifests, Terraform IaC, rate-limiting & resilience |
-| **Person 4** | **Vaibhav** | **Edge Centre Client + Physical Demo** | Edge polling client, in-memory decryption, per-copy dynamic PDF watermarking, dual-device setup |
-| **Person 5** | **Chhavi** | **Audit Trail + Hash-Chain** | Hash-chain engine, API audit middleware hooks, standalone audit verification CLI, tamper demo |
-| **Person 6** | **Vaibhav** | **Dashboard + Integration + Documentation** | Live WebSocket monitoring dashboard, daily end-to-end integration runs, SIH presentation / PPT & report |
+| Architecture Tier | Production Vision | Hackathon Prototype Scope |
+| :--- | :--- | :--- |
+| **Central AI Engine** | AI-assisted Bloom's selection + Human Approval | Question bank + embedding deduplication + human approval endpoint |
+| **Cloud Infrastructure** | Multi-region Private Cloud | **Terraform**-provisioned cloud infrastructure (`terraform apply` / `destroy`) |
+| **Orchestration** | Full Kubernetes Cluster | **k3s / Docker Compose** (lightweight real K8s manifests & self-healing) |
+| **Centre Hardware Auth** | Hardware Security Module (HSM) / Biometrics | **Mutual TLS (mTLS) with self-signed CA** + Scoped JWT RBAC |
+| **Physical Separation** | Central Data Centre $\leftrightarrow$ Edge Centres | **Two physical devices** on local network (Authority Host $\leftrightarrow$ Edge Client) |
+| **Secure Delivery** | Encrypted Print Stream | In-memory decryption $\rightarrow$ **ReportLab/FPDF dynamic watermarked PDF** |
 
 ---
 
@@ -93,44 +145,19 @@ $$\text{Current Hash} = \text{SHA-256}(\text{Previous Hash} + \text{Timestamp} +
 
 ---
 
-## 📅 10-Day Execution Timeline
-
-- **Days 1–3:** Core module construction against API stubs; first end-to-end loop running by Day 3.
-- **Days 4–6:** Integration across real network (2 physical devices), implement hash-chain & watermarking.
-- **Days 6–7:** k3s orchestration & Terraform IaC provisioning scripts.
-- **Days 7–8:** Adversarial testing & tamper simulation (breaking our own system and documenting defense).
-- **Day 9:** SIH final report, presentation slides, 2 full rehearsal dry-runs.
-- **Day 10:** Buffer day — backup video recording & live demo rehearsal (no new code).
-
----
-
 ## 🎬 90-Second Demo Script
 
-1. **Encrypted State:** Show the encrypted package on the edge centre device. Attempt to read or decrypt it before scheduled time $\rightarrow$ strictly rejected.
-2. **Time Trigger:** Advance the time-lock window to the authorized release minute.
-3. **Key Release & Auth:** Edge centre authenticates via mTLS + JWT. The Central Authority verifies credentials and releases the decryption key.
-4. **Edge In-Memory Decrypt:** The client decrypts the paper in memory (no plaintext written to disk).
-5. **Traceable Printing:** PDF generates with dynamic per-copy QR/watermarking. Show two distinct generated copies.
-6. **Immutable Audit:** Open the real-time dashboard showing every event logged in the cryptographic hash chain. Run the verification CLI to prove zero tampering.
+1. **Encrypted Package:** Show the encrypted package on the edge centre device — prove it is completely unreadable.
+2. **Time-Lock Window:** Advance time to the scheduled exam release minute.
+3. **Authentication & Key Release:** Edge centre authenticates via mTLS + JWT. Authority verifies credentials and releases the decryption key.
+4. **In-Memory Decryption:** Edge client decrypts the paper in memory without writing plaintext to disk.
+5. **Traceable Printing:** PDF generated with dynamic per-copy forensic watermarking. Show two distinct generated copies.
+6. **Immutable Audit & Tamper Test:** Switch to the live dashboard showing all events logged in real time. Run the verification CLI, then simulate a database tampering attack to prove immediate detection.
 
 ---
 
-## 📂 Repository Structure
+## 📌 Technical Accuracy Notes
 
-```
-SIH2026/
-├── README.md                          # Project Master Overview
-├── TEAM_ROADMAP.md                    # Detailed 10-Day Breakdown & Checklists
-├── docker-compose.yml                 # Local multi-service orchestration
-├── services/
-│   ├── question_engine/               # Person 1 (Nupur)
-│   ├── crypto_core/                   # Person 2 (Parth)
-│   ├── backend/                       # Person 3 (Janaki)
-│   ├── edge_client/                   # Person 4 (Vaibhav)
-│   ├── audit_service/                 # Person 5 (Chhavi)
-│   └── dashboard/                     # Person 6 (Vaibhav)
-├── infra/
-│   ├── terraform/                     # Terraform IaC configurations
-│   └── k3s/                           # Kubernetes deployment manifests
-└── docs/                              # SIH Report, Architecture Diagrams, Presentation
-```
+- **AES-256-GCM** is the encryption mechanism; the *time condition* is enforced via server-controlled key release policy (never describe AES itself as "time-lock encryption").
+- **SHA-256** provides cryptographic integrity and signing, not encryption.
+- **Authentication, encryption, authorization, integrity, and auditing** are five distinct architectural concerns.
