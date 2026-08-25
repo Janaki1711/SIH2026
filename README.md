@@ -12,7 +12,7 @@
 | **Member 1** | **Chhavi** | AI Speech Recognition (STT) & DSP Lead | Audio Ingestion, Silero VAD & IndicConformer STT | PyTorch, Google Oboe, ONNX Runtime Mobile, C++20, NDK | `libaudio_stt_core.so`, `indic_stt_int8.onnx`, `silero_vad.onnx` |
 | **Member 2** | **Vaibhav Senior** | Neural Speech Synthesis (TTS) & Audio Lead | Edge Indic TTS, Voice Tone Cloner & Audio Playback | FastPitch, HiFi-GAN, Android `STREAM_ALARM`, Oboe, C++ | `libaudio_tts_core.so`, `indic_fastpitch_int8.onnx`, `AlarmAudioRouter.kt` |
 | **Member 3** | **Parth Karpe** | Semantic Compression & NLP Lead | Tokenization, Indic Translation Bridge & Protobuf Framer | Protocol Buffers (Lite), `IndicTrans2`, AES-128-GCM, CRC16 | `packet_schema.proto`, `libsemantic_protocol.so`, `indic_trans_int8.onnx` |
-| **Member 4** | **M Janaki** | P2P Wireless Transport & Networking Lead | Wi-Fi Direct, Bluetooth RFCOMM & Mesh Networking | Android `WifiP2pManager`, Bluetooth Sockets, Java NIO | `P2PTransportManager.kt`, `WifiP2pTransport.kt`, `BluetoothTransport.kt` |
+| **Member 4** | **M Janaki** | P2P Wireless Transport & WFB-ng Protocol Lead | WFB-ng Resilient UDP + FEC, Wi-Fi Direct, Bluetooth & Mesh | Android `WifiP2pManager`, Libsodium ChaCha20, Reed-Solomon FEC, Java NIO | `WfbngTransportManager.kt`, `ReedSolomonFEC.kt`, `WifiP2pTransport.kt` |
 | **Member 5** | **Nupur** | Native Android Core & Database Lead | PTT State Machine, Foreground Daemon & JNI Bridge | Kotlin, JNI, CMake, Room (SQLite), Android Foreground Service | `native_bridge.cpp`, `RadioDaemonService.kt`, `MessageDatabase.kt` |
 | **Member 6** | **Vaibhav Junior** | Tactical UI/UX & Benchmark/Pitch Lead | Jetpack Compose UI, Telemetry Overlay & QA Harness | Jetpack Compose, Material 3, Android Studio Profiler | `MainWalkieTalkieScreen.kt`, `LiveTelemetryOverlay.kt`, Benchmark Report |
 
@@ -58,8 +58,10 @@ Standard voice streaming (Opus, PCM, AMR) requires **16 to 128 kbps**, collapsin
  [Step 7: Local Database Insertion (Room / SQLite)] (Member 5: Nupur)
     │   • Logs message in local SQLite database with status "TRANSMITTING".
     ▼
- [Step 8: P2P Socket Transmitter] (Member 4: M Janaki)
-    │   • Transmits 38 bytes over Wi-Fi Direct (or Bluetooth RFCOMM fallback).
+ [Step 8: WFB-ng FEC Encoder & Radio Transmitter] (Member 4: M Janaki)
+    │   • Generates Reed-Solomon FEC Parity Blocks (survives 40% RF packet loss).
+    │   • Encrypts via Libsodium ChaCha20-Poly1305.
+    │   • Transmits over Connectionless UDP Wi-Fi Direct / BT RFCOMM.
     │
 ═════════════════════════════════════ WIRELESS RF HOP (<20 ms) ═════════════════════════════════════
     │
@@ -68,8 +70,9 @@ Standard voice streaming (Opus, PCM, AMR) requires **16 to 128 kbps**, collapsin
 ====================================================================================================
     │
     ▼
- [Step 9: P2P Socket Receiver Daemon] (Member 4: M Janaki)
-    │   • Receives 38-byte binary packet; verifies CRC16 checksum.
+ [Step 9: WFB-ng Receiver Daemon & FEC Decoder] (Member 4: M Janaki)
+    │   • Ingests UDP datagrams; decrypts with Libsodium.
+    │   • Recovers corrupted/dropped packets via Reed-Solomon FEC without retransmission delay.
     ▼
  [Step 10: Protobuf Unpacker & Translation Engine (IndicTrans2 INT8)] (Member 3: Parth Karpe)
     │   • Extracts text, sender callsign, and 16-byte prosody vector.
@@ -133,10 +136,10 @@ Because this system operates in **100% offline, zero-infrastructure tactical and
                           (CPU < 2.8%, Zero Battery Drain)                    (Start Audio Capture)
 
  2. TRANSMISSION STATE (PTT Pressed):
-    [Voice Spoken] -> [STT Transcription] -> [Tokenize (38B)] -> [SQLite DB Save] -> [Wi-Fi/BT TX]
+    [Voice Spoken] -> [STT Transcription] -> [Tokenize (38B)] -> [SQLite DB Save] -> [WFB-ng FEC TX]
 
  3. RECEPTION STATE (Background Daemon):
-    [RF Packet Rx] -> [CRC16 Check] -> [NMT Translate] -> [SQLite DB Save] -> [TTS Synthesize] -> [Speaker]
+    [WFB-ng UDP Rx] -> [FEC Reconstruction] -> [NMT Translate] -> [SQLite DB Save] -> [TTS Synthesize] -> [Speaker]
 
  4. EMERGENCY OVERRIDE STATE (SOS Priority):
     [Priority == 2] -> [Request AudioManager.STREAM_ALARM] -> [Force Max Volume] -> [Play Non-Duckable]
@@ -144,40 +147,35 @@ Because this system operates in **100% offline, zero-infrastructure tactical and
 
 ---
 
-## 👥 Exhaustive 6-Member Work Distribution & Toolchains
+## 👥 6-Member Balanced Work Breakdown
 
-```
-                                  6-MEMBER COLLABORATION TOPOLOGY
-                                  -------------------------------
-  +-----------------------------------------------------------------------------------------+
-  | [MEMBER 1: Chhavi] Audio Ingestion, Silero VAD Gatekeeper & IndicConformer STT Engine   |
-  +--------------------------------------------+--------------------------------------------+
-                                               | (Decoded Transcript + Confidence + Lang ID)
-                                               v
-  +-----------------------------------------------------------------------------------------+
-  | [MEMBER 3: Parth Karpe] Semantic Compression, Translation Bridge & Protobuf Framer       |
-  +--------------------------------------------+--------------------------------------------+
-                                               | (Framed 40-Byte Binary Payload + CRC16)
-                                               v
-  +-----------------------------------------------------------------------------------------+
-  | [MEMBER 4: M Janaki] P2P Wireless Transport Layer (Wi-Fi Direct, Bluetooth & BLE Mesh)   |
-  +--------------------------------------------+--------------------------------------------+
-                                               | (Wireless Hop across Phones)
-                                               v
-  +-----------------------------------------------------------------------------------------+
-  | [MEMBER 2: Vaibhav Senior] On-Device Indic TTS, Voice Tone Cloner & STREAM_ALARM Audio  |
-  +-----------------------------------------------------------------------------------------+
-                                               ^
-                                               | (JNI Data Binding & State Events)
-  +--------------------------------------------+--------------------------------------------+
-  | [MEMBER 5: Nupur] Native Android Core, PTT State Machine, Foreground Daemon & JNI Glue  |
-  +-----------------------------------------------------------------------------------------+
-                                               ^
-                                               | (Reactive StateFlow & Telemetry Pipes)
-  +--------------------------------------------+--------------------------------------------+
-  | [MEMBER 6: Vaibhav Junior] Tactical UI/UX, Telemetry Dashboard & Live Demo QA Harness   |
-  +-----------------------------------------------------------------------------------------+
-```
+---
+
+### 👤 Member 4 (M Janaki): Updated WFB-ng Responsibilities & Deliverables
+
+* **Domain:** Wireless Telecommunications, RF Protocol Engineering & Resilient P2P Networking
+* **Mission:** Build a 100% offline, battle-tested radio transport stack adopting the WFB-ng (Wi-Fi Broadcast Next Generation) protocol paradigm with Forward Error Correction (FEC), connectionless UDP datagrams, Libsodium authenticated encryption, and autonomous Bluetooth fallback.
+
+#### Exact Tools & Compilers for Janaki:
+* **Protocol & Wireless:** WFB-ng Architecture, Android Wi-Fi P2P (`WifiP2pManager`), Android Wi-Fi Aware (NAN), Bluetooth Classic RFCOMM (`BluetoothServerSocket`), BLE L2CAP.
+* **FEC & Cryptography:** Reed-Solomon / Cauchy Block Forward Error Correction (FEC), Libsodium (`crypto_aead_chacha20poly1305`), Java NIO Non-Blocking Datagram Channels (`DatagramChannel`).
+* **Diagnostics & Toolchains:** Wireshark, Android SDK (API 30+), Kotlin Coroutines & Flow, Linux `libpcap` (for C++ Edge Engine).
+
+#### Exact Code Files Janaki Will Write:
+1. **`app/src/main/java/org/isro/itantra/network/ReedSolomonFEC.kt`:**
+   * Block Forward Error Correction: Generates $M$ parity blocks for $K$ data packets ($8$ data $+ 4$ parity).
+   * Recovers dropped or corrupted speech packets with **zero retransmission delay**, surviving up to **40% RF packet loss**.
+2. **`app/src/main/java/org/isro/itantra/network/WifiP2pTransport.kt`:**
+   * Autonomous peer discovery and Group Owner (GO) negotiation.
+   * High-throughput, non-blocking UDP Datagram socket server on port `8988` (eliminates TCP head-of-line blocking).
+3. **`app/src/main/java/org/isro/itantra/network/BluetoothTransport.kt`:**
+   * Parallel Bluetooth Classic RFCOMM server and BLE L2CAP listener for short-range/low-power failover.
+4. **`app/src/main/java/org/isro/itantra/network/WfbngTransportManager.kt`:**
+   * Master Transceiver Controller: Encrypts outgoing payloads with Libsodium ChaCha20-Poly1305, attaches FEC parity frames, and manages autonomous link failover to Bluetooth in $<50	ext{ ms}$.
+5. **`app/src/main/java/org/isro/itantra/network/MeshRelayRouter.kt`:**
+   * Multi-hop store-and-forward relay with a 64-entry LRU ring of packet hashes to prevent routing loops.
+6. **`edge_engine/wfbng_raw_injector.cpp` (For C++ Linux/SDR Edge Deliverable):**
+   * Standalone C++ module implementing raw IEEE 802.11 monitor mode packet injection via `libpcap` for external Raspberry Pi / Linux tactical nodes with RTL8812AU Wi-Fi adapters.
 
 ---
 
@@ -206,11 +204,6 @@ Because this system operates in **100% offline, zero-infrastructure tactical and
    * `app/src/main/assets/models/silero_vad.onnx` (~1.8 MB)
    * `app/src/main/assets/models/indic_stt_int8.onnx` (~35.0 MB)
 
-#### Interface Contract & Handoff:
-* **Input:** Raw microphone stream.
-* **Output:** `struct STTResult { std::string transcript; std::string lang_code; float confidence; uint32_t duration_ms; }`
-* **Handoff:** Passes `STTResult` directly to **Member 3 (Parth Karpe)** for arithmetic tokenization.
-
 ---
 
 ### 👤 Member 2 (Vaibhav Senior): On-Device Indic TTS, Voice Tone Cloner & Audio Playback Lead
@@ -237,10 +230,6 @@ Because this system operates in **100% offline, zero-infrastructure tactical and
    * `app/src/main/assets/models/indic_fastpitch_int8.onnx` (~28.0 MB)
    * `app/src/main/assets/models/hifigan_vocoder_int8.onnx` (~14.0 MB)
 
-#### Interface Contract & Handoff:
-* **Input:** `struct PacketPayload { std::string text; std::string target_lang; uint8_t prosody[16]; uint8_t priority; }`
-* **Output:** Audible speech output + playback completion event dispatched to **Member 5 (Nupur)**.
-
 ---
 
 ### 👤 Member 3 (Parth Karpe): Semantic Compression, Translation Bridge & Serialization Lead
@@ -249,7 +238,7 @@ Because this system operates in **100% offline, zero-infrastructure tactical and
 
 #### Exact Tools, Libraries & Compilers:
 * **Serialization & NLP:** Google Protocol Buffers (Protobuf Lite 3.25+), Python `sentencepiece`, `IndicTrans2-Distilled-INT8`.
-* **Cryptography & Math:** Libsodium / Crypto++ (AES-128-GCM), CRC16-CCITT implementation, Reed-Solomon (255, 223) FEC.
+* **Cryptography & Math:** Libsodium / Crypto++ (AES-128-GCM), CRC16-CCITT implementation.
 * **Build Systems:** CMake 3.22+, Clang C++20, Protoc Compiler.
 
 #### Detailed Tasks & File Deliverables:
@@ -260,41 +249,9 @@ Because this system operates in **100% offline, zero-infrastructure tactical and
 3. **`app/src/main/cpp/ml/IndicTranslationEngine.cpp`:**
    * Deploy distilled `IndicTrans2-INT8` (~24 MB) for offline dialect-to-dialect translation (e.g., Tamil $\leftrightarrow$ Hindi in $<80	ext{ ms}$).
 4. **`app/src/main/cpp/protocol/PacketFramer.cpp` & `CRC16.cpp`:**
-   * Assemble and validate binary frames; compute CRC16 and apply Reed-Solomon FEC for high-BER RF links.
+   * Assemble and validate binary frames; compute CRC16 for transmission integrity.
 5. **Model Asset Deliverables:**
    * `app/src/main/assets/models/indic_trans_int8.onnx` (~24.0 MB)
-
-#### Interface Contract & Handoff:
-* **TX Path:** Input: `STTResult` $ightarrow$ Output: `std::vector<uint8_t> binary_packet` (35–45 bytes).
-* **RX Path:** Input: `raw_bytes` $ightarrow$ Output: `DecodedVoiceMessage` (Translated text + prosody vector).
-* **Handoff:** Passes binary packet to **Member 4 (M Janaki)** for transmission, and passes decoded message to **Member 2 (Vaibhav Senior)** for synthesis.
-
----
-
-### 👤 Member 4 (M Janaki): P2P Wireless Transport & Mesh Networking Lead
-* **Domain:** Wireless Telecommunications, RF Protocol Engineering & Networking
-* **Mission:** Establish 100% offline, resilient peer-to-peer radio links using Wi-Fi Direct, Bluetooth RFCOMM, and store-and-forward mesh relay.
-
-#### Exact Tools, Libraries & Compilers:
-* **Wireless Frameworks:** Android Wi-Fi P2P (`WifiP2pManager`), Bluetooth Classic (`BluetoothServerSocket`, `BluetoothSocket`), BLE L2CAP, Java NIO non-blocking socket channels.
-* **Network Diagnostics:** Wireshark, Android Network Service Discovery (NSD / mDNS), RF Signal Profiler.
-* **Build Systems:** Android SDK (API 30+), Kotlin Coroutines & Flow.
-
-#### Detailed Tasks & File Deliverables:
-1. **`app/src/main/java/org/isro/itantra/network/WifiP2pTransport.kt`:**
-   * Autonomous peer discovery, service advertisement (DNS-SD), and Group Owner (GO) negotiation.
-   * Persistent non-blocking TCP socket server on port `8988`.
-2. **`app/src/main/java/org/isro/itantra/network/BluetoothTransport.kt`:**
-   * Parallel Bluetooth Classic RFCOMM server and BLE L2CAP socket listener.
-3. **`app/src/main/java/org/isro/itantra/network/P2PTransportManager.kt`:**
-   * **Dual-Mode Autonomous Failover:** If Wi-Fi Direct RSSI drops below $-85	ext{ dBm}$ or packet loss exceeds 20%, seamlessly switch packet dispatch to Bluetooth in $<50	ext{ ms}$.
-4. **`app/src/main/java/org/isro/itantra/network/MeshRelayRouter.kt` & `SelectiveAckQueue.kt`:**
-   * Multi-hop epidemic flooding relay with 64-entry LRU packet-ID deduplication and selective ACK retransmissions.
-
-#### Interface Contract & Handoff:
-* **Send API:** `fun sendPacket(bytes: ByteArray, targetCallsign: String?, priority: PriorityLevel)`
-* **Receive Flow:** `val onPacketReceivedFlow: SharedFlow<ByteArray>`
-* **Handoff:** Transmits byte stream from **Member 3 (Parth Karpe)**; bound to service lifecycle by **Member 5 (Nupur)**.
 
 ---
 
@@ -318,10 +275,6 @@ Because this system operates in **100% offline, zero-infrastructure tactical and
 4. **`app/src/main/java/org/isro/itantra/data/local/MessageDatabase.kt` & `MessageDao.kt`:**
    * Room Database implementation for `MessageAuditLog`, `MeshPeerRegistry`, and `EmergencyCodebook`.
 
-#### Interface Contract & Handoff:
-* **Exposes:** `val pttStateFlow: StateFlow<PTTState>` and `val messageLogFlow: Flow<List<MessageEntity>>`.
-* **Handoff:** Supplies reactive state streams to **Member 6 (Vaibhav Junior)** for UI rendering.
-
 ---
 
 ### 👤 Member 6 (Vaibhav Junior): Tactical UI/UX, Live Telemetry Dashboard & QA/Pitch Lead
@@ -339,14 +292,11 @@ Because this system operates in **100% offline, zero-infrastructure tactical and
 2. **`app/src/main/java/org/isro/itantra/ui/components/TacticalPTTButton.kt` & `AudioWaveformVisualizer.kt`:**
    * Central haptic PTT button with active state animations and dynamic audio FFT waveform visualizer.
 3. **`app/src/main/java/org/isro/itantra/ui/components/LiveTelemetryOverlay.kt`:**
-   * Real-time hardware telemetry display: `Payload Size (38 Bytes)`, `Airtime Latency (18 ms)`, `Data Saved (99.8%)`, `Carrier (Wi-Fi Direct / BT)`.
+   * Real-time hardware telemetry display: `Payload Size (38 Bytes)`, `Airtime Latency (18 ms)`, `Data Saved (99.8%)`, `WFB-ng FEC Parity (4 Blocks)`, `Carrier (Wi-Fi Direct / BT)`.
 4. **`app/src/main/java/org/isro/itantra/ui/components/DemoInjectionDrawer.kt`:**
    * Test harness with one-touch triggers: `[Simulate Airplane Mode]`, `[Inject 40% Packet Loss]`, `[Trigger SOS Max Volume Alarm]`, `[Toggle Hindi -> Tamil]`.
 5. **`docs/benchmarks/Energy_CPU_Benchmark_Report.pdf`:**
    * Profile and document $<3\%$ idle CPU load to secure full marks on the 20% evaluation rubric.
-
-#### Interface Contract & Handoff:
-* **Handoff:** Owns final APK packaging, multi-device field testing, and live presentation defense.
 
 ---
 
@@ -363,7 +313,7 @@ Because this system operates in **100% offline, zero-infrastructure tactical and
 | **On-Device TTS** | FastPitch + HiFi-GAN Vocoder (INT8)| Natural neural speech synthesis in <150ms on mobile CPU. |
 | **Offline Translation (NMT)**| IndicTrans2-Distilled (INT8) | On-device dialect translation without cloud APIs (<25 MB). |
 | **Inference Engine** | ONNX Runtime Mobile v1.17+ | Optimized for ARM XNNPACK and NNAPI acceleration. |
-| **Wireless Transport** | Wi-Fi Direct (`WifiP2pManager`) + BT | Autonomous peer discovery, group owner election, 50m–100m range. |
+| **Wireless Transport** | WFB-ng UDP + Reed-Solomon FEC | Connectionless UDP datagrams, Libsodium encryption, 40% loss immunity. |
 | **Serialization** | Protocol Buffers (Protobuf Lite) | Compact structured binary schema with CRC16 error detection. |
 | **Local Audit Database** | SQLite via Room Library | Offline chronological indexing of all received/sent voice packets. |
 
@@ -408,7 +358,7 @@ message VoicePacket {
  ├── M1 (Chhavi): Export Silero VAD & IndicConformer to ONNX; test desktop inference.
  ├── M2 (Vaibhav Senior): Export Indic FastPitch + HiFi-GAN to ONNX; verify speech synthesis.
  ├── M3 (Parth Karpe): Define `packet_schema.proto`; generate C++ and Kotlin bindings.
- ├── M4 (M Janaki): Build standalone Android Wi-Fi Direct discovery sample app.
+ ├── M4 (M Janaki): Build standalone Android Wi-Fi Direct discovery sample app with UDP sockets.
  ├── M5 (Nupur): Scaffold Android Studio monorepo with CMake NDK bridge and JNI stubs.
  └── M6 (Vaibhav Junior): Design high-contrast Figma UI assets and build Jetpack Compose theme.
 
@@ -416,13 +366,13 @@ message VoicePacket {
  ├── M1 (Chhavi): Quantize STT model to INT8 (<38MB); integrate Oboe audio capture.
  ├── M2 (Vaibhav Senior): Quantize TTS model to INT8 (<45MB); implement `STREAM_ALARM` audio track.
  ├── M3 (Parth Karpe): Build IndicTrans2 translation bridge and arithmetic tokenizer.
- ├── M4 (M Janaki): Complete non-blocking async socket server; add Bluetooth fallback.
+ ├── M4 (M Janaki): Implement Reed-Solomon FEC encoder/decoder + Libsodium ChaCha20 encryption.
  ├── M5 (Nupur): Build PTT state machine and foreground service lifecycle handlers.
  └── M6 (Vaibhav Junior): Implement real-time waveform visualizer and P2P peer radar screen.
 
  Day 6 - 7: Native Integration & JNI Fusion
  ├── Merge M1 (STT) + M2 (TTS) + M3 (Protocol) into native shared library (`.so`).
- ├── Connect M4 (P2P Transport) to M5 (Foreground Service).
+ ├── Connect M4 (WFB-ng Transport) to M5 (Foreground Service).
  ├── Connect M5 (JNI Engine) to M6 (Compose UI StateFlows).
  └── First full-loop on single phone: Speak -> VAD -> STT -> Packet -> TTS -> Speaker.
 
@@ -430,6 +380,7 @@ message VoicePacket {
  ├── Two-device P2P field testing across physical distance (10m, 30m, 60m).
  ├── Test cross-lingual translation: Hindi speech -> Tamil synthesis.
  ├── Test Emergency Priority: Verify DND override at 100% volume.
+ ├── Inject 40% packet loss to demonstrate WFB-ng Reed-Solomon FEC recovery live!
  └── Profile with Android Battery Historian to confirm <3% idle CPU load.
 
  Day 10: Freeze, Polish & Live Demo Setup
@@ -443,6 +394,6 @@ message VoicePacket {
 ## 🎤 3-Minute Live Hackathon Demo Script
 
 1. **Act 1: Airplane Mode Setup (20s):** Place both phones in complete Airplane Mode (zero internet, zero SIM, zero cloud).
-2. **Act 2: Instant Voice Relay (40s):** Speak into Phone A in Hindi (*"सेक्टर 4 में तुरंत सहायता भेजो!"*). Phone B across the room receives the 38-byte packet in <300ms and speaks aloud in natural voice.
+2. **Act 2: Instant Voice Relay & WFB-ng FEC Proof (40s):** Speak into Phone A in Hindi (*"सेक्टर 4 में तुरंत सहायता भेजो!"*). Phone B across the room receives the 38-byte packet in <300ms, recovers through injected radio noise via Reed-Solomon FEC, and speaks aloud in natural voice.
 3. **Act 3: Emergency Mute Override (40s):** Put Phone B on Silent/DND. Send an SOS Alert → Phone B overrides mute and sounds the alert at 100% volume via `STREAM_ALARM`.
 4. **Act 4: 20% Evaluation Metric Proof (30s):** Point to the real-time CPU monitor showing <2.8% CPU load during idle listening, proving all-day field battery life.
