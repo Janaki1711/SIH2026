@@ -1,163 +1,229 @@
-# Bharat AI — Zero-Leak Examination Management System
+# iTantra — Indian Multilingual Neural Transceiver for Low-Bitrate Links
+### Smart India Hackathon (SIH 2026) | Problem Statement: SIH26173 | Organization: ISRO
 
-> **Cloud-native, AI-powered, zero-trust examination distribution architecture for high-stakes national and state examinations.**
+> **Offline, Edge-Deployable, Multilingual Semantic Walkie-Talkie for Tactical, Disaster, and Ultra-Low-Bitrate Space/Radio Communications.**
 
 ---
 
-## 🎯 Core Principle
+## 🎯 Executive Summary & Core Principle
 
-> **"The complete readable examination paper must not exist anywhere before the authorized examination release time."**
+> **"Do not stream heavy raw audio over fragile, degraded wireless links — compress speech by 2,000× into semantic tokens on-device, transmit 40-byte micro-packets across physical distance, and synthesize natural speech locally."**
 
-Everything in this project traces back to this single sentence: **Do not just protect the final paper; eliminate its pre-exam existence.**
+Standard voice streaming (Opus, PCM, AMR) requires **16 to 128 kbps**, collapsing completely under RF interference, satellite link bottlenecks, and disaster-induced infrastructure blackouts. **iTantra** implements **Semantic Voice Transmission (Voice → Text → RF → Voice)** directly on edge hardware, enabling **100% intelligible two-way communication at <50 bps** with zero cellular network or internet infrastructure.
 
-### End-to-End Flow
 ```
-[ Generate ] ➔ [ Encrypt ] ➔ [ Time-lock ] ➔ [ Authorize ] ➔ [ Decrypt ] ➔ [ Print ] ➔ [ Audit ]
+[Phone A: Transmitter]                                           [Phone B: Receiver]
+======================                                           ====================
++------------------------------------+                           +------------------------------------+
+| 1. Google Oboe Audio Ingestion     |                           | 8. Speaker (STREAM_ALARM Override) |
+|    (16kHz 16-bit PCM Mono Chunks)  |                           |    (Non-duckable 100% Volume Gain) |
++-----------------+------------------+                           +-----------------+------------------+
+                  |                                                                ^
+                  v                                                                | (Raw Audio Waveform)
++------------------------------------+                           +-----------------+------------------+
+| 2. Silero VAD Gatekeeper (<1ms)    |                           | 7. On-Device Indic TTS             |
+|    (Keeps idle CPU below 3%)       |                           |    (FastPitch + HiFi-GAN INT8 ONNX)|
++-----------------+------------------+                           +-----------------+------------------+
+                  | (Voice Confirmed)                                              ^
+                  v                                                                | (Text + Prosody Vector)
++------------------------------------+                           +-----------------+------------------+
+| 3. On-Device Indic STT             |                           | 6. Packet Unpacker & Router        |
+|    (IndicConformer INT8, ~35MB)    |                           |    (Protobuf Deserializer + CRC16) |
++-----------------+------------------+                           +-----------------+------------------+
+                  | (Raw Transcript)                                               ^
+                  v                                                                |
++------------------------------------+                           +-----------------+------------------+
+| 4. Semantic Compression & NMT      |                           | 5. P2P Socket Receiver Daemon      |
+|    (16-Byte Vector + IndicTrans2)  |                           |    (Wi-Fi Direct / BT RFCOMM)      |
++-----------------+------------------+                           +-----------------+------------------+
+                  |                                                                ^
+                  |=========== [40-Byte Binary Packet via RF] =====================|
 ```
 
 ---
 
-## 🚨 The Problem
+## 🚨 Problem Statement & The Need
 
-Exam paper leaks happen because a fully readable paper exists in some form — a file, a physical printout, or a photo — hours or days before the exam begins. That window is where every leak originates.
-
-**Bharat AI removes that window entirely:**
-- The paper is assembled and encrypted centrally under human authorization.
-- The decryption key is locked on the server and only released at the exact authorized release time to authenticated centres.
-- The examination paper is only decrypted in memory at the edge centre moments before printing.
-- Every single action is recorded in an immutable, tamper-evident hash-chain audit log.
-- Every printed physical copy contains unique forensic watermarking (QR / micro-serial) mapping back to the exact centre, candidate room, and timestamp.
+In defense field operations, satellite communications (SATCOM), high-frequency (HF) skywave radio, and disaster relief zones (floods, earthquakes, landslides):
+1. **Zero Infrastructure:** Cellular towers and internet backbones fail or do not exist.
+2. **Audio Packet Drop:** Traditional audio codecs stutter and fail when packet loss exceeds 25%.
+3. **Severe Bandwidth Limits:** Satellite channels (e.g., ISRO NavIC Short Messaging) offer sub-frame capacities of only 12–16 bytes per burst.
+4. **Linguistic Barriers:** Multi-state first responders and coastal communities speak distinct regional Indian languages.
+5. **Battery Constraints:** Continuous listening on edge devices drains phone batteries within 2–3 hours.
 
 ---
 
-## 👥 Team Responsibilities & Work Allocation
+## 💡 Key Technical Innovations
+
+1. **2,000× Data Reduction:** Compresses 5 seconds of audio (160,000 bytes) into a single **40-byte** binary payload.
+2. **Zero-Bitrate Voice & Emotion Cloning:** Attaches a 16-byte prosody/speaker vector so the receiver synthesizes speech in the **sender's original voice, pitch, and emotional urgency**.
+3. **<3% Idle CPU Consumption (VAD Gating):** Lightweight Silero VAD keeps heavy neural networks dormant during silence, solving the critical battery metric.
+4. **Offline Indic-to-Indic Translation Bridge:** Instant on-device translation across 10+ Indian dialects (e.g., Tamil speech synthesized as Hindi audio).
+5. **Hardware Priority Alerting (`STREAM_ALARM`):** Life-safety SOS alerts bypass Android Do-Not-Disturb and Silent modes at 100% volume.
+6. **Dual-Tier Physical Radio Support:** Seamlessly transmits over Wi-Fi Direct, Bluetooth RFCOMM, BLE Mesh, and NavIC/LoRa framing.
 
 ---
 
-### 1. Nupur — Question Bank & AI Selection Engine
-**Focus:** Central AI Engine, Question Bank & Dynamic Assembly  
-**Tools:** Python, SQLite / MongoDB, `sentence-transformers` / LLM API
+## 🛠️ Complete Technology Stack
 
-- **Question Schema & Seeding:** Design comprehensive schema (`topic`, `subtopic`, `difficulty`, `marks`, `bloom_taxonomy`, `tags`, `last_used_year`, `embedding_vector`) and seed realistic question sets across subjects.
-- **Paper Assembly Engine:** Develop `assemble_paper(subject, difficulty_distribution, total_marks)` to dynamically generate balanced exam sets.
-- **AI Deduplication & Validation:** Implement embedding vector similarity matching against previous exam papers to detect duplicates or near-duplicates (> 0.85 cosine similarity).
-- **Human-in-the-Loop Authorization:** Build human approval/rejection endpoints so AI assists selection while authorized officials give final approval.
-- **Difficulty Balancing & Analytics:** Bloom's taxonomy weighted balancing and question bank coverage gap analytics.
-- **Handoff:** Standardized paper JSON structure passed to crypto and backend services.
-
----
-
-### 2. Parth — Crypto Core & Zero-Trust Authentication
-**Focus:** Cryptographic Engine, PKI Infrastructure & Authorization  
-**Tools:** Python `cryptography` library, OpenSSL, `PyJWT`
-
-- **Symmetric Encryption & Signing:** Implement `sign_and_encrypt(paper)` and `decrypt_and_verify(package, key)` using SHA-256 (integrity/signature) and AES-256-GCM (authenticated encryption).
-- **Public Key Infrastructure & Mutual TLS (mTLS):** Build a self-signed Root CA, issue X.509 certificates to authority and edge centre nodes, and enforce bidirectional TLS encryption.
-- **Scoped JWT Role-Based Access Control:** Granular token validation enforcing least privilege for `centre-role`, `authority-role`, and `invigilator-role`.
-- **Adversarial Security Testing:** Test and defend against replay attacks, pre-release decryption attempts, forged JWTs, and tampered ciphertext packages.
-- **Handoff:** Importable crypto/auth module and verified certificate authority configurations.
-
----
-
-### 3. Janaki — Backend Microservices & Infrastructure as Code (IaC)
-**Focus:** Microservice Architecture, Containerization & Cloud Infrastructure  
-**Tools:** FastAPI, Uvicorn, Docker Compose, k3s, Terraform
-
-- **FastAPI Microservices:** Design and scaffold modular backend services (`auth_service`, `paper_service`, `timelock_service`, `key_release_service`).
-- **Core Pipeline Wiring:** Integrate question engine, crypto core, and audit hooks into a seamless end-to-end API lifecycle.
-- **Container Orchestration (Docker & k3s):** Provide local multi-container `docker-compose.yml` and Kubernetes (`k3s`) manifests demonstrating pod self-healing and zero-trust networking.
-- **Terraform Infrastructure as Code (IaC):** Write Terraform scripts (`main.tf`, `variables.tf`) to provision cloud nodes/VMs, enabling demoable `terraform apply` and `terraform destroy`.
-- **Production Hardening:** Implement API rate limiting, retries, structured error handling, and health-check monitoring.
-- **Handoff:** Stable, documented REST and WebSocket API endpoints.
-
----
-
-### 4. Vaibhav — Edge Centre Client & Physical Demonstration
-**Focus:** Edge Centre Deployment, In-Memory Decryption & Secure Printing  
-**Tools:** Python, ReportLab / FPDF, QRCode, Physical Laptop / Raspberry Pi
-
-- **Edge Client Lifecycle:** Walk full sequence: Authenticate (mTLS + JWT) $\rightarrow$ Poll release time $\rightarrow$ Request decryption key $\rightarrow$ In-memory decryption $\rightarrow$ Print buffer.
-- **Dual-Device Physical Setup:** Run the edge client on a separate physical device on the local network (laptop or Raspberry Pi) making genuine network calls to the authority server.
-- **Forensic Per-Copy Watermarking:** Generate dynamically watermarked PDFs where each copy contains a unique QR code and micro-serial tracking `Centre ID + Room + Candidate ID + Timestamp`.
-- **Zero-Footprint Print Execution:** Ensure decrypted plaintext never persists to the client disk and is wiped immediately after generating the print stream.
-- **Handoff:** Live edge client application, verified printing pipeline, and distinct physical print samples.
-
----
-
-### 5. Chhavi — Immutable Audit Trail & Hash-Chain Engine
-**Focus:** Tamper-Evident Logging & Standalone Verification  
-**Tools:** Python, Hashlib, SQLite / MongoDB, WebSockets
-
-- **Cryptographic Hash-Chain Ledger:** Implement the hash-chain algorithm where each entry records $\text{Hash} = \text{SHA-256}(\text{Previous Hash} + \text{Event Data})$.
-- **Middleware Audit Hooks:** Instrument every backend microservice to record auth attempts, key queries, paper assembly, print requests, and unauthorized accesses.
-- **Standalone Verification CLI:** Build an independent verification command-line tool that anyone (including evaluators) can run to mathematically audit the entire event ledger.
-- **Live Tamper-Detection Demo:** Demonstrate live tampering resistance by altering a database row directly and showing how `verify_chain()` immediately flags the exact corrupted block.
-- **Handoff:** Standalone audit verification utility and real-time event streaming interface.
-
----
-
-### 6. Vaibhav — Real-Time Dashboard, Integration & Documentation
-**Focus:** Live Monitoring Interface, Full-Pipeline Integration & SIH Deliverables  
-**Tools:** Streamlit / React + Tailwind, WebSockets, Prometheus / Grafana, Canva / PowerPoint
-
-- **Real-Time Web Dashboard:** Build the centralized monitoring UI displaying live exam countdown timers, edge node connectivity, key release status, and WebSocket audit event feeds.
-- **End-to-End System Integration:** Coordinate daily end-to-end pipeline execution runs across all modules to identify and resolve integration bottlenecks early.
-- **SIH Submission Deliverables:** Author the comprehensive SIH technical report, presentation pitch deck, and architecture diagrams.
-- **Demonstration Rehearsal & Backup:** Direct end-to-end dry runs and produce a high-fidelity backup video demonstration.
-- **Handoff:** Central dashboard interface, finalized report, presentation slides, and backup demonstration recording.
-
----
-
-## 🌟 The Two Headline Differentiators
-
-### 1. Hash-Chained, Tamper-Evident Audit Log (Led by Chhavi)
-Every single system event is cryptographically sealed into a sequential hash chain:
-$$\text{Current Hash} = \text{SHA-256}(\text{Previous Hash} + \text{Timestamp} + \text{Actor} + \text{Action} + \text{Payload Digest})$$
-A standalone verification CLI recomputes the chain from genesis and instantly flags any manual alteration or deleted row.
-
-### 2. Forensic Per-Copy Watermarking & Leak Traceability (Led by Vaibhav)
-Every printed physical exam paper is dynamically injected with unique, verifiable metadata (Centre ID, Room No., Candidate ID, Timestamp) via embedded QR codes and micro-serials, making any post-print paper photo forensically traceable to its exact origin.
-
----
-
-## 🏛️ Target Architecture vs. Prototype Scope
-
-| Architecture Tier | Production Vision | Hackathon Prototype Scope |
+| Layer | Technology | Purpose & Rationale |
 | :--- | :--- | :--- |
-| **Central AI Engine** | AI-assisted Bloom's selection + Human Approval | Question bank + embedding deduplication + human approval endpoint |
-| **Cloud Infrastructure** | Multi-region Private Cloud | **Terraform**-provisioned cloud infrastructure (`terraform apply` / `destroy`) |
-| **Orchestration** | Full Kubernetes Cluster | **k3s / Docker Compose** (lightweight real K8s manifests & self-healing) |
-| **Centre Hardware Auth** | Hardware Security Module (HSM) / Biometrics | **Mutual TLS (mTLS) with self-signed CA** + Scoped JWT RBAC |
-| **Physical Separation** | Central Data Centre $\leftrightarrow$ Edge Centres | **Two physical devices** on local network (Authority Host $\leftrightarrow$ Edge Client) |
-| **Secure Delivery** | Encrypted Print Stream | In-memory decryption $\rightarrow$ **ReportLab/FPDF dynamic watermarked PDF** |
+| **Operating Platform** | Android 11+ (API 30+) | Universal deployment on budget ₹8,000–₹15,000 phones. |
+| **Mobile UI** | Kotlin + Jetpack Compose | Modern declarative UI; state-driven reactivity. |
+| **Native Performance Core** | C++20 via Android NDK (JNI) | Zero-overhead DSP, lock-free ring buffers, SIMD math. |
+| **Audio Pipeline** | Google Oboe (AAudio/OpenSL) | Sub-10ms low-latency audio capture and rendering. |
+| **Voice Activity Detector** | Silero VAD v5 (ONNX Mobile) | 1.8 MB model; <1ms inference per 30ms window; <3% idle CPU. |
+| **On-Device STT** | AI4Bharat IndicConformer (INT8) | High-accuracy Indic phonetics; compressed to ~35 MB. |
+| **On-Device TTS** | FastPitch + HiFi-GAN Vocoder (INT8)| Natural neural speech synthesis in <150ms on mobile CPU. |
+| **Offline Translation (NMT)**| IndicTrans2-Distilled (INT8) | On-device dialect translation without cloud APIs (<25 MB). |
+| **Inference Engine** | ONNX Runtime Mobile v1.17+ | Optimized for ARM XNNPACK and NNAPI acceleration. |
+| **Wireless Transport** | Wi-Fi Direct (`WifiP2pManager`) + BT | Autonomous peer discovery, group owner election, 50m–100m range. |
+| **Serialization** | Protocol Buffers (Protobuf Lite) | Compact structured binary schema with CRC16 error detection. |
+| **Local Audit Database** | SQLite via Room Library | Offline chronological indexing of all received/sent voice packets. |
 
 ---
 
-## 🛠️ Technology Stack
+## 👥 6-Member Balanced Work Breakdown
 
-- **Backend & APIs:** Python 3.11+, FastAPI, Uvicorn, Pydantic
-- **Cryptography & Security:** Python `cryptography` (AES-256-GCM, SHA-256), OpenSSL (mTLS / X.509 certs), PyJWT
-- **AI & NLP:** `sentence-transformers` / LLM API (embedding deduplication, Bloom's taxonomy tagging)
-- **Infrastructure & Containers:** Docker, Docker Compose, k3s (Lightweight Kubernetes), Terraform
-- **Database & Storage:** SQLite / MongoDB (Encrypted storage)
-- **Edge Document Generation:** ReportLab, PyPDF, qrcode
-- **Monitoring & Dashboard:** Streamlit / React + Tailwind, WebSockets, Prometheus, Grafana
+```
+                                  6-MEMBER WORK ALLOCATION
+                                  ------------------------
+  +-----------------------------------------------------------------------------------------+
+  | [MEMBER 1] Audio Ingestion, Silero VAD Gatekeeper & IndicConformer STT Engine            |
+  +--------------------------------------------+--------------------------------------------+
+                                               | (Decoded Transcript + Lang ID)
+                                               v
+  +-----------------------------------------------------------------------------------------+
+  | [MEMBER 3] Semantic Compression, Indic Translation Bridge & Binary Protobuf Framer       |
+  +--------------------------------------------+--------------------------------------------+
+                                               | (Packaged 40-Byte Binary Frame)
+                                               v
+  +-----------------------------------------------------------------------------------------+
+  | [MEMBER 4] P2P Wireless Transport Layer (Wi-Fi Direct & Bluetooth RFCOMM Sockets)        |
+  +--------------------------------------------+--------------------------------------------+
+                                               | (Wireless Hop to Receiver Phone)
+                                               v
+  +-----------------------------------------------------------------------------------------+
+  | [MEMBER 2] On-Device Indic TTS Engine, Voice Tone Cloner & STREAM_ALARM Playback        |
+  +-----------------------------------------------------------------------------------------+
+                                               ^
+                                               |
+  +--------------------------------------------+--------------------------------------------+
+  | [MEMBER 5] Native Android App, PTT State Machine & NDK/JNI Core Integration              |
+  +--------------------------------------------+--------------------------------------------+
+                                               ^
+                                               |
+  +--------------------------------------------+--------------------------------------------+
+  | [MEMBER 6] Tactical UI/UX, Telemetry Dashboard, Battery Benchmarking & Demo Harness     |
+  +-----------------------------------------------------------------------------------------+
+```
+
+### Member 1: Audio Ingestion, VAD Gatekeeper & Indic STT Pipeline
+* **Role:** AI Speech Recognition & DSP Engineer
+* **Deliverables:** `libaudio_stt_core.so` + `indic_stt_int8.onnx` + Google Oboe microphone bridge.
+* **Tasks:** Ingest 16 kHz 16-bit PCM audio; run Silero VAD gatekeeper (<1ms); execute INT8 quantized IndicConformer speech recognition.
+
+### Member 2: Edge Indic TTS, Voice Tone Cloner & Audio Playback Engine
+* **Role:** Neural Audio Synthesis & Playback Engineer
+* **Deliverables:** `libaudio_tts_core.so` + `indic_tts_int8.onnx` + `STREAM_ALARM` audio renderer.
+* **Tasks:** Synthesize Indic speech from text tokens; inject 16-byte prosody vector for voice cloning; route emergency alerts through hardware alarm stream.
+
+### Member 3: Semantic Compression, Translation Bridge & Protobuf Framer
+* **Role:** Edge NLP, Cryptography & Serialization Engineer
+* **Deliverables:** `libsemantic_protocol.so` + compiled Protobuf classes + `IndicTrans2` INT8 translation bridge.
+* **Tasks:** Build Protobuf binary packaging schema with CRC16; translate across Indic languages; compress sentences to 15–30 bytes.
+
+### Member 4: P2P Wireless Transport Layer (Wi-Fi Direct & Bluetooth)
+* **Role:** Embedded Systems & Wireless Networking Engineer
+* **Deliverables:** `P2PTransportManager.kt` service managing peer discovery and non-blocking asynchronous sockets.
+* **Tasks:** Implement Wi-Fi Direct Group Owner auto-election; build dual-mode Bluetooth RFCOMM fallback; guarantee packet delivery with selective ACK.
+
+### Member 5: Native Android App, PTT State Machine & NDK Integration
+* **Role:** Native Android Architecture & Systems Lead
+* **Deliverables:** Compiled Android APK architecture + JNI bindings + 24/7 background foreground daemon.
+* **Tasks:** Build hardware/software Push-To-Talk state machine; manage WakeLocks and background persistence; link C++ libraries to Kotlin.
+
+### Member 6: Tactical UI/UX, Telemetry Dashboard, QA & Live Demo Harness
+* **Role:** UI/UX Developer, Performance Profiler & Integration Lead
+* **Deliverables:** Jetpack Compose tactical UI + live telemetry monitor + automated test harness.
+* **Tasks:** Build high-contrast PTT interface; display real-time latency and bitrate savings; verify <3% idle CPU load using Android Profiler.
 
 ---
 
-## 🎬 90-Second Demo Script
+## 📦 Binary Packet Specification (`packet_schema.proto`)
 
-1. **Encrypted Package:** Show the encrypted package on the edge centre device — prove it is completely unreadable.
-2. **Time-Lock Window:** Advance time to the scheduled exam release minute.
-3. **Authentication & Key Release:** Edge centre authenticates via mTLS + JWT. Authority verifies credentials and releases the decryption key.
-4. **In-Memory Decryption:** Edge client decrypts the paper in memory without writing plaintext to disk.
-5. **Traceable Printing:** PDF generated with dynamic per-copy forensic watermarking. Show two distinct generated copies.
-6. **Immutable Audit & Tamper Test:** Switch to the live dashboard showing all events logged in real time. Run the verification CLI, then simulate a database tampering attack to prove immediate detection.
+```protobuf
+syntax = "proto3";
+package itantra.protocol;
+
+enum PriorityLevel {
+  ROUTINE = 0;
+  TACTICAL = 1;
+  LIFE_SAFETY_ALERT = 2;
+}
+
+message VoicePacket {
+  uint32 magic_header = 1;       // 0x41475931 (AGY1)
+  uint32 sequence_number = 2;   // Rolling packet counter
+  uint64 timestamp_ms = 3;       // Sender epoch time
+  PriorityLevel priority = 4;    // Priority routing (0, 1, 2)
+  string source_callsign = 5;    // e.g., "RESCUE_LEADER_01"
+  string source_language = 6;    // ISO 639-1 code (e.g., "hi", "ta", "mr")
+  
+  bytes compressed_payload = 7;  // Phoneme / Tokenized semantic text (15-30B)
+  bytes prosody_vector = 8;      // 16-byte pitch & speaker identity vector
+  uint32 crc16_checksum = 9;     // Error detection checksum
+}
+```
 
 ---
 
-## 📌 Technical Accuracy Notes
+## 📅 10-Day Sprint Plan
 
-- **AES-256-GCM** is the encryption mechanism; the *time condition* is enforced via server-controlled key release policy (never describe AES itself as "time-lock encryption").
-- **SHA-256** provides cryptographic integrity and signing, not encryption.
-- **Authentication, encryption, authorization, integrity, and auditing** are five distinct architectural concerns.
+```
++----------------------------------------------------------------------------------------------------+
+|                                    10-DAY SPRINT SCHEDULE                                          |
++----------------------------------------------------------------------------------------------------+
+
+ Day 1 - 2: Foundation & Interfaces
+ ├── M1: Export Silero VAD & IndicConformer to ONNX; test desktop inference.
+ ├── M2: Export Indic FastPitch + HiFi-GAN to ONNX; verify speech synthesis.
+ ├── M3: Define `packet_schema.proto`; generate C++ and Kotlin bindings.
+ ├── M4: Build standalone Android Wi-Fi Direct discovery sample app.
+ ├── M5: Scaffold Android Studio monorepo with CMake NDK bridge and JNI stubs.
+ └── M6: Design high-contrast Figma UI assets and build Jetpack Compose theme.
+
+ Day 3 - 5: Core Engineering & Quantization
+ ├── M1: Quantize STT model to INT8 (<38MB); integrate Oboe audio capture.
+ ├── M2: Quantize TTS model to INT8 (<45MB); implement `STREAM_ALARM` audio track.
+ ├── M3: Build IndicTrans2 translation bridge and arithmetic tokenizer.
+ ├── M4: Complete non-blocking async socket server; add Bluetooth fallback.
+ ├── M5: Build PTT state machine and foreground service lifecycle handlers.
+ └── M6: Implement real-time waveform visualizer and P2P peer radar screen.
+
+ Day 6 - 7: Native Integration & JNI Fusion
+ ├── Merge M1 (STT) + M2 (TTS) + M3 (Protocol) into native shared library (`.so`).
+ ├── Connect M4 (P2P Transport) to M5 (Foreground Service).
+ ├── Connect M5 (JNI Engine) to M6 (Compose UI StateFlows).
+ └── First full-loop on single phone: Speak -> VAD -> STT -> Packet -> TTS -> Speaker.
+
+ Day 8 - 9: End-to-End P2P Testing & Battery Profiling
+ ├── Two-device P2P field testing across physical distance (10m, 30m, 60m).
+ ├── Test cross-lingual translation: Hindi speech -> Tamil synthesis.
+ ├── Test Emergency Priority: Verify DND override at 100% volume.
+ └── Profile with Android Battery Historian to confirm <3% idle CPU load.
+
+ Day 10: Freeze, Polish & Live Demo Setup
+ ├── Compile signed release APKs and install on 2 target demonstration phones.
+ ├── Prepare Airplane Mode demo harness with real-time telemetry metrics.
+ └── Dry run the 3-minute pitch sequence with simulated radio channel noise.
+```
+
+---
+
+## 🎤 3-Minute Live Hackathon Demo Script
+
+1. **Act 1: Airplane Mode Setup (20s):** Place both phones in complete Airplane Mode (zero internet, zero SIM, zero cloud).
+2. **Act 2: Instant Voice Relay (40s):** Speak into Phone A in Hindi (*"सेक्टर 4 में तुरंत सहायता भेजो!"*). Phone B across the room receives the 38-byte packet in <300ms and speaks aloud in natural voice.
+3. **Act 3: Emergency Mute Override (40s):** Put Phone B on Silent/DND. Send an SOS Alert → Phone B overrides mute and sounds the alert at 100% volume via `STREAM_ALARM`.
+4. **Act 4: 20% Evaluation Metric Proof (30s):** Point to the real-time CPU monitor showing <2.8% CPU load during idle listening, proving all-day field battery life.
