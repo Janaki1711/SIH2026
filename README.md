@@ -5,6 +5,19 @@
 
 ---
 
+## 👥 Team Roster & Role Assignment Table
+
+| Member | Assigned Name | Primary Role | Domain & Core Module | Key Tools & Technologies | Major Deliverable Artifacts |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Member 1** | **Chhavi** | AI Speech Recognition (STT) & DSP Lead | Audio Ingestion, Silero VAD & IndicConformer STT | PyTorch, Google Oboe, ONNX Runtime Mobile, C++20, NDK | `libaudio_stt_core.so`, `indic_stt_int8.onnx`, `silero_vad.onnx` |
+| **Member 2** | **Vaibhav Senior** | Neural Speech Synthesis (TTS) & Audio Lead | Edge Indic TTS, Voice Tone Cloner & Audio Playback | FastPitch, HiFi-GAN, Android `STREAM_ALARM`, Oboe, C++ | `libaudio_tts_core.so`, `indic_fastpitch_int8.onnx`, `AlarmAudioRouter.kt` |
+| **Member 3** | **Parth Karpe** | Semantic Compression & NLP Lead | Tokenization, Indic Translation Bridge & Protobuf Framer | Protocol Buffers (Lite), `IndicTrans2`, AES-128-GCM, CRC16 | `packet_schema.proto`, `libsemantic_protocol.so`, `indic_trans_int8.onnx` |
+| **Member 4** | **M Janaki** | P2P Wireless Transport & Networking Lead | Wi-Fi Direct, Bluetooth RFCOMM & Mesh Networking | Android `WifiP2pManager`, Bluetooth Sockets, Java NIO | `P2PTransportManager.kt`, `WifiP2pTransport.kt`, `BluetoothTransport.kt` |
+| **Member 5** | **Nupur** | Native Android Core & Database Lead | PTT State Machine, Foreground Daemon & JNI Bridge | Kotlin, JNI, CMake, Room (SQLite), Android Foreground Service | `native_bridge.cpp`, `RadioDaemonService.kt`, `MessageDatabase.kt` |
+| **Member 6** | **Vaibhav Junior** | Tactical UI/UX & Benchmark/Pitch Lead | Jetpack Compose UI, Telemetry Overlay & QA Harness | Jetpack Compose, Material 3, Android Studio Profiler | `MainWalkieTalkieScreen.kt`, `LiveTelemetryOverlay.kt`, Benchmark Report |
+
+---
+
 ## 🎯 Executive Summary & Core Principle
 
 > **"Do not stream heavy raw audio over fragile, degraded wireless links — compress speech by 2,000× into semantic tokens on-device, transmit 40-byte micro-packets across physical distance, and synthesize natural speech locally."**
@@ -20,32 +33,32 @@ Standard voice streaming (Opus, PCM, AMR) requires **16 to 128 kbps**, collapsin
                                       SENDER PHONE (TRANSMITTER)
 ====================================================================================================
 
- [Step 1: User Presses PTT / Speaks]
+ [Step 1: User Presses PTT / Speaks] (Member 5: Nupur & Member 6: Vaibhav Junior)
     │
     ▼
- [Step 2: Google Oboe Audio Capture (C++ NDK)]
+ [Step 2: Google Oboe Audio Capture (C++ NDK)] (Member 1: Chhavi)
     │   • Captures raw 16kHz 16-bit Mono PCM audio in 30ms lock-free chunks (480 samples).
     ▼
- [Step 3: Silero VAD Gatekeeper (<1ms)]
+ [Step 3: Silero VAD Gatekeeper (<1ms)] (Member 1: Chhavi)
     │   • Detects human voice onset and cutoff.
     │   • Gates subsequent heavy AI models so they sleep during silence (<3% idle CPU).
     ▼
- [Step 4: AI4Bharat IndicConformer STT Engine (INT8 ONNX)]
+ [Step 4: AI4Bharat IndicConformer STT Engine (INT8 ONNX)] (Member 1: Chhavi)
     │   • Processes the captured speech audio segment.
     │   • Outputs raw text transcript: "सेक्टर 4 में तुरंत मदद भेजो" + Language ID ("hi").
     ▼
- [Step 5: Prosody & Voice Feature Extractor]
+ [Step 5: Prosody & Voice Feature Extractor] (Member 2: Vaibhav Senior)
     │   • Extracts 16-byte vector containing pitch contour (F0) + speaker timbre + urgency flag.
     ▼
- [Step 6: Arithmetic Tokenizer & Protobuf Framer]
+ [Step 6: Arithmetic Tokenizer & Protobuf Framer] (Member 3: Parth Karpe)
     │   • Compresses UTF-8 text down to 22 bytes.
     │   • Packages binary frame: [Header | Priority: SOS | Lang: HI | Prosody | Payload | CRC16].
     │   • Total packet size: 38 Bytes!
     ▼
- [Step 7: Local Database Insertion (Room / SQLite)]
+ [Step 7: Local Database Insertion (Room / SQLite)] (Member 5: Nupur)
     │   • Logs message in local SQLite database with status "TRANSMITTING".
     ▼
- [Step 8: P2P Socket Transmitter]
+ [Step 8: P2P Socket Transmitter] (Member 4: M Janaki)
     │   • Transmits 38 bytes over Wi-Fi Direct (or Bluetooth RFCOMM fallback).
     │
 ═════════════════════════════════════ WIRELESS RF HOP (<20 ms) ═════════════════════════════════════
@@ -55,22 +68,22 @@ Standard voice streaming (Opus, PCM, AMR) requires **16 to 128 kbps**, collapsin
 ====================================================================================================
     │
     ▼
- [Step 9: P2P Socket Receiver Daemon]
+ [Step 9: P2P Socket Receiver Daemon] (Member 4: M Janaki)
     │   • Receives 38-byte binary packet; verifies CRC16 checksum.
     ▼
- [Step 10: Protobuf Unpacker & Translation Engine (IndicTrans2 INT8)]
+ [Step 10: Protobuf Unpacker & Translation Engine (IndicTrans2 INT8)] (Member 3: Parth Karpe)
     │   • Extracts text, sender callsign, and 16-byte prosody vector.
     │   • Translates text from Hindi to Listener's preferred language (e.g., Tamil: "பிரிவு 4 இல் உதவி அனுப்பவும்").
     ▼
- [Step 11: Local Database Sync & UI Telemetry Update]
+ [Step 11: Local Database Sync & UI Telemetry Update] (Member 5: Nupur & Member 6: Vaibhav Junior)
     │   • Inserts received packet into local SQLite MessageAuditLog.
     │   • Updates Jetpack Compose UI (displays text transcript + 38-byte telemetry).
     ▼
- [Step 12: On-Device Indic FastPitch + HiFi-GAN TTS Engine]
+ [Step 12: On-Device Indic FastPitch + HiFi-GAN TTS Engine] (Member 2: Vaibhav Senior)
     │   • Ingests translated text + conditions on the 16-byte prosody vector.
     │   • Synthesizes audio in the original speaker's pitch and urgency in <140ms.
     ▼
- [Step 13: Hardware Priority Audio Playback (STREAM_ALARM)]
+ [Step 13: Hardware Priority Audio Playback (STREAM_ALARM)] (Member 2: Vaibhav Senior)
         • For SOS alerts: Bypasses Android Mute / Do Not Disturb at 100% volume.
         • Speaks aloud into the receiver's ear!
 ```
@@ -79,7 +92,7 @@ Standard voice streaming (Opus, PCM, AMR) requires **16 to 128 kbps**, collapsin
 
 ## 🗄️ Local Database Architecture (Offline Embedded SQLite / Room)
 
-Because this system operates in **100% offline, zero-infrastructure tactical and disaster zones**, every device acts as an **autonomous edge database node** powered by **Android Room / SQLite**:
+Because this system operates in **100% offline, zero-infrastructure tactical and disaster zones**, every device acts as an **autonomous edge database node** powered by **Android Room / SQLite** (Managed by **Member 5: Nupur**):
 
 ```
 +----------------------------------------------------------------------------------------------------+
@@ -103,44 +116,72 @@ Because this system operates in **100% offline, zero-infrastructure tactical and
 
 ---
 
+## ⚡ 4 Operational State Machine Flows
+
+```
++----------------------------------------------------------------------------------------------------+
+|                                      SYSTEM STATE MACHINE FLOW                                     |
++----------------------------------------------------------------------------------------------------+
+
+ 1. IDLE LISTENING STATE (Battery-Saver Mode):
+    [Mic Ingestion (Oboe)] ---> [Silero VAD (<1ms)] ---> (Is Speech Detected?)
+                                                               │
+                                     +-------------------------+-------------------------+
+                                     | No                                                | Yes
+                                     v                                                   v
+                          [Remain in Sleep Mode]                              [Wake STT Model]
+                          (CPU < 2.8%, Zero Battery Drain)                    (Start Audio Capture)
+
+ 2. TRANSMISSION STATE (PTT Pressed):
+    [Voice Spoken] -> [STT Transcription] -> [Tokenize (38B)] -> [SQLite DB Save] -> [Wi-Fi/BT TX]
+
+ 3. RECEPTION STATE (Background Daemon):
+    [RF Packet Rx] -> [CRC16 Check] -> [NMT Translate] -> [SQLite DB Save] -> [TTS Synthesize] -> [Speaker]
+
+ 4. EMERGENCY OVERRIDE STATE (SOS Priority):
+    [Priority == 2] -> [Request AudioManager.STREAM_ALARM] -> [Force Max Volume] -> [Play Non-Duckable]
+```
+
+---
+
 ## 👥 Exhaustive 6-Member Work Distribution & Toolchains
 
 ```
                                   6-MEMBER COLLABORATION TOPOLOGY
                                   -------------------------------
   +-----------------------------------------------------------------------------------------+
-  | [MEMBER 1] Audio Ingestion, Silero VAD Gatekeeper & IndicConformer STT Engine            |
+  | [MEMBER 1: Chhavi] Audio Ingestion, Silero VAD Gatekeeper & IndicConformer STT Engine   |
   +--------------------------------------------+--------------------------------------------+
                                                | (Decoded Transcript + Confidence + Lang ID)
                                                v
   +-----------------------------------------------------------------------------------------+
-  | [MEMBER 3] Semantic Compression, Indic Translation Bridge & Binary Protobuf Framer       |
+  | [MEMBER 3: Parth Karpe] Semantic Compression, Translation Bridge & Protobuf Framer       |
   +--------------------------------------------+--------------------------------------------+
                                                | (Framed 40-Byte Binary Payload + CRC16)
                                                v
   +-----------------------------------------------------------------------------------------+
-  | [MEMBER 4] P2P Wireless Transport Layer (Wi-Fi Direct, Bluetooth RFCOMM & BLE Mesh)      |
+  | [MEMBER 4: M Janaki] P2P Wireless Transport Layer (Wi-Fi Direct, Bluetooth & BLE Mesh)   |
   +--------------------------------------------+--------------------------------------------+
                                                | (Wireless Hop across Phones)
                                                v
   +-----------------------------------------------------------------------------------------+
-  | [MEMBER 2] On-Device Indic TTS Engine, Voice Tone Cloner & STREAM_ALARM Playback        |
+  | [MEMBER 2: Vaibhav Senior] On-Device Indic TTS, Voice Tone Cloner & STREAM_ALARM Audio  |
   +-----------------------------------------------------------------------------------------+
                                                ^
                                                | (JNI Data Binding & State Events)
   +--------------------------------------------+--------------------------------------------+
-  | [MEMBER 5] Native Android Core, PTT State Machine, Foreground Daemon & JNI Glue          |
+  | [MEMBER 5: Nupur] Native Android Core, PTT State Machine, Foreground Daemon & JNI Glue  |
   +-----------------------------------------------------------------------------------------+
                                                ^
                                                | (Reactive StateFlow & Telemetry Pipes)
   +--------------------------------------------+--------------------------------------------+
-  | [MEMBER 6] Tactical UI/UX, Telemetry Dashboard, Battery Profiler & Live Demo Harness    |
+  | [MEMBER 6: Vaibhav Junior] Tactical UI/UX, Telemetry Dashboard & Live Demo QA Harness   |
   +-----------------------------------------------------------------------------------------+
 ```
 
 ---
 
-### 👤 Member 1: Audio Ingestion, Silero VAD & On-Device Indic STT Lead
+### 👤 Member 1 (Chhavi): Audio Ingestion, Silero VAD & On-Device Indic STT Lead
 * **Domain:** AI Speech Recognition, Digital Signal Processing (DSP) & Edge Acceleration
 * **Mission:** Ingest low-latency raw microphone audio, execute micro-VAD speech gating to keep idle CPU $<3\%$, and run INT8 quantized Indic speech recognition offline.
 
@@ -168,11 +209,11 @@ Because this system operates in **100% offline, zero-infrastructure tactical and
 #### Interface Contract & Handoff:
 * **Input:** Raw microphone stream.
 * **Output:** `struct STTResult { std::string transcript; std::string lang_code; float confidence; uint32_t duration_ms; }`
-* **Handoff:** Passes `STTResult` directly to **Member 3** for arithmetic tokenization.
+* **Handoff:** Passes `STTResult` directly to **Member 3 (Parth Karpe)** for arithmetic tokenization.
 
 ---
 
-### 👤 Member 2: On-Device Indic TTS, Voice Tone Cloner & Audio Playback Lead
+### 👤 Member 2 (Vaibhav Senior): On-Device Indic TTS, Voice Tone Cloner & Audio Playback Lead
 * **Domain:** Neural Acoustic Modeling, Speech Synthesis & Android Audio Framework
 * **Mission:** Reconstruct natural Indic speech from text packets, inject speaker pitch/emotion via a 16-byte vector, and enforce non-interruptible `STREAM_ALARM` playback.
 
@@ -198,11 +239,11 @@ Because this system operates in **100% offline, zero-infrastructure tactical and
 
 #### Interface Contract & Handoff:
 * **Input:** `struct PacketPayload { std::string text; std::string target_lang; uint8_t prosody[16]; uint8_t priority; }`
-* **Output:** Audible speech output + playback completion event dispatched to **Member 5**.
+* **Output:** Audible speech output + playback completion event dispatched to **Member 5 (Nupur)**.
 
 ---
 
-### 👤 Member 3: Semantic Compression, Translation Bridge & Serialization Lead
+### 👤 Member 3 (Parth Karpe): Semantic Compression, Translation Bridge & Serialization Lead
 * **Domain:** NLP Tokenization, Machine Translation, Information Theory & Cryptography
 * **Mission:** Compress text transcripts to $<30	ext{ bytes}$, translate across Indian dialects offline, and package binary frames with CRC16/FEC error correction.
 
@@ -226,11 +267,11 @@ Because this system operates in **100% offline, zero-infrastructure tactical and
 #### Interface Contract & Handoff:
 * **TX Path:** Input: `STTResult` $ightarrow$ Output: `std::vector<uint8_t> binary_packet` (35–45 bytes).
 * **RX Path:** Input: `raw_bytes` $ightarrow$ Output: `DecodedVoiceMessage` (Translated text + prosody vector).
-* **Handoff:** Passes binary packet to **Member 4** for transmission, and passes decoded message to **Member 2** for synthesis.
+* **Handoff:** Passes binary packet to **Member 4 (M Janaki)** for transmission, and passes decoded message to **Member 2 (Vaibhav Senior)** for synthesis.
 
 ---
 
-### 👤 Member 4: P2P Wireless Transport & Mesh Networking Lead
+### 👤 Member 4 (M Janaki): P2P Wireless Transport & Mesh Networking Lead
 * **Domain:** Wireless Telecommunications, RF Protocol Engineering & Networking
 * **Mission:** Establish 100% offline, resilient peer-to-peer radio links using Wi-Fi Direct, Bluetooth RFCOMM, and store-and-forward mesh relay.
 
@@ -253,11 +294,11 @@ Because this system operates in **100% offline, zero-infrastructure tactical and
 #### Interface Contract & Handoff:
 * **Send API:** `fun sendPacket(bytes: ByteArray, targetCallsign: String?, priority: PriorityLevel)`
 * **Receive Flow:** `val onPacketReceivedFlow: SharedFlow<ByteArray>`
-* **Handoff:** Transmits byte stream from **Member 3**; bound to service lifecycle by **Member 5**.
+* **Handoff:** Transmits byte stream from **Member 3 (Parth Karpe)**; bound to service lifecycle by **Member 5 (Nupur)**.
 
 ---
 
-### 👤 Member 5: Native Android Core, State Machine & Database Systems Lead
+### 👤 Member 5 (Nupur): Native Android Core, State Machine & Database Systems Lead
 * **Domain:** Android Native Architecture (NDK/JNI), Lifecycle Management & Edge Databases
 * **Mission:** Build the master Android application architecture, manage the multi-threaded JNI bridge, run the 24/7 background radio daemon, and manage local SQLite storage.
 
@@ -279,11 +320,11 @@ Because this system operates in **100% offline, zero-infrastructure tactical and
 
 #### Interface Contract & Handoff:
 * **Exposes:** `val pttStateFlow: StateFlow<PTTState>` and `val messageLogFlow: Flow<List<MessageEntity>>`.
-* **Handoff:** Supplies reactive state streams to **Member 6** for UI rendering.
+* **Handoff:** Supplies reactive state streams to **Member 6 (Vaibhav Junior)** for UI rendering.
 
 ---
 
-### 👤 Member 6: Tactical UI/UX, Live Telemetry Dashboard & QA/Pitch Lead
+### 👤 Member 6 (Vaibhav Junior): Tactical UI/UX, Live Telemetry Dashboard & QA/Pitch Lead
 * **Domain:** Modern Declarative UI, System Benchmarking, Quality Assurance & Hackathon Presentation
 * **Mission:** Build the military-grade tactical UI, visual live telemetry monitor, energy profiling harness, and execute the 3-minute winning hackathon live pitch.
 
@@ -364,20 +405,20 @@ message VoicePacket {
 +----------------------------------------------------------------------------------------------------+
 
  Day 1 - 2: Foundation & Interfaces
- ├── M1: Export Silero VAD & IndicConformer to ONNX; test desktop inference.
- ├── M2: Export Indic FastPitch + HiFi-GAN to ONNX; verify speech synthesis.
- ├── M3: Define `packet_schema.proto`; generate C++ and Kotlin bindings.
- ├── M4: Build standalone Android Wi-Fi Direct discovery sample app.
- ├── M5: Scaffold Android Studio monorepo with CMake NDK bridge and JNI stubs.
- └── M6: Design high-contrast Figma UI assets and build Jetpack Compose theme.
+ ├── M1 (Chhavi): Export Silero VAD & IndicConformer to ONNX; test desktop inference.
+ ├── M2 (Vaibhav Senior): Export Indic FastPitch + HiFi-GAN to ONNX; verify speech synthesis.
+ ├── M3 (Parth Karpe): Define `packet_schema.proto`; generate C++ and Kotlin bindings.
+ ├── M4 (M Janaki): Build standalone Android Wi-Fi Direct discovery sample app.
+ ├── M5 (Nupur): Scaffold Android Studio monorepo with CMake NDK bridge and JNI stubs.
+ └── M6 (Vaibhav Junior): Design high-contrast Figma UI assets and build Jetpack Compose theme.
 
  Day 3 - 5: Core Engineering & Quantization
- ├── M1: Quantize STT model to INT8 (<38MB); integrate Oboe audio capture.
- ├── M2: Quantize TTS model to INT8 (<45MB); implement `STREAM_ALARM` audio track.
- ├── M3: Build IndicTrans2 translation bridge and arithmetic tokenizer.
- ├── M4: Complete non-blocking async socket server; add Bluetooth fallback.
- ├── M5: Build PTT state machine and foreground service lifecycle handlers.
- └── M6: Implement real-time waveform visualizer and P2P peer radar screen.
+ ├── M1 (Chhavi): Quantize STT model to INT8 (<38MB); integrate Oboe audio capture.
+ ├── M2 (Vaibhav Senior): Quantize TTS model to INT8 (<45MB); implement `STREAM_ALARM` audio track.
+ ├── M3 (Parth Karpe): Build IndicTrans2 translation bridge and arithmetic tokenizer.
+ ├── M4 (M Janaki): Complete non-blocking async socket server; add Bluetooth fallback.
+ ├── M5 (Nupur): Build PTT state machine and foreground service lifecycle handlers.
+ └── M6 (Vaibhav Junior): Implement real-time waveform visualizer and P2P peer radar screen.
 
  Day 6 - 7: Native Integration & JNI Fusion
  ├── Merge M1 (STT) + M2 (TTS) + M3 (Protocol) into native shared library (`.so`).
