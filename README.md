@@ -1,21 +1,7 @@
 # iTantra — Indian Multilingual Neural Transceiver for Low-Bitrate Links
 ### Smart India Hackathon (SIH 2026) | Problem Statement: SIH26173 | Sponsoring Agency: Indian Space Research Organisation (ISRO)
 
-> **The World's First 100% Offline, Multi-Task TinyML-Powered Semantic Walkie-Talkie & Long-Range Mesh Transceiver with Zero-Bitrate Voice Cloning and Real-Time Indic Translation.**
-
----
-
-## 🌟 What Makes iTantra Completely Unique & Unprecedented?
-
-Existing walkie-talkies (Motorola, Zello) stream **heavy raw audio (16,000 to 128,000 bps)** that collapses under RF noise, while existing mesh apps (BitChat, Meshtalk) are **text-only typing chats**.
-
-**iTantra creates an entirely new category:** An **AI-Powered Semantic Voice Transceiver** that delivers:
-1. **2,000× Data Compression (38 Bytes vs 160,000 Bytes):** We convert voice to meaning on-device, transmit tiny micro-packets across radio links, and re-synthesize speech locally.
-2. **Zero-Bitrate Voice & Emotion Cloning:** The receiver doesn't hear a monotone robot. We extract a 16-byte acoustic vector so the synthesized speech **preserves the sender's exact voice timbre, pitch, and panicked emergency tone**.
-3. **Universal Indic "Babel-Fish" Voice Bridge:** A rescue worker speaks Hindi in Uttarakhand; a doctor in Kerala hears it spoken aloud in Malayalam in <300 ms offline.
-4. **WFB-ng Indestructible Radio Protocol:** Uses connectionless UDP and Reed-Solomon Forward Error Correction (FEC) to survive **40% packet drops with zero lag**.
-5. **Zero-Friction, Consumer-Grade UX:** Open the app → Phones auto-discover in 3 seconds → Press the haptic PTT button and speak. Zero manual IP typing or pairing required.
-6. **Opportunistic Local-to-Global Gateway:** 100% offline by default, but if any single phone or drone catches a weak satellite/2G link, it bridges the entire disaster network to National Command HQ!
+> **Offline, Edge-Deployable, Multilingual Semantic Walkie-Talkie and Long-Range Mesh Transceiver with Zero-Bitrate Voice Cloning and Real-Time Indic Translation.**
 
 ---
 
@@ -32,40 +18,53 @@ Existing walkie-talkies (Motorola, Zello) stream **heavy raw audio (16,000 to 12
 
 ---
 
-## 🔄 How the Entire System Works (Step-by-Step Technical Flow)
+## 🎯 Executive Summary & Core Principle
+
+Standard voice streaming (Opus, PCM, AMR) requires **16 to 128 kbps**, collapsing completely under RF interference, satellite link bottlenecks, and disaster-induced infrastructure blackouts. **iTantra** implements **Semantic Voice Transmission (Voice → Text → RF → Voice)** directly on edge hardware, enabling **100% intelligible two-way communication at <50 bps** with zero cellular network or internet infrastructure.
+
+1. **2,000× Data Compression (38 Bytes vs 160,000 Bytes):** We convert voice to meaning on-device, transmit tiny micro-packets across radio links, and re-synthesize speech locally.
+2. **Zero-Bitrate Voice & Emotion Cloning:** Extracts a 16-byte acoustic vector so the synthesized speech preserves the sender's exact voice timbre, pitch, and panicked emergency tone.
+3. **Universal Indic "Babel-Fish" Voice Bridge:** A rescue worker speaks Hindi in Uttarakhand; a doctor in Kerala hears it spoken aloud in Malayalam in <300 ms offline.
+4. **WFB-ng Indestructible Radio Protocol:** Uses connectionless UDP and Reed-Solomon Forward Error Correction (FEC) to survive **40% packet drops with zero lag**.
+5. **Zero-Friction Consumer-Grade UX:** Open the app → Phones auto-discover in 3 seconds → Press the haptic PTT button and speak. Zero manual IP typing or pairing required.
+6. **Opportunistic Local-to-Global Gateway:** 100% offline by default, but if any single phone or drone catches a weak satellite/2G link, it bridges the entire disaster network to National Command HQ.
+
+---
+
+## 🔄 End-to-End System Execution Flow
 
 ```
 ====================================================================================================
                                       SENDER PHONE (TRANSMITTER)
 ====================================================================================================
 
- [Step 1: User Presses Tactical PTT Button] (Member 5: Nupur & Member 6: Vaibhav Junior)
+ [Step 1: User Presses Tactical PTT Button] (Native Android Runtime)
     │   • Single-tap haptic trigger; activates audio ingestion stream.
     ▼
- [Step 2: Google Oboe Native Audio Capture] (Member 1: Chhavi)
+ [Step 2: Google Oboe Native Audio Capture] (Acoustic Ingestion Subsystem)
     │   • Ingests raw 16kHz 16-bit Mono PCM audio in 30ms lock-free circular ring buffers.
     ▼
- [Step 3: Silero VAD Gatekeeper (<1ms)] (Member 1: Chhavi)
+ [Step 3: Silero VAD Gatekeeper (<1ms)] (Acoustic Ingestion Subsystem)
     │   • Detects human voice onset/cutoff; keeps idle CPU <2.8% during silence.
     ▼
- [Step 4: AI4Bharat IndicConformer STT Engine (INT8 ONNX)] (Member 1: Chhavi)
+ [Step 4: AI4Bharat IndicConformer STT Engine (INT8 ONNX)] (Acoustic Ingestion Subsystem)
     │   • Converts Hindi/Indic voice into raw text transcript in <180ms.
     ▼
- [Step 5: Multi-Task TinyML Agent (IndicBERT-Tiny)] (Member 3: Parth Karpe)
+ [Step 5: Multi-Task TinyML Agent (IndicBERT-Tiny)] (Semantic Intelligence Subsystem)
     │   • Task A: Snaps local geographic landmarks ("Tolan care" -> "Tolankere GeoID: 0x4F2A").
     │   • Task B: Extracts Intent & Action Codes ("RESCUE_REQUEST | COUNT: 5 | HAZARD: FLOOD").
     │   • Task C: Evaluates Acoustic Emotion -> Classifies urgency as "CRITICAL_PANIC_SOS (0x03)".
     ▼
- [Step 6: 3-Tier Compression & Protobuf Packaging] (Member 3: Parth Karpe)
+ [Step 6: 3-Tier Compression & Protobuf Packaging] (Semantic Intelligence Subsystem)
     │   • Tier 1 (Semantic Macro): 6 - 8 Bytes.
     │   • Tier 2 (Structured Frame): 18 - 22 Bytes.
     │   • Tier 3 (Arithmetic Phoneme Fallback): 35 - 38 Bytes.
     │   • Total packet size: ONLY 6 to 38 Bytes!
     ▼
- [Step 7: Local Database Insertion (Room / SQLite)] (Member 5: Nupur)
+ [Step 7: Local Database Insertion (Room / SQLite)] (Storage Subsystem)
     │   • Logs message in local SQLite flight black-box with status "TRANSMITTING".
     ▼
- [Step 8: WFB-ng Radio Transmitter & FEC Encoder] (Member 4: M Janaki)
+ [Step 8: WFB-ng Radio Transmitter & FEC Encoder] (Wireless Transport Subsystem)
     │   • Encrypts via Libsodium ChaCha20-Poly1305.
     │   • Generates Reed-Solomon (8, 4) FEC Parity Blocks (survives 40% packet drops).
     │   • Transmits over Connectionless UDP Wi-Fi Direct / BLE Mesh.
@@ -77,22 +76,22 @@ Existing walkie-talkies (Motorola, Zello) stream **heavy raw audio (16,000 to 12
 ====================================================================================================
     │
     ▼
- [Step 9: WFB-ng Receiver Daemon & FEC Decoder] (Member 4: M Janaki)
+ [Step 9: WFB-ng Receiver Daemon & FEC Decoder] (Wireless Transport Subsystem)
     │   • Receives UDP datagrams; decrypts with Libsodium.
     │   • Reconstructs dropped packets via Reed-Solomon FEC without retransmission delay.
     ▼
- [Step 10: Protobuf Unpacker & IndicTrans2 Translation] (Member 3: Parth Karpe)
+ [Step 10: Protobuf Unpacker & IndicTrans2 Translation] (Semantic Intelligence Subsystem)
     │   • Unpacks 6B-38B frame; translates text from Hindi to Tamil/Kannada in <80ms.
     ▼
- [Step 11: Local Database Sync & UI Telemetry Update] (Member 5: Nupur & Member 6: Vaibhav Junior)
+ [Step 11: Local Database Sync & UI Telemetry Update] (Storage Subsystem & UI)
     │   • Inserts received packet into local SQLite MessageAuditLog.
     │   • Updates Jetpack Compose UI (displays text transcript + live 38-byte telemetry card).
     ▼
- [Step 12: On-Device FastPitch + HiFi-GAN TTS Engine] (Member 2: Vaibhav Senior)
+ [Step 12: On-Device FastPitch + HiFi-GAN TTS Engine] (Neural Synthesis Subsystem)
     │   • Ingests translated text + conditions on the 16-byte prosody vector.
     │   • Synthesizes natural speech reproducing sender's original pitch & frantic urgency in <140ms.
     ▼
- [Step 13: Hardware Priority Audio Playback (STREAM_ALARM)] (Member 2: Vaibhav Senior)
+ [Step 13: Hardware Priority Audio Playback (STREAM_ALARM)] (Neural Synthesis Subsystem)
         • For SOS alerts: Bypasses Android Mute / Do Not Disturb at 100% volume.
         • Speaks aloud into the receiver's ear!
 ```
@@ -101,7 +100,7 @@ Existing walkie-talkies (Motorola, Zello) stream **heavy raw audio (16,000 to 12
 
 ## 🗄️ Local Database Architecture (Offline Embedded SQLite / Room)
 
-Managed by **Member 5: Nupur**, the local database serves as the **Tactical Black Box**:
+Because this system operates in **100% offline, zero-infrastructure tactical and disaster zones**, every device acts as an **autonomous edge database node** powered by **Android Room / SQLite**:
 
 ```
 +----------------------------------------------------------------------------------------------------+
@@ -125,103 +124,156 @@ Managed by **Member 5: Nupur**, the local database serves as the **Tactical Blac
 
 ---
 
-## 👥 Exhaustive 6-Member Work Distribution & Toolchains
+## 🧩 Modular Engineering: Built in Isolated Parts & Integrated Together
+
+The architecture is cleanly separated into **6 independent technical subsystems**. Each part can be built, compiled, and unit-tested in isolation before being unified into the master Android application.
+
+```
++----------------------------------------------------------------------------------------------------+
+|                                   6-PART MODULAR SUBSYSTEM TOPOLOGY                                |
++----------------------------------------------------------------------------------------------------+
+
+  [PART 1: Acoustic Ingestion & Speech-to-Text] ──(Text + Prosody)──> [PART 2: Semantic Compression]
+                                                                                   │
+                                                                                   ▼ (6B - 38B Frame)
+  [PART 4: Neural Synthesis & Voice Cloner] <──(Decoded Text)─── [PART 3: WFB-ng Wireless Mesh]
+                         │                                                         ▲
+                         │ (Audio Stream)                                          │ (Byte Stream)
+                         ▼                                                         ▼
+  [PART 5: Native Android Runtime & SQLite DB] <═════════════════> [PART 6: Tactical UI & Telemetry]
+```
 
 ---
 
-### 👤 Member 1 (Chhavi): Audio Ingestion, Silero VAD & On-Device Indic STT Lead
-* **Domain:** AI Speech Recognition, Digital Signal Processing (DSP) & Edge Acceleration
-* **Mission:** Ingest low-latency raw microphone audio, execute micro-VAD speech gating to keep idle CPU <3%, and run INT8 quantized Indic speech recognition offline.
-
-#### Exact Tools & Compilers:
-* PyTorch 2.2+, ONNX Runtime Mobile C++ v1.17+, Google Oboe C++ Library (v1.8+), Android NDK r26c, CMake 3.22+, Python 3.10+.
-* Models: Silero VAD v5 ONNX (~1.8 MB), AI4Bharat `IndicConformer` INT8 (~35 MB).
-
-#### Detailed Tasks & File Deliverables:
-1. **`app/src/main/cpp/audio/OboeAudioRecorder.cpp` & `AudioRingBuffer.hpp`:** Lock-free 16 kHz 16-bit Mono PCM circular ring buffer processing 30 ms chunks.
-2. **`app/src/main/cpp/ml/SileroVAD.cpp`:** Silero VAD gatekeeper executing in <1 ms, enforcing silence thresholding to keep idle CPU <2.8%.
-3. **`app/src/main/cpp/ml/IndicSTTEngine.cpp`:** C++ ONNX Runtime wrapper running quantized IndicConformer with CTC decoding.
-4. **Deliverables:** `libaudio_stt_core.so`, `silero_vad.onnx`, `indic_stt_int8.onnx`.
-
----
-
-### 👤 Member 2 (Vaibhav Senior): On-Device Indic TTS, Voice Tone Cloner & Audio Playback Lead
-* **Domain:** Neural Acoustic Modeling, Speech Synthesis & Android Audio Framework
-* **Mission:** Reconstruct natural Indic speech from text packets, inject speaker pitch/emotion via a 16-byte vector, and enforce non-interruptible `STREAM_ALARM` playback.
-
-#### Exact Tools & Compilers:
-* PyTorch, FastPitch, HiFi-GAN Vocoder, ONNX Runtime Mobile C++, Android `AudioManager`, Google Oboe Player.
-* Models: AI4Bharat `Indic-FastPitch` INT8 (~28 MB), `HiFi-GAN` Vocoder INT8 (~14 MB).
-
-#### Detailed Tasks & File Deliverables:
-1. **`app/src/main/cpp/ml/IndicTTSEngine.cpp`:** FastPitch + HiFi-GAN ONNX synthesis pipeline executing in <140 ms.
-2. **`app/src/main/cpp/ml/VoiceToneCloner.cpp`:** Conditions FastPitch duration/pitch predictors on the 16-byte Prosody Vector (F0 contour + timbre + urgency).
-3. **`app/src/main/java/org/isro/itantra/audio/AlarmAudioRouter.kt`:** Routes SOS alerts through `AudioManager.STREAM_ALARM` at 100% volume, bypassing DND and Mute.
-4. **Deliverables:** `libaudio_tts_core.so`, `indic_fastpitch_int8.onnx`, `hifigan_vocoder_int8.onnx`.
+### 🎙️ Part 1: Acoustic Ingestion, Silero VAD & Speech-to-Text Subsystem
+* **Core Function:** Low-latency native audio capture, micro-VAD speech detection gating, and offline quantized Indic phoneme recognition.
+* **Component Architecture:**
+  1. **Native Audio Capture (`OboeAudioRecorder.cpp` & `AudioRingBuffer.hpp`):**
+     * Direct interface with Android's native `AAudio` / `OpenSL ES` drivers via Google Oboe C++.
+     * Lock-free circular ring buffer processing 16 kHz 16-bit Mono PCM audio in 30 ms chunks (480 samples).
+  2. **Micro-VAD Speech Gatekeeper (`SileroVAD.cpp`):**
+     * Integrates the Silero VAD v5 ONNX model (~1.8 MB) executing in $<1	ext{ ms}$ on CPU.
+     * Keeps heavy downstream AI models asleep during silence, maintaining idle CPU load strictly below **$<2.8\%$**.
+  3. **Quantized Indic STT Engine (`IndicSTTEngine.cpp`):**
+     * Runs static INT8 quantized AI4Bharat IndicConformer (~35 MB) using ONNX Runtime Mobile with XNNPACK.
+     * CTC greedy decoding outputs transcript text + Language ID in $<180	ext{ ms}$.
+* **Artifact Deliverables:** `libaudio_stt_core.so`, `silero_vad.onnx`, `indic_stt_int8.onnx`.
 
 ---
 
-### 👤 Member 3 (Parth Karpe): Semantic Compression, Multi-Task TinyML Agent & Serialization Lead
-* **Domain:** NLP Tokenization, Multi-Task Machine Learning, Information Theory & Cryptography
-* **Mission:** Deploy the Multi-Task TinyML Agent to resolve local landmarks (*Hubballi, Tolankere*) and emotions, translate between Indian dialects, and manage 3-tier binary framing.
-
-#### Exact Tools & Compilers:
-* Google Protocol Buffers Lite 3.25+, Python `sentencepiece`, `IndicBERT-Tiny`, `IndicTrans2-Distilled-INT8`, Libsodium.
-* Models: `multitask_agent_int8.onnx` (~22 MB), `indic_trans_int8.onnx` (~24 MB).
-
-#### Detailed Tasks & File Deliverables:
-1. **`app/src/main/cpp/ml/MultiTaskAgent.cpp`:** Evaluates Intent, extracts Local Landmark GeoIDs via phonetic Soundex matching, and classifies emotion urgency.
-2. **`app/src/main/cpp/ml/IndicTranslationEngine.cpp`:** On-device Indic-to-Indic translation in <80 ms.
-3. **`proto/packet_schema.proto` & `PacketFramer.cpp`:** Assembles 3-tier binary frames (Tier 1: 6B, Tier 2: 18B, Tier 3: 38B) with CRC16.
-4. **Deliverables:** `packet_schema.proto`, `multitask_agent_int8.onnx`, `indic_trans_int8.onnx`, `libsemantic_protocol.so`.
-
----
-
-### 👤 Member 4 (M Janaki): P2P Wireless Transport & WFB-ng Protocol Lead
-* **Domain:** Wireless Telecommunications, RF Protocol Engineering & Resilient P2P Networking
-* **Mission:** Build a 100% offline, battle-tested radio transport stack adopting the WFB-ng protocol paradigm with Forward Error Correction (FEC), connectionless UDP datagrams, Libsodium encryption, and 7-hop mesh relay.
-
-#### Exact Tools & Compilers:
-* WFB-ng Architecture, Android Wi-Fi P2P (`WifiP2pManager`), Bluetooth Classic RFCOMM, BLE L2CAP, Reed-Solomon FEC, Libsodium (`crypto_aead_chacha20poly1305`), Java NIO Datagram Channels.
-
-#### Detailed Tasks & File Deliverables:
-1. **`app/src/main/java/org/isro/itantra/network/ReedSolomonFEC.kt`:** Block FEC generating 4 parity blocks for 8 data packets (survives 40% RF packet loss with zero lag).
-2. **`app/src/main/java/org/isro/itantra/network/WifiP2pTransport.kt`:** Autonomous peer discovery, Group Owner negotiation, and high-throughput UDP socket server on port `8988`.
-3. **`app/src/main/java/org/isro/itantra/network/WfbngTransportManager.kt`:** Master transceiver managing Libsodium encryption, FEC parity attachment, and <50 ms Bluetooth failover.
-4. **`app/src/main/java/org/isro/itantra/network/MeshRelayRouter.kt`:** 7-hop store-and-forward relay extending range from 50m to 500m–5km.
-5. **Deliverables:** `WfbngTransportManager.kt`, `ReedSolomonFEC.kt`, `WifiP2pTransport.kt`, `BluetoothTransport.kt`.
+### 🗜️ Part 2: Semantic Compression, Multi-Task TinyML & Binary Serialization Subsystem
+* **Core Function:** Converts raw text transcripts into compact binary semantic tokens, extracts out-of-vocabulary local landmarks and emotions, and handles dialect translation.
+* **Component Architecture:**
+  1. **Multi-Task TinyML Agent (`MultiTaskAgent.cpp`):**
+     * Quantized `IndicBERT-Tiny-INT8` / `MobileBERT` model ($<22	ext{ MB}$, $<35	ext{ ms}$ inference).
+     * **Local Geographic Entity Resolution:** Uses Soundex and a local geographic prefix trie to snap misspelled local landmarks (*"Tolan care" → Tolankere GeoID: `0x4F2A`*).
+     * **Intent & Action Extractor:** Maps recognized voice intents into single-byte macro action codes (`EVACUATE`, `FLOOD`, `BOAT`).
+     * **Vocal Urgency Classifier:** Extracts emotion from speech features, setting Urgency to `Routine`, `Tactical`, or `Critical SOS`.
+  2. **Offline Indic-to-Indic Translation Bridge (`IndicTranslationEngine.cpp`):**
+     * Distilled `IndicTrans2-INT8` (~24 MB) executes dialect-to-dialect translation (e.g., Hindi $\leftrightarrow$ Tamil/Kannada in $<80	ext{ ms}$).
+  3. **3-Tier Compression & Protobuf Framer (`PacketFramer.cpp`):**
+     * Assembles binary frames: Tier 1 (Semantic Macro: 6–8B), Tier 2 (Structured Frame: 18–22B), Tier 3 (Arithmetic Phoneme Fallback: 35–38B).
+     * Appends CRC16-CCITT checksum for frame validation.
+* **Artifact Deliverables:** `packet_schema.proto`, `multitask_agent_int8.onnx`, `indic_trans_int8.onnx`, `libsemantic_protocol.so`.
 
 ---
 
-### 👤 Member 5 (Nupur): Native Android Core, State Machine & Database Systems Lead
-* **Domain:** Android Native Architecture (NDK/JNI), Lifecycle Management & Edge Databases
-* **Mission:** Build the master Android application architecture, manage the multi-threaded JNI bridge, run the 24/7 background radio daemon, and manage local SQLite storage.
-
-#### Exact Tools & Compilers:
-* Kotlin 1.9+, Android NDK r26c, CMake 3.22+, Room Persistence Library (SQLite 3.40+), Android Foreground Service, WakeLock API.
-
-#### Detailed Tasks & File Deliverables:
-1. **`app/src/main/cpp/native_bridge.cpp`:** High-performance JNI bindings with zero-copy `DirectByteBuffer` memory transfers.
-2. **`app/src/main/java/org/isro/itantra/domain/PTTStateMachine.kt`:** Deterministic state machine + hardware volume button PTT interceptor (`KEYCODE_VOLUME_DOWN`).
-3. **`app/src/main/java/org/isro/itantra/service/RadioDaemonService.kt`:** 24/7 Background Foreground Service with `START_STICKY` and `PARTIAL_WAKE_LOCK`.
-4. **`app/src/main/java/org/isro/itantra/data/local/MessageDatabase.kt`:** Room Database implementing `MessageAuditLog`, `MeshPeerRegistry`, and `EmergencyCodebook`.
-5. **Deliverables:** `native_bridge.cpp`, `RadioDaemonService.kt`, `PTTStateMachine.kt`, `MessageDatabase.kt`.
+### 📡 Part 3: WFB-ng Wireless Transport, Reed-Solomon FEC & Mesh Subsystem
+* **Core Function:** 100% offline, connectionless radio transmission, Reed-Solomon error correction, Libsodium encryption, and multi-hop range extension.
+* **Component Architecture:**
+  1. **Reed-Solomon Forward Error Correction Engine (`ReedSolomonFEC.kt`):**
+     * Implements Block FEC: Generates 4 parity blocks for every 8 data packets ($8$ data $+ 4$ parity).
+     * Reconstructs dropped or corrupted speech packets with **zero retransmission delay**, surviving up to **40% RF packet loss**.
+  2. **Connectionless UDP Wi-Fi Direct Transport (`WifiP2pTransport.kt`):**
+     * Autonomous peer discovery (DNS-SD `_itantra_radio._tcp`) and Group Owner (GO) negotiation.
+     * High-throughput UDP datagram socket server on port `8988`, eliminating TCP connection and head-of-line blocking delays.
+  3. **Master Transceiver Controller (`WfbngTransportManager.kt`):**
+     * Encrypts outgoing payloads with Libsodium `crypto_aead_chacha20poly1305`.
+     * Manages **Autonomous Dual-Mode Failover**: Automatically switches to Bluetooth RFCOMM / BLE in $<50	ext{ ms}$ if Wi-Fi Direct RSSI drops below $-85	ext{ dBm}$.
+  4. **7-Hop Mesh Store-and-Forward Router (`MeshRelayRouter.kt`):**
+     * Multi-hop store-and-forward relay with a 64-entry LRU ring of packet hashes to prevent broadcast storms, extending range across intermediate nodes from 50m to 500m–5km.
+* **Artifact Deliverables:** `WfbngTransportManager.kt`, `ReedSolomonFEC.kt`, `WifiP2pTransport.kt`, `BluetoothTransport.kt`.
 
 ---
 
-### 👤 Member 6 (Vaibhav Junior): Tactical UI/UX, Live Telemetry Dashboard & QA/Pitch Lead
-* **Domain:** Modern Declarative UI, System Benchmarking, Quality Assurance & Hackathon Presentation
-* **Mission:** Build the military-grade tactical UI, visual live telemetry monitor, energy profiling harness, and execute the 3-minute winning hackathon live pitch.
+### 🔊 Part 4: Neural Speech Synthesis, Voice Cloning & Emergency Playback Subsystem
+* **Core Function:** Local speech synthesis from text tokens, zero-bitrate voice timbre and emotion cloning, and hardware-priority audio dispatching.
+* **Component Architecture:**
+  1. **Quantized Neural Indic Speech Synthesis (`IndicTTSEngine.cpp`):**
+     * AI4Bharat `Indic-FastPitch` (Mel-Spectrogram predictor) and `HiFi-GAN` neural vocoder in ONNX INT8 ($<42	ext{ MB}$ total).
+     * Executes in $<140	ext{ ms}$ for a 5-second sentence on mobile ARM CPUs.
+  2. **Zero-Bitrate Voice Identity & Emotion Cloner (`VoiceToneCloner.cpp`):**
+     * Ingests the 16-byte Prosody Vector ($F_0$ pitch contour + timbre $d$-vector + urgency level).
+     * Conditions FastPitch duration and pitch predictors to synthesize speech that preserves the sender's original voice pitch and panicked emergency urgency.
+  3. **Hardware Priority Emergency Audio Router (`AlarmAudioRouter.kt`):**
+     * Routes SOS alerts through `AudioManager.STREAM_ALARM` with `AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE` and `FLAG_AUDIBILITY_ENFORCED`.
+     * Forces speaker output to **100% maximum volume**, overriding Android Do Not Disturb and Mute settings.
+* **Artifact Deliverables:** `libaudio_tts_core.so`, `indic_fastpitch_int8.onnx`, `hifigan_vocoder_int8.onnx`, `AlarmAudioRouter.kt`.
 
-#### Exact Tools & Compilers:
-* Jetpack Compose, Material Design 3, Android Studio Profiler (Energy, CPU, Memory), Battery Historian, JUnit 5.
+---
 
-#### Detailed Tasks & File Deliverables:
-1. **`app/src/main/java/org/isro/itantra/ui/screens/MainWalkieTalkieScreen.kt`:** High-contrast tactical dark theme (`#0B0E14` with `#00E5FF` and `#FF3D00` accents).
-2. **`app/src/main/java/org/isro/itantra/ui/components/TacticalPTTButton.kt` & `AudioWaveformVisualizer.kt`:** Central haptic PTT button with active dynamic audio FFT visualizer.
-3. **`app/src/main/java/org/isro/itantra/ui/components/LiveTelemetryOverlay.kt`:** Real-time hardware telemetry card: `Payload: 6-38 Bytes | Airtime: 18 ms | Data Saved: 99.8% | Hops: 3 | Carrier: WFB-ng UDP`.
-4. **`app/src/main/java/org/isro/itantra/ui/components/DemoInjectionDrawer.kt`:** Test drawer with one-touch triggers: `[Airplane Mode]`, `[Inject 40% Packet Loss]`, `[Trigger SOS Max Volume Alarm]`, `[Toggle Hindi -> Tamil]`.
-5. **Deliverables:** `MainWalkieTalkieScreen.kt`, `LiveTelemetryOverlay.kt`, `Energy_CPU_Benchmark_Report.pdf`.
+### 🧠 Part 5: Native Android Runtime, State Machine & Local Storage Subsystem
+* **Core Function:** Application lifecycle coordination, hardware button interception, zero-copy JNI memory bridge, and embedded SQLite black-box logging.
+* **Component Architecture:**
+  1. **Zero-Copy JNI Native Bridge (`native_bridge.cpp`):**
+     * High-performance JNI bindings using `DirectByteBuffer` to pass audio and binary frames between Kotlin and C++ without JVM garbage collection pauses.
+  2. **Deterministic PTT State Machine (`PTTStateMachine.kt`):**
+     * Manages runtime states: `IDLE_LISTENING` $\leftrightarrow$ `PTT_CAPTURING` $\leftrightarrow$ `TRANSMITTING` $\leftrightarrow$ `RECEIVING` $\leftrightarrow$ `ALARM_ACTIVE`.
+     * Intercepts physical hardware volume buttons (`KEYCODE_VOLUME_DOWN`) to toggle PTT even when the screen is locked.
+  3. **24/7 Persistent Radio Daemon (`RadioDaemonService.kt`):**
+     * Android Foreground Service with `START_STICKY`, persistent notification, and `PARTIAL_WAKE_LOCK` keeping the radio receiver active around the clock.
+  4. **Local Room SQLite Black-Box Database (`MessageDatabase.kt` & `MessageDao.kt`):**
+     * Manages `MessageAuditLog` (flight black box), `MeshPeerRegistry` (neighbor nodes and signal quality), and `EmergencyCodebook` (offline macro lookups).
+* **Artifact Deliverables:** `native_bridge.cpp`, `RadioDaemonService.kt`, `PTTStateMachine.kt`, `MessageDatabase.kt`.
+
+---
+
+### 📱 Part 6: Tactical UI/UX, Peer Radar & Live Telemetry Subsystem
+* **Core Function:** Modern, high-contrast tactical user interface, live hardware telemetry HUD, peer discovery radar, and developer diagnostic controls.
+* **Component Architecture:**
+  1. **Tactical Military-Grade Jetpack Compose UI (`MainWalkieTalkieScreen.kt`):**
+     * High-contrast dark palette (`#0B0E14` with `#00E5FF` cyan active and `#FF3D00` alert accents).
+     * Central tactile PTT button with haptic feedback and dynamic FFT audio waveform visualizer (`AudioWaveformVisualizer.kt`).
+  2. **Live Hardware Telemetry HUD (`LiveTelemetryOverlay.kt`):**
+     * Real-time diagnostic card displaying: `Payload Size (6-38 Bytes)`, `Airtime Latency (18 ms)`, `Bandwidth Saved (99.8%)`, `WFB-ng FEC Parity (4 Blocks)`, `Carrier (Wi-Fi Direct / BT)`.
+  3. **Diagnostic Test Panel (`DemoInjectionDrawer.kt`):**
+     * Developer control drawer with one-touch triggers: `[Simulate Airplane Mode]`, `[Inject 40% Packet Loss]`, `[Trigger SOS Max Volume Alarm]`, `[Toggle Hindi -> Tamil]`.
+* **Artifact Deliverables:** `MainWalkieTalkieScreen.kt`, `LiveTelemetryOverlay.kt`, `DemoInjectionDrawer.kt`.
+
+---
+
+## 🔗 Integration Plan: How All Parts Fuse Together
+
+```
+====================================================================================================
+                                      MASTER INTEGRATION PIPELINE
+====================================================================================================
+
+ PHASE 1: C++ Native Engine Compilation (Parts 1 + 2 + 4)
+ ├── Compile Oboe Audio Ingestion + Silero VAD + IndicConformer STT.
+ ├── Compile Multi-Task TinyML Agent + IndicTrans2 + Protobuf Framer.
+ ├── Compile FastPitch Mel-Model + HiFi-GAN Vocoder.
+ └── Output: Single unified C++ shared library -> `libitantra_core.so`
+
+ PHASE 2: Native-to-Kotlin Binding via JNI (Parts 1, 2, 4 -> Part 5)
+ ├── Wire `native_bridge.cpp` to expose zero-copy JNI methods to Kotlin:
+ │   ├── `nativeStartCapture()`, `nativeStopAndTranscribe()`
+ │   ├── `nativeProcessTinyML()`, `nativeFramePacket()`
+ │   └── `nativeSynthesizeAudio()`, `nativePlayAlarm()`
+
+ PHASE 3: Network & Database Attachment (Parts 3 + 5)
+ ├── Connect `WfbngTransportManager.kt` to `RadioDaemonService.kt`.
+ ├── Outgoing binary frames -> Reed-Solomon FEC -> UDP Socket Send -> Log in Room DB.
+ └── Incoming UDP Datagrams -> Libsodium Decrypt -> FEC Reconstruct -> Log in Room DB.
+
+ PHASE 4: UI & StateFlow Reactivity (Parts 5 + 6)
+ ├── Bind `PTTStateMachine.kt` to `TacticalPTTButton.kt` (Press/Release events).
+ ├── Bind incoming `MessageAuditLog` stream to `MainWalkieTalkieScreen.kt` message feed.
+ └── Bind live RF metrics (RSSI, Bytes, Latency) to `LiveTelemetryOverlay.kt`.
+
+ PHASE 5: End-to-End System Validation
+ └── Full loop on 2 physical Android phones: Speak -> VAD -> STT -> TinyML -> UDP RF -> TTS -> Speaker.
+```
 
 ---
 
@@ -250,20 +302,3 @@ message VoicePacket {
   uint32 crc16_checksum = 9;     // Error detection checksum
 }
 ```
-
----
-
-## 🎤 3-Minute Live Hackathon Winning Pitch Script
-
-1. **Act 1: The Airplane Mode Proof (20s):**
-   > *"Judges, we have placed both phones in complete Airplane Mode with zero internet, zero SIM cards, and zero cloud connectivity. Phone B is held across the room by the Chief Judge."*
-2. **Act 2: Instant Voice Relay & Voice Cloning (40s):**
-   > *(Speak into Phone A in Hindi)*: *"तोळनकेरे रोड पर 5 लोग फंसे हैं, तुरंत बोट भेजो!"*  
-   > *(In <300ms, Phone B receives a 6-byte micro-packet, translates it to Tamil, and speaks aloud in the caller's pitch and panic urgency!)*  
-   > *"That was a 99.9% bandwidth reduction transmitted over Janaki's WFB-ng radio link, with Parth's TinyML Agent resolving the local Tolankere landmark and Chhavi's pitch preserved."*
-3. **Act 3: The 40% Noise & FEC Proof (40s):**
-   > *(Tap "[Inject 40% Packet Loss]")* → Speak another message → Phone B still plays crystal-clear speech without any stutter!  
-   > *"Our Reed-Solomon Forward Error Correction reconstructed the corrupted packets with zero retransmission lag."*
-4. **Act 4: Emergency Mute Override & Battery Proof (20s):**
-   > *(Put Phone B on Silent/DND)* → Send SOS Alert → Phone B overrides mute and blasts the alert at 100% volume via `STREAM_ALARM`.  
-   > *(Point to the CPU monitor)*: *"While waiting for speech, our Silero VAD keeps CPU load under 2.8%, ensuring all-day field battery life."*
