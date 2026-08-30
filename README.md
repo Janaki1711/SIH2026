@@ -12,9 +12,9 @@ Existing walkie-talkies (Motorola, Zello) stream **heavy raw audio (16,000 to 12
 **iTantra creates an entirely new category:** An **AI-Powered Semantic Voice Transceiver** that delivers:
 1. **2,000× Data Compression (38 Bytes vs 160,000 Bytes):** We convert voice to meaning on-device, transmit tiny micro-packets across radio links, and re-synthesize speech locally.
 2. **Zero-Bitrate Voice & Emotion Cloning:** The receiver doesn't hear a monotone robot. We extract a 16-byte acoustic vector so the synthesized speech **preserves the sender's exact voice timbre, pitch, and panicked emergency tone**.
-3. **Universal Indic "Babel-Fish" Voice Bridge:** A rescue worker speaks Hindi in Uttarakhand; a doctor in Kerala hears it spoken aloud in Malayalam in $<300	ext{ ms}$ offline.
+3. **Universal Indic "Babel-Fish" Voice Bridge:** A rescue worker speaks Hindi in Uttarakhand; a doctor in Kerala hears it spoken aloud in Malayalam in <300 ms offline.
 4. **WFB-ng Indestructible Radio Protocol:** Uses connectionless UDP and Reed-Solomon Forward Error Correction (FEC) to survive **40% packet drops with zero lag**.
-5. **Zero-Friction, Consumer-Grade UX:** Open the app $ightarrow$ Phones auto-discover in 3 seconds $ightarrow$ Press the haptic PTT button and speak. Zero manual IP typing or pairing required.
+5. **Zero-Friction, Consumer-Grade UX:** Open the app → Phones auto-discover in 3 seconds → Press the haptic PTT button and speak. Zero manual IP typing or pairing required.
 6. **Opportunistic Local-to-Global Gateway:** 100% offline by default, but if any single phone or drone catches a weak satellite/2G link, it bridges the entire disaster network to National Command HQ!
 
 ---
@@ -131,7 +131,7 @@ Managed by **Member 5: Nupur**, the local database serves as the **Tactical Blac
 
 ### 👤 Member 1 (Chhavi): Audio Ingestion, Silero VAD & On-Device Indic STT Lead
 * **Domain:** AI Speech Recognition, Digital Signal Processing (DSP) & Edge Acceleration
-* **Mission:** Ingest low-latency raw microphone audio, execute micro-VAD speech gating to keep idle CPU $<3\%$, and run INT8 quantized Indic speech recognition offline.
+* **Mission:** Ingest low-latency raw microphone audio, execute micro-VAD speech gating to keep idle CPU <3%, and run INT8 quantized Indic speech recognition offline.
 
 #### Exact Tools & Compilers:
 * PyTorch 2.2+, ONNX Runtime Mobile C++ v1.17+, Google Oboe C++ Library (v1.8+), Android NDK r26c, CMake 3.22+, Python 3.10+.
@@ -139,7 +139,7 @@ Managed by **Member 5: Nupur**, the local database serves as the **Tactical Blac
 
 #### Detailed Tasks & File Deliverables:
 1. **`app/src/main/cpp/audio/OboeAudioRecorder.cpp` & `AudioRingBuffer.hpp`:** Lock-free 16 kHz 16-bit Mono PCM circular ring buffer processing 30 ms chunks.
-2. **`app/src/main/cpp/ml/SileroVAD.cpp`:** Silero VAD gatekeeper executing in $<1	ext{ ms}$, enforcing silence thresholding to keep idle CPU $<2.8\%$.
+2. **`app/src/main/cpp/ml/SileroVAD.cpp`:** Silero VAD gatekeeper executing in <1 ms, enforcing silence thresholding to keep idle CPU <2.8%.
 3. **`app/src/main/cpp/ml/IndicSTTEngine.cpp`:** C++ ONNX Runtime wrapper running quantized IndicConformer with CTC decoding.
 4. **Deliverables:** `libaudio_stt_core.so`, `silero_vad.onnx`, `indic_stt_int8.onnx`.
 
@@ -154,8 +154,8 @@ Managed by **Member 5: Nupur**, the local database serves as the **Tactical Blac
 * Models: AI4Bharat `Indic-FastPitch` INT8 (~28 MB), `HiFi-GAN` Vocoder INT8 (~14 MB).
 
 #### Detailed Tasks & File Deliverables:
-1. **`app/src/main/cpp/ml/IndicTTSEngine.cpp`:** FastPitch + HiFi-GAN ONNX synthesis pipeline executing in $<140	ext{ ms}$.
-2. **`app/src/main/cpp/ml/VoiceToneCloner.cpp`:** Conditions FastPitch duration/pitch predictors on the 16-byte Prosody Vector ($F_0$ contour + timbre + urgency).
+1. **`app/src/main/cpp/ml/IndicTTSEngine.cpp`:** FastPitch + HiFi-GAN ONNX synthesis pipeline executing in <140 ms.
+2. **`app/src/main/cpp/ml/VoiceToneCloner.cpp`:** Conditions FastPitch duration/pitch predictors on the 16-byte Prosody Vector (F0 contour + timbre + urgency).
 3. **`app/src/main/java/org/isro/itantra/audio/AlarmAudioRouter.kt`:** Routes SOS alerts through `AudioManager.STREAM_ALARM` at 100% volume, bypassing DND and Mute.
 4. **Deliverables:** `libaudio_tts_core.so`, `indic_fastpitch_int8.onnx`, `hifigan_vocoder_int8.onnx`.
 
@@ -171,7 +171,7 @@ Managed by **Member 5: Nupur**, the local database serves as the **Tactical Blac
 
 #### Detailed Tasks & File Deliverables:
 1. **`app/src/main/cpp/ml/MultiTaskAgent.cpp`:** Evaluates Intent, extracts Local Landmark GeoIDs via phonetic Soundex matching, and classifies emotion urgency.
-2. **`app/src/main/cpp/ml/IndicTranslationEngine.cpp`:** On-device Indic-to-Indic translation in $<80	ext{ ms}$.
+2. **`app/src/main/cpp/ml/IndicTranslationEngine.cpp`:** On-device Indic-to-Indic translation in <80 ms.
 3. **`proto/packet_schema.proto` & `PacketFramer.cpp`:** Assembles 3-tier binary frames (Tier 1: 6B, Tier 2: 18B, Tier 3: 38B) with CRC16.
 4. **Deliverables:** `packet_schema.proto`, `multitask_agent_int8.onnx`, `indic_trans_int8.onnx`, `libsemantic_protocol.so`.
 
@@ -187,7 +187,7 @@ Managed by **Member 5: Nupur**, the local database serves as the **Tactical Blac
 #### Detailed Tasks & File Deliverables:
 1. **`app/src/main/java/org/isro/itantra/network/ReedSolomonFEC.kt`:** Block FEC generating 4 parity blocks for 8 data packets (survives 40% RF packet loss with zero lag).
 2. **`app/src/main/java/org/isro/itantra/network/WifiP2pTransport.kt`:** Autonomous peer discovery, Group Owner negotiation, and high-throughput UDP socket server on port `8988`.
-3. **`app/src/main/java/org/isro/itantra/network/WfbngTransportManager.kt`:** Master transceiver managing Libsodium encryption, FEC parity attachment, and $<50	ext{ ms}$ Bluetooth failover.
+3. **`app/src/main/java/org/isro/itantra/network/WfbngTransportManager.kt`:** Master transceiver managing Libsodium encryption, FEC parity attachment, and <50 ms Bluetooth failover.
 4. **`app/src/main/java/org/isro/itantra/network/MeshRelayRouter.kt`:** 7-hop store-and-forward relay extending range from 50m to 500m–5km.
 5. **Deliverables:** `WfbngTransportManager.kt`, `ReedSolomonFEC.kt`, `WifiP2pTransport.kt`, `BluetoothTransport.kt`.
 
@@ -253,50 +253,6 @@ message VoicePacket {
 
 ---
 
-## 📅 10-Day Sprint Implementation Schedule
-
-```
-+----------------------------------------------------------------------------------------------------+
-|                                    10-DAY SPRINT SCHEDULE                                          |
-+----------------------------------------------------------------------------------------------------+
-
- Day 1 - 2: Foundation & Interfaces
- ├── M1 (Chhavi): Export Silero VAD & IndicConformer to ONNX; test desktop inference.
- ├── M2 (Vaibhav Senior): Export Indic FastPitch + HiFi-GAN to ONNX; verify speech synthesis.
- ├── M3 (Parth Karpe): Train Multi-Task TinyML model; define `packet_schema.proto`.
- ├── M4 (M Janaki): Build standalone Android Wi-Fi Direct discovery app with UDP sockets.
- ├── M5 (Nupur): Scaffold Android Studio monorepo with CMake NDK bridge and JNI stubs.
- └── M6 (Vaibhav Junior): Design high-contrast Figma UI assets and build Jetpack Compose theme.
-
- Day 3 - 5: Core Engineering & Quantization
- ├── M1 (Chhavi): Quantize STT model to INT8 (<38MB); integrate Oboe audio capture.
- ├── M2 (Vaibhav Senior): Quantize TTS model to INT8 (<45MB); implement `STREAM_ALARM` audio track.
- ├── M3 (Parth Karpe): Build IndicTrans2 translation bridge and 3-tier arithmetic tokenizer.
- ├── M4 (M Janaki): Implement Reed-Solomon FEC encoder/decoder + Libsodium ChaCha20 encryption.
- ├── M5 (Nupur): Build PTT state machine and foreground service lifecycle handlers.
- └── M6 (Vaibhav Junior): Implement real-time waveform visualizer and P2P peer radar screen.
-
- Day 6 - 7: Native Integration & JNI Fusion
- ├── Merge M1 (STT) + M2 (TTS) + M3 (TinyML) into native shared library (`libitantra_core.so`).
- ├── Connect M4 (WFB-ng Transport) to M5 (Foreground Service).
- ├── Connect M5 (JNI Engine) to M6 (Compose UI StateFlows).
- └── First full-loop on single phone: Speak -> VAD -> STT -> TinyML -> Packet -> TTS -> Speaker.
-
- Day 8 - 9: End-to-End P2P Testing & Battery Profiling
- ├── Two-device P2P field testing across physical distance (10m, 30m, 60m).
- ├── Test cross-lingual translation: Hindi speech -> Tamil synthesis.
- ├── Test Emergency Priority: Verify DND override at 100% volume.
- ├── Inject 40% packet loss to demonstrate WFB-ng Reed-Solomon FEC recovery live!
- └── Profile with Android Battery Historian to confirm <3% idle CPU load.
-
- Day 10: Freeze, Polish & Live Demo Setup
- ├── Compile signed release APKs and install on 2 target demonstration phones.
- ├── Prepare Airplane Mode demo harness with real-time telemetry metrics.
- └── Dry run the 3-minute pitch sequence with simulated radio channel noise.
-```
-
----
-
 ## 🎤 3-Minute Live Hackathon Winning Pitch Script
 
 1. **Act 1: The Airplane Mode Proof (20s):**
@@ -306,8 +262,8 @@ message VoicePacket {
    > *(In <300ms, Phone B receives a 6-byte micro-packet, translates it to Tamil, and speaks aloud in the caller's pitch and panic urgency!)*  
    > *"That was a 99.9% bandwidth reduction transmitted over Janaki's WFB-ng radio link, with Parth's TinyML Agent resolving the local Tolankere landmark and Chhavi's pitch preserved."*
 3. **Act 3: The 40% Noise & FEC Proof (40s):**
-   > *(Tap "[Inject 40% Packet Loss]")* $ightarrow$ Speak another message $ightarrow$ Phone B still plays crystal-clear speech without any stutter!  
+   > *(Tap "[Inject 40% Packet Loss]")* → Speak another message → Phone B still plays crystal-clear speech without any stutter!  
    > *"Our Reed-Solomon Forward Error Correction reconstructed the corrupted packets with zero retransmission lag."*
 4. **Act 4: Emergency Mute Override & Battery Proof (20s):**
-   > *(Put Phone B on Silent/DND)* $ightarrow$ Send SOS Alert $ightarrow$ Phone B overrides mute and blasts the alert at 100% volume via `STREAM_ALARM`.  
+   > *(Put Phone B on Silent/DND)* → Send SOS Alert → Phone B overrides mute and blasts the alert at 100% volume via `STREAM_ALARM`.  
    > *(Point to the CPU monitor)*: *"While waiting for speech, our Silero VAD keeps CPU load under 2.8%, ensuring all-day field battery life."*
