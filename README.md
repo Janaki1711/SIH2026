@@ -145,7 +145,7 @@ The architecture is cleanly separated into **6 independent technical subsystems*
 
 ---
 
-### 🎙️ Part 1: Acoustic Ingestion, Silero VAD & Speech-to-Text Subsystem
+### 🎙️ Member 1: Acoustic Ingestion, Silero VAD & Speech-to-Text Subsystem (Chhavi)
 * **Core Function:** Low-latency native audio capture, micro-VAD speech detection gating, and offline quantized Indic phoneme recognition.
 * **Component Architecture:**
   1. **Native Audio Capture (`OboeAudioRecorder.cpp` & `AudioRingBuffer.hpp`):**
@@ -161,7 +161,7 @@ The architecture is cleanly separated into **6 independent technical subsystems*
 
 ---
 
-### 🗜️ Part 2: Semantic Compression, Multi-Task TinyML & Binary Serialization Subsystem
+### 🗜️ Member 2: Semantic Compression, Multi-Task TinyML & Binary Serialization Subsystem (Parth)
 * **Core Function:** Converts raw text transcripts into compact binary semantic tokens, extracts out-of-vocabulary local landmarks and emotions, and handles dialect translation.
 * **Component Architecture:**
   1. **Multi-Task TinyML Agent (`MultiTaskAgent.cpp`):**
@@ -178,7 +178,7 @@ The architecture is cleanly separated into **6 independent technical subsystems*
 
 ---
 
-### 📡 Part 3: WFB-ng Wireless Transport, Reed-Solomon FEC & Mesh Subsystem
+### 📡 Member 3: WFB-ng Wireless Transport, Reed-Solomon FEC & Mesh Subsystem (Janaki)
 * **Core Function:** 100% offline, connectionless radio transmission, Reed-Solomon error correction, Libsodium encryption, and multi-hop range extension.
 * **Component Architecture:**
   1. **Reed-Solomon Forward Error Correction Engine (`ReedSolomonFEC.kt`):**
@@ -196,7 +196,7 @@ The architecture is cleanly separated into **6 independent technical subsystems*
 
 ---
 
-### 🔊 Part 4: Neural Speech Synthesis, Voice Cloning & Emergency Playback Subsystem
+### 🔊 Member 4: Neural Speech Synthesis, Voice Cloning & Emergency Playback Subsystem (Vaibhav snr.)
 * **Core Function:** Local speech synthesis from text tokens, zero-bitrate voice timbre and emotion cloning, and hardware-priority audio dispatching.
 * **Component Architecture:**
   1. **Quantized Neural Indic Speech Synthesis (`IndicTTSEngine.cpp`):**
@@ -212,7 +212,7 @@ The architecture is cleanly separated into **6 independent technical subsystems*
 
 ---
 
-### 🧠 Part 5: Native Android Runtime, State Machine & Local Storage Subsystem
+### 🧠 Member 5: Native Android Runtime, State Machine & Local Storage Subsystem (Nupur)
 * **Core Function:** Application lifecycle coordination, hardware button interception, zero-copy JNI memory bridge, and embedded SQLite black-box logging.
 * **Component Architecture:**
   1. **Zero-Copy JNI Native Bridge (`native_bridge.cpp`):**
@@ -228,7 +228,7 @@ The architecture is cleanly separated into **6 independent technical subsystems*
 
 ---
 
-### 📱 Part 6: Tactical UI/UX, Peer Radar & Live Telemetry Subsystem
+### 📱 Member 6: Tactical UI/UX, Peer Radar & Live Telemetry Subsystem (Vaibhav Jr.)
 * **Core Function:** Modern, high-contrast tactical user interface, live hardware telemetry HUD, peer discovery radar, and developer diagnostic controls.
 * **Component Architecture:**
   1. **Tactical Military-Grade Jetpack Compose UI (`MainWalkieTalkieScreen.kt`):**
@@ -249,24 +249,24 @@ The architecture is cleanly separated into **6 independent technical subsystems*
                                       MASTER INTEGRATION PIPELINE
 ====================================================================================================
 
- PHASE 1: C++ Native Engine Compilation (Parts 1 + 2 + 4)
+ PHASE 1: C++ Native Engine Compilation (Member 1 + 2 + 4)
  ├── Compile Oboe Audio Ingestion + Silero VAD + IndicConformer STT.
  ├── Compile Multi-Task TinyML Agent + IndicTrans2 + Protobuf Framer.
  ├── Compile FastPitch Mel-Model + HiFi-GAN Vocoder.
  └── Output: Single unified C++ shared library -> `libitantra_core.so`
 
- PHASE 2: Native-to-Kotlin Binding via JNI (Parts 1, 2, 4 -> Part 5)
+ PHASE 2: Native-to-Kotlin Binding via JNI (Member 1, 2, 4 -> Part 5)
  ├── Wire `native_bridge.cpp` to expose zero-copy JNI methods to Kotlin:
  │   ├── `nativeStartCapture()`, `nativeStopAndTranscribe()`
  │   ├── `nativeProcessTinyML()`, `nativeFramePacket()`
  │   └── `nativeSynthesizeAudio()`, `nativePlayAlarm()`
 
- PHASE 3: Network & Database Attachment (Parts 3 + 5)
+ PHASE 3: Network & Database Attachment (Member 3 + 5)
  ├── Connect `WfbngTransportManager.kt` to `RadioDaemonService.kt`.
  ├── Outgoing binary frames -> Reed-Solomon FEC -> UDP Socket Send -> Log in Room DB.
  └── Incoming UDP Datagrams -> Libsodium Decrypt -> FEC Reconstruct -> Log in Room DB.
 
- PHASE 4: UI & StateFlow Reactivity (Parts 5 + 6)
+ PHASE 4: UI & StateFlow Reactivity (Member 5 + 6)
  ├── Bind `PTTStateMachine.kt` to `TacticalPTTButton.kt` (Press/Release events).
  ├── Bind incoming `MessageAuditLog` stream to `MainWalkieTalkieScreen.kt` message feed.
  └── Bind live RF metrics (RSSI, Bytes, Latency) to `LiveTelemetryOverlay.kt`.
