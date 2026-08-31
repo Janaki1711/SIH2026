@@ -87,13 +87,14 @@ class Emotion(IntEnum):
     RELIEF = 7
 
 class SemanticField:
-    def __init__(self, name: str, value: Any, code: int, source_phrase: str = "", encoded_hex: str = "", confidence: float = 1.0):
+    def __init__(self, name: str, value: Any, code: int, source_phrase: str = "", encoded_hex: str = "", confidence: float = 1.0, source_type: str = "RULE"):
         self.name = name
         self.value = value
         self.code = code
         self.source_phrase = source_phrase
         self.encoded_hex = encoded_hex
         self.confidence = confidence  # 0.0–1.0; <0.7 = low confidence, preserved as text
+        self.source_type = source_type  # "RULE", "TINYML", "HYBRID"
 
     def to_dict(self):
         d = {
@@ -102,6 +103,7 @@ class SemanticField:
             "code": self.code,
             "source_phrase": self.source_phrase,
             "encoded_value": self.encoded_hex,
+            "source": self.source_type,
         }
         if self.confidence < 1.0:
             d["confidence"] = round(self.confidence, 2)
@@ -124,6 +126,11 @@ class SemanticMessage:
         self.status_text:   Optional[str] = None   # detected communication/event status
         self.extra_fields:  List[SemanticField] = []  # additional recognized semantic fields
 
+        self.location_source: str = "RULE"
+        self.hazard_source: str = "RULE"
+        self.resource_source: str = "RULE"
+        self.status_source: str = "RULE"
+
         self.fallback_text   = fallback_text
         self.is_fallback     = bool(fallback_text)
         self.fallback_reason = fallback_reason
@@ -135,13 +142,13 @@ class SemanticMessage:
         # Inject extra recognised text fields as SemanticField-like objects for UI display
         extras = list(self.extra_fields)
         if self.location_text and self.target.code in (0, Target.PROPER_LOCATION):
-            extras.append(SemanticField("LOCATION", self.location_text, Target.PROPER_LOCATION, self.location_text, "PROPER_NOUN", 0.85))
+            extras.append(SemanticField("LOCATION", self.location_text, Target.PROPER_LOCATION, self.location_text, "PROPER_NOUN", 0.95, self.location_source))
         if self.hazard_text:
-            extras.append(SemanticField("HAZARD", self.hazard_text, 0, self.hazard_text, "TEXT", 0.8))
+            extras.append(SemanticField("HAZARD", self.hazard_text, 0, self.hazard_text, "TEXT", 0.90, self.hazard_source))
         if self.resource_text:
-            extras.append(SemanticField("RESOURCE", self.resource_text, 0, self.resource_text, "TEXT", 0.8))
+            extras.append(SemanticField("RESOURCE", self.resource_text, 0, self.resource_text, "TEXT", 0.90, self.resource_source))
         if self.status_text:
-            extras.append(SemanticField("STATUS", self.status_text, 0, self.status_text, "TEXT", 0.8))
+            extras.append(SemanticField("STATUS", self.status_text, 0, self.status_text, "TEXT", 0.90, self.status_source))
         return base + extras
 
     def to_dict(self) -> Dict[str, Any]:
@@ -151,13 +158,13 @@ class SemanticMessage:
         extra_active = [f.to_dict() for f in self.extra_fields]
         # Proper-noun location
         if self.location_text and self.target.code in (0, Target.PROPER_LOCATION):
-            extra_active.append(SemanticField("LOCATION", self.location_text, Target.PROPER_LOCATION, self.location_text, "PROPER_NOUN", 0.85).to_dict())
+            extra_active.append(SemanticField("LOCATION", self.location_text, Target.PROPER_LOCATION, self.location_text, "PROPER_NOUN", 0.95, self.location_source).to_dict())
         if self.hazard_text:
-            extra_active.append(SemanticField("HAZARD", self.hazard_text, 0, self.hazard_text, "TEXT", 0.8).to_dict())
+            extra_active.append(SemanticField("HAZARD", self.hazard_text, 0, self.hazard_text, "TEXT", 0.90, self.hazard_source).to_dict())
         if self.resource_text:
-            extra_active.append(SemanticField("RESOURCE", self.resource_text, 0, self.resource_text, "TEXT", 0.8).to_dict())
+            extra_active.append(SemanticField("RESOURCE", self.resource_text, 0, self.resource_text, "TEXT", 0.90, self.resource_source).to_dict())
         if self.status_text:
-            extra_active.append(SemanticField("STATUS", self.status_text, 0, self.status_text, "TEXT", 0.8).to_dict())
+            extra_active.append(SemanticField("STATUS", self.status_text, 0, self.status_text, "TEXT", 0.90, self.status_source).to_dict())
 
         return {
             "fields": base_active + extra_active,

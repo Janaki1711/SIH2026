@@ -663,40 +663,30 @@ def parse_hindi(text: str) -> SemanticMessage:
     return _parse_core(text)
 
 def parse(text: str, language: str) -> SemanticMessage:
-    """Parse text into a SemanticMessage.
+    """Parse text into a SemanticMessage using Hybrid Rule + TinyML parsing."""
+    try:
+        import hybrid_engine
+        return hybrid_engine.parse(text, language)
+    except Exception as e:
+        # Graceful fallback to pure rule-based parse if TinyML fails to load
+        msg = _parse_core(text)
+        failed = []
+        if msg.action.code == 0:
+            failed.append("ACTION")
+        if msg.target.code == 0 and not msg.location_text:
+            failed.append("TARGET")
+        if msg.entity.code == 0 and msg.action.code == Action.SEND_TEAM.value:
+            failed.append("ENTITY")
+        msg.failed_fields = failed
 
-    Fallback logic (v2 — information-preserving):
-    - At least 2 meaningful fields extracted → return semantic message
-    - Hazard/status content with no other fields → return partial semantic message
-    - Truly nothing recognised → fallback
-    """
-    msg = _parse_core(text)
-
-    # Mark what genuinely failed
-    failed = []
-    if msg.action.code == 0:
-        failed.append("ACTION")
-    if msg.target.code == 0 and not msg.location_text:
-        failed.append("TARGET")
-    if msg.entity.code == 0 and msg.action.code == Action.SEND_TEAM.value:
-        failed.append("ENTITY")
-
-    msg.failed_fields = failed
-
-    # Check if there's enough meaningful content to return a semantic message
-    meaningful = _meaningful_field_count(msg)
-
-    # Also check for status/event content (e.g. "comm link active", "building collapsed")
-    has_status = _has_status_content(text.lower())
-
-    # Only trigger fallback when genuinely nothing useful was extracted
-    if meaningful < 2 and not has_status:
-        reason = f"Insufficient semantic content. Recognised fields: {', '.join(msg.matched_fields) or 'none'}"
-        return SemanticMessage(
-            fallback_text=text,
-            fallback_reason=reason,
-            matched_fields=msg.matched_fields,
-            failed_fields=failed,
-        )
-
-    return msg
+        meaningful = _meaningful_field_count(msg)
+        has_status = _has_status_content(text.lower())
+        if meaningful < 2 and not has_status:
+            reason = f"Insufficient semantic content. Recognised fields: {', '.join(msg.matched_fields) or 'none'}"
+            return SemanticMessage(
+                fallback_text=text,
+                fallback_reason=reason,
+                matched_fields=msg.matched_fields,
+                failed_fields=failed,
+            )
+        return msg
