@@ -6,6 +6,8 @@ interface SemanticFieldData {
   code: number;
   source_phrase: string;
   encoded_value: string;
+  confidence?: number;
+  source?: string;
 }
 
 interface SemanticData {
@@ -120,6 +122,15 @@ export default function SemanticPanel({ semanticData, originalText, semanticBina
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
+                          {field.source && (
+                            <span className={`text-[9px] px-1 py-0.2 rounded border font-mono ${
+                              field.source === 'TINYML' ? 'bg-tac-cyan/10 text-tac-cyan border-tac-cyan/30' :
+                              field.source === 'HYBRID' ? 'bg-tac-amber/10 text-tac-amber border-tac-amber/30' :
+                              'bg-tac-blue/10 text-tac-blue border-tac-blue/20'
+                            }`}>
+                              {field.source}
+                            </span>
+                          )}
                           {!isUnknown ? (
                             <span className="text-tac-green text-xs">✓</span>
                           ) : (
@@ -140,6 +151,18 @@ export default function SemanticPanel({ semanticData, originalText, semanticBina
                             <span className="text-tac-muted">Human Value:</span>
                             <span className="text-tac-green font-bold">{String(field.value)}</span>
                           </div>
+                          {field.source && (
+                            <div className="flex justify-between">
+                              <span className="text-tac-muted">Engine Source:</span>
+                              <span className="text-tac-cyan font-bold">{field.source}</span>
+                            </div>
+                          )}
+                          {field.confidence !== undefined && (
+                            <div className="flex justify-between">
+                              <span className="text-tac-muted">Confidence:</span>
+                              <span className="text-tac-green font-bold">{Math.round(field.confidence * 100)}%</span>
+                            </div>
+                          )}
                           <div className="flex justify-between">
                             <span className="text-tac-muted">Semantic ID:</span>
                             <span className="text-tac-blue font-bold">0x{field.code.toString(16).toUpperCase().padStart(2, '0')}</span>
