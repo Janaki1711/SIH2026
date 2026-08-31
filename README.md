@@ -255,7 +255,7 @@ The architecture is cleanly separated into **6 independent technical subsystems*
  ├── Compile FastPitch Mel-Model + HiFi-GAN Vocoder.
  └── Output: Single unified C++ shared library -> `libitantra_core.so`
 
- PHASE 2: Native-to-Kotlin Binding via JNI (Member 1, 2, 4 -> Part 5)
+ PHASE 2: Native-to-Kotlin Binding via JNI (Member 1, 2, 4 -> Member 5)
  ├── Wire `native_bridge.cpp` to expose zero-copy JNI methods to Kotlin:
  │   ├── `nativeStartCapture()`, `nativeStopAndTranscribe()`
  │   ├── `nativeProcessTinyML()`, `nativeFramePacket()`
