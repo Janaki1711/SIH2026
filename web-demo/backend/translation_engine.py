@@ -171,14 +171,27 @@ def _realize_english(msg: SemanticMessage, qty) -> str:
         if cs_fields:
             parts.append(cs_fields[0].value)
         parts.append("is moving")
-        if tgt:
+
+        dir_fields = [f for f in msg.extra_fields if f.name == "DIRECTION"]
+        direction = dir_fields[0].value.lower() if dir_fields else ""
+
+        # Deduplicate if target is just the direction name
+        if tgt and tgt.lower() in {"north", "south", "east", "west", "northeast", "northwest", "southeast", "southwest"}:
+            if not direction:
+                direction = tgt.lower()
+            tgt = ""
+
+        if direction and tgt and tgt.lower() != direction.lower():
+            parts.append(f"{direction} towards {tgt}")
+        elif direction:
+            parts.append(direction)
+        elif tgt:
             parts.append(f"towards {tgt}")
+
         cond = msg.condition.value if msg.condition.code != 0 else ""
         if cond:
-            parts.append(f"— {cond}.")
-        else:
-            parts.append(".")
-        return " ".join(parts)
+            return f"{' '.join(parts)} — {cond}."
+        return f"{' '.join(parts)}."
 
     # ── SEARCH ──
     elif action == "SEARCH":
@@ -192,6 +205,8 @@ def _realize_english(msg: SemanticMessage, qty) -> str:
 
     # ── NO CLEAR ACTION — build summary from available fields ──
     parts = []
+    dir_fields = [f for f in msg.extra_fields if f.name == "DIRECTION"]
+    direction = dir_fields[0].value if dir_fields else ""
     if msg.emotion.code != 0:
         parts.append(f"Situation: {msg.emotion.value.lower()}")
     if msg.condition.code != 0:
@@ -201,6 +216,8 @@ def _realize_english(msg: SemanticMessage, qty) -> str:
                 parts.append(f"also {ef.value.lower()}")
     if qty:
         parts.append(f"Count: {qty}")
+    if direction:
+        parts.append(f"Direction: {direction}")
     if tgt:
         parts.append(f"Location: {tgt}")
     if msg.hazard_text:
@@ -279,6 +296,33 @@ def _realize_hindi(msg: SemanticMessage, qty) -> str:
         hazard = msg.hazard_text or ""
         loc = tgt or ""
         return f"चेतावनी: {hazard}{' — ' + loc if loc else ''}।"
+
+    elif action == "MOVE":
+        parts = []
+        if ent:
+            parts.append(ent)
+        if qty:
+            parts.append(f"({qty})")
+        cs_fields = [f for f in msg.extra_fields if f.name == "CALLSIGN"]
+        if cs_fields:
+            parts.append(cs_fields[0].value)
+        dir_fields = [f for f in msg.extra_fields if f.name == "DIRECTION"]
+        direction = dir_fields[0].value if dir_fields else ""
+        DIR_MAP_HI = {
+            "NORTH": "उत्तर", "SOUTH": "दक्षिण", "EAST": "पूर्व", "WEST": "पश्चिम",
+            "NORTHEAST": "उत्तर-पूर्व", "NORTHWEST": "उत्तर-पश्चिम",
+            "SOUTHEAST": "दक्षिण-पूर्व", "SOUTHWEST": "दक्षिण-पश्चिम"
+        }
+        dir_hi = DIR_MAP_HI.get(direction.upper(), direction.lower())
+        if dir_hi and tgt:
+            parts.append(f"{tgt} की ओर {dir_hi} दिशा में आगे बढ़ रहा है।")
+        elif dir_hi:
+            parts.append(f"{dir_hi} दिशा में आगे बढ़ रहा है।")
+        elif tgt:
+            parts.append(f"{tgt} की ओर बढ़ रहा है।")
+        else:
+            parts.append("आगे बढ़ रहा है।")
+        return " ".join(parts)
 
     # Partial / no action
     parts = []
