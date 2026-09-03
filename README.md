@@ -862,3 +862,4 @@ VOICE → MEANING → COMPACT PACKET → MEANING → VOICE
 
 **One caution:** in the `Running the Web Demo` section, keep only the commands that actually work on your machine. In particular, if `.\start_demo.ps1` already starts both backend and frontend, you don't need the separate `npm` commands.
 ```
+Implemented and benchmarked a lightweight TinyML semantic communication pipeline with V2 and V3 candidates. V2 uses a TF-IDF + Logistic Regression hybrid classifier, while V3 introduces a character-level 1D CNN with INT8 quantization and TFLite/LiteRT-ready deployment. V3 INT8 achieves 98.44% accuracy, 98.53% Macro F1, 50.5 KB model size, 38,570 parameters, and ~0.028 ms inference latency, with zero observed accuracy loss from FP32 to INT8. The existing semantic parsing, compression, M3 protocol, V2 model, and production functionality were preserved, while generated cache/obsolete files were cleaned and the work was committed to the parth-tinyml branch.
