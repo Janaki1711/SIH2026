@@ -63,6 +63,10 @@ message VoicePacket {
     // Interface is INTENTIONALLY stable across phases.
     bytes compressed_payload = 7;
 
-    // Phase 4 reserved: prosody control vector for IndicTTS synthesis.
+    // Phase 4 reserved: prosody control vector for IndicTTS synthesis (16 bytes).
     bytes prosody_vector = 8;
+
+    // CRC16-CCITT checksum for end-to-end frame verification.
+    uint32 crc16_checksum = 9;
 }
+

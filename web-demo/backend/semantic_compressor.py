@@ -1,171 +1,142 @@
-# semantic_compressor.py
 """
-iTantra M3 Semantic Compressor
-Encodes SemanticMessage into an ultra-compact byte sequence.
+semantic_compressor.py — 3-Tier Semantic Compressor & Decompressor
 
-BIT LAYOUT (preserved, 4 bytes total):
-  Byte 0: Action (4 bits), Urgency (3 bits), IsFallback (1 bit)
-  Byte 1: Entity (4 bits), Target (4 bits)
-  Byte 2: Quantity (8 bits)
-  Byte 3: Condition (4 bits), Emotion (4 bits)
-
-EXTENDED LAYOUT (for PROPER_LOCATION / partial messages):
-  When target code == Target.PROPER_LOCATION (15), an additional
-  zlib-compressed UTF-8 suffix carries the proper noun text.
-  The receiver can reconstruct the LOCATION field from this.
-
-  Byte 0:  header — 0x02 = semantic-with-location-suffix
-  Bytes 1–4: the 4 core semantic bytes (as above, target nibble = 0x0F)
-  Bytes 5+:  zlib-compressed location_text UTF-8
+Implements:
+- Tier 1: Semantic Macro (6–8 bytes)
+- Tier 2: Structured Frame (18–22 bytes)
+- Tier 3: Fallback Payload (35–38 bytes)
 """
 
 import struct
-import zlib
-import json
-from semantic_schema import SemanticMessage, Action, Urgency, Entity, Target, Condition, Emotion, SemanticField
+from typing import Union
+from semantic_codebook import ActionCode, UrgencyCode, HazardCode, GeoID, CompressionTier
+from tinyml_agent import SemanticResult, LocationEntity
 
-_HEADER_FALLBACK         = 0x01   # original: full text fallback
-_HEADER_SEMANTIC         = 0x00   # original: clean 4-byte semantic (encoded in MSB of b0)
-_HEADER_SEMANTIC_WITH_LOC = 0x02  # new: 4-byte semantic + location suffix
+def compress_tier1(res: SemanticResult) -> bytes:
+    """Tier 1: 6 bytes payload."""
+    b0 = int(CompressionTier.TIER_1_MACRO.value)
+    b1 = ((int(res.intent.value) & 0x0F) << 4) | (int(res.urgency.value) & 0x0F)
+    b2 = ((int(res.action.value) & 0x0F) << 4) | (int(res.hazard.value) & 0x0F)
+    b3 = min(res.person_count, 255) & 0xFF
+    gid = int(res.location.geo_id)
+    b4 = (gid >> 8) & 0xFF
+    b5 = gid & 0xFF
+    return struct.pack("!BBBBBB", b0, b1, b2, b3, b4, b5)
 
+def decompress_tier1(data: bytes) -> SemanticResult:
+    if len(data) < 6:
+        raise ValueError("Tier 1 payload must be at least 6 bytes")
+    b0, b1, b2, b3, b4, b5 = struct.unpack("!BBBBBB", data[:6])
+    intent = ActionCode((b1 >> 4) & 0x0F)
+    urgency = UrgencyCode(b1 & 0x0F)
+    action = ActionCode((b2 >> 4) & 0x0F)
+    hazard = HazardCode(b2 & 0x0F)
+    person_count = b3
+    gid = (b4 << 8) | b5
 
-def compress(msg: SemanticMessage) -> bytes:
-    if msg.is_fallback:
-        header = 0x01
-        text_bytes = msg.fallback_text.encode('utf-8')
-        compressed_text = zlib.compress(text_bytes, level=9)
-        return struct.pack("!B", header) + compressed_text
+    from semantic_codebook import GEOID_TO_CANONICAL
+    canonical = GEOID_TO_CANONICAL.get(gid, "Unknown Location")
 
-    # Calculate core 4 bytes
-    b0 = ((msg.action.code & 0x0F) << 4) | ((msg.urgency.code & 0x07) << 1) | 0x00
-    b1 = ((msg.entity.code & 0x0F) << 4) | (msg.target.code & 0x0F)
-    b2 = min(msg.quantity.code, 255) & 0xFF
-    b3 = ((msg.condition.code & 0x0F) << 4) | (msg.emotion.code & 0x0F)
+    return SemanticResult(
+        original_text="",
+        intent=intent,
+        action=action,
+        hazard=hazard,
+        person_count=person_count,
+        urgency=urgency,
+        location=LocationEntity(canonical, gid, 0.95),
+        compression_tier=CompressionTier.TIER_1_MACRO,
+        confidence=0.95
+    )
 
-    # Store encoded hex representations back onto the msg object for UI inspection
-    msg.action.encoded_hex    = f"0x{b0 & 0xF0:02X}"
-    msg.urgency.encoded_hex   = f"0x{b0 & 0x0E:02X}"
-    msg.entity.encoded_hex    = f"0x{b1 & 0xF0:02X}"
-    msg.target.encoded_hex    = f"0x{b1 & 0x0F:02X}"
-    msg.quantity.encoded_hex  = f"0x{b2:02X}"
-    msg.condition.encoded_hex = f"0x{b3 & 0xF0:02X}"
-    msg.emotion.encoded_hex   = f"0x{b3 & 0x0F:02X}"
+def compress_tier2(res: SemanticResult) -> bytes:
+    """Tier 2: 18 bytes payload."""
+    b0 = int(CompressionTier.TIER_2_STRUCTURED.value)
+    b1 = int(res.intent.value) & 0xFF
+    b2 = int(res.action.value) & 0xFF
+    b3 = int(res.hazard.value) & 0xFF
+    b4 = int(res.urgency.value) & 0xFF
+    count16 = min(res.person_count, 65535)
+    gid = int(res.location.geo_id)
+    conf_byte = min(max(int(res.confidence * 100), 0), 100)
 
-    # If extended fields are present, append them as a compressed JSON suffix
-    extensions = {}
-    if msg.location_text and msg.target.code == Target.PROPER_LOCATION.value:
-        extensions["loc"] = msg.location_text
-    if msg.hazard_text:
-        extensions["haz"] = msg.hazard_text
-    if msg.resource_text:
-        extensions["res"] = msg.resource_text
-    if msg.status_text:
-        extensions["sts"] = msg.status_text
-    if msg.extra_fields:
-        extensions["ext"] = [(f.name, str(f.value), f.source_phrase) for f in msg.extra_fields]
+    lang = res.detected_language or "en"
+    l0 = ord(lang[0]) if len(lang) > 0 else ord('e')
+    l1 = ord(lang[1]) if len(lang) > 1 else ord('n')
 
-    if extensions:
-        ext_bytes = json.dumps(extensions).encode('utf-8')
-        compressed_ext = zlib.compress(ext_bytes, level=9)
-        # Use a special 1-byte header so the receiver knows there's a JSON extension suffix
-        header_byte = struct.pack("!B", _HEADER_SEMANTIC_WITH_LOC)
-        return header_byte + struct.pack("!BBBB", b0, b1, b2, b3) + compressed_ext
+    sub_flags = len(res.extracted_entities) & 0xFFFF
+    ctx_flags = 0
 
-    return struct.pack("!BBBB", b0, b1, b2, b3)
+    return struct.pack("!BBBBBHHBBBHI", b0, b1, b2, b3, b4, count16, gid, conf_byte, l0, l1, sub_flags, ctx_flags)
 
+def decompress_tier2(data: bytes) -> SemanticResult:
+    if len(data) < 18:
+        raise ValueError("Tier 2 payload must be at least 18 bytes")
+    b0, b1, b2, b3, b4, count16, gid, conf_byte, l0, l1, sub_flags, ctx_flags = struct.unpack("!BBBBBHHBBBHI", data[:18])
 
-def decompress(data: bytes) -> SemanticMessage:
+    intent = ActionCode(b1) if b1 in ActionCode._value2member_map_ else ActionCode.UNKNOWN
+    action = ActionCode(b2) if b2 in ActionCode._value2member_map_ else ActionCode.UNKNOWN
+    hazard = HazardCode(b3) if b3 in HazardCode._value2member_map_ else HazardCode.NONE
+    urgency = UrgencyCode(b4) if b4 in UrgencyCode._value2member_map_ else UrgencyCode.ROUTINE
+
+    lang = chr(l0) + chr(l1)
+    from semantic_codebook import GEOID_TO_CANONICAL
+    canonical = GEOID_TO_CANONICAL.get(gid, "Unknown Location")
+
+    return SemanticResult(
+        original_text="",
+        detected_language=lang,
+        intent=intent,
+        action=action,
+        hazard=hazard,
+        person_count=count16,
+        urgency=urgency,
+        location=LocationEntity(canonical, gid, 0.95),
+        compression_tier=CompressionTier.TIER_2_STRUCTURED,
+        confidence=conf_byte / 100.0
+    )
+
+def compress_tier3(res: SemanticResult) -> bytes:
+    """Tier 3: 36 bytes payload."""
+    b0 = int(CompressionTier.TIER_3_FALLBACK.value)
+    text_bytes = res.original_text.encode('utf-8')
+    raw_len = min(len(text_bytes), 255)
+    mode = 0x01
+    payload_cap = 33
+    payload = text_bytes[:payload_cap].ljust(payload_cap, b'\x00')
+    return struct.pack("!BBB", b0, raw_len, mode) + payload
+
+def decompress_tier3(data: bytes) -> SemanticResult:
+    if len(data) < 35:
+        raise ValueError("Tier 3 payload must be at least 35 bytes")
+    b0, raw_len, mode = struct.unpack("!BBB", data[:3])
+    actual_len = min(raw_len, len(data) - 3)
+    text = data[3:3 + actual_len].decode('utf-8', errors='replace')
+    return SemanticResult(
+        original_text=text,
+        is_fallback=True,
+        fallback_reason="Decoded from Tier 3 fallback payload",
+        compression_tier=CompressionTier.TIER_3_FALLBACK,
+        confidence=0.35
+    )
+
+def compress(res: SemanticResult) -> bytes:
+    if res.compression_tier == CompressionTier.TIER_1_MACRO:
+        return compress_tier1(res)
+    elif res.compression_tier == CompressionTier.TIER_2_STRUCTURED:
+        return compress_tier2(res)
+    else:
+        return compress_tier3(res)
+
+def decompress(data: bytes) -> SemanticResult:
     if not data:
-        return SemanticMessage()
-
-    b0 = data[0]
-
-    # --- Check for new extended header byte ---
-    if b0 == _HEADER_SEMANTIC_WITH_LOC:
-        # 1 header byte + 4 semantic bytes + compressed location
-        if len(data) < 5:
-            return SemanticMessage(fallback_text="[TRUNCATED EXTENDED PACKET]")
-        real_b0 = data[1]
-        b1 = data[2]
-        b2 = data[3]
-        b3 = data[4]
-        location_suffix = data[5:]
-        extensions = {}
-        if location_suffix:
-            try:
-                ext_str = zlib.decompress(location_suffix).decode('utf-8')
-                if ext_str.startswith('{'):
-                    extensions = json.loads(ext_str)
-                else:
-                    extensions["loc"] = ext_str  # backward compatibility
-            except Exception:
-                pass
-        return _decode_semantic_bytes(real_b0, b1, b2, b3, extensions)
-
-    # --- Original fallback packet ---
-    is_fallback = (b0 & 0x01) == 0x01
-    if is_fallback:
-        compressed_text = data[1:]
-        try:
-            text = zlib.decompress(compressed_text).decode('utf-8')
-        except Exception:
-            text = "[CORRUPTED DECOMPRESSION]"
-        return SemanticMessage(fallback_text=text)
-
-    # --- Original 4-byte semantic packet ---
-    if len(data) < 4:
-        return SemanticMessage(fallback_text="[TRUNCATED PACKET]")
-
-    b1 = data[1]
-    b2 = data[2]
-    b3 = data[3]
-    return _decode_semantic_bytes(b0, b1, b2, b3, None)
-
-
-def _decode_semantic_bytes(b0: int, b1: int, b2: int, b3: int, extensions: dict = None) -> SemanticMessage:
-    a_val  = (b0 >> 4) & 0x0F
-    u_val  = (b0 >> 1) & 0x07
-    e_val  = (b1 >> 4) & 0x0F
-    t_val  = b1 & 0x0F
-    q_val  = b2
-    c_val  = (b3 >> 4) & 0x0F
-    em_val = b3 & 0x0F
-
-    try:
-        msg = SemanticMessage()
-        msg.action    = SemanticField("ACTION",    Action(a_val).name,    a_val)
-        msg.urgency   = SemanticField("URGENCY",   Urgency(u_val).name,   u_val)
-        msg.entity    = SemanticField("ENTITY",    Entity(e_val).name,    e_val)
-        msg.target    = SemanticField("TARGET",    Target(t_val).name,    t_val)
-        msg.quantity  = SemanticField("QUANTITY",  q_val,                  q_val)
-        msg.condition = SemanticField("CONDITION", Condition(c_val).name,  c_val)
-        msg.emotion   = SemanticField("EMOTION",   Emotion(em_val).name,   em_val)
-
-        # Populate encoded_hex
-        msg.action.encoded_hex    = f"0x{b0 & 0xF0:02X}"
-        msg.urgency.encoded_hex   = f"0x{b0 & 0x0E:02X}"
-        msg.entity.encoded_hex    = f"0x{b1 & 0xF0:02X}"
-        msg.target.encoded_hex    = f"0x{b1 & 0x0F:02X}"
-        msg.quantity.encoded_hex  = f"0x{b2:02X}"
-        msg.condition.encoded_hex = f"0x{b3 & 0xF0:02X}"
-        msg.emotion.encoded_hex   = f"0x{b3 & 0x0F:02X}"
-
-        # Restore extended fields
-        if extensions:
-            if "loc" in extensions:
-                msg.location_text = extensions["loc"]
-            if "haz" in extensions:
-                msg.hazard_text = extensions["haz"]
-            if "res" in extensions:
-                msg.resource_text = extensions["res"]
-            if "sts" in extensions:
-                msg.status_text = extensions["sts"]
-            if "ext" in extensions:
-                for item in extensions["ext"]:
-                    if len(item) == 3:
-                        name, val, src = item
-                        msg.extra_fields.append(SemanticField(name, val, 0, src, "TEXT", 0.9))
-
-        return msg
-    except ValueError:
-        return SemanticMessage(fallback_text="[INVALID SEMANTIC CODE]")
+        raise ValueError("Cannot decompress empty byte sequence")
+    header = data[0]
+    if header == int(CompressionTier.TIER_1_MACRO.value):
+        return decompress_tier1(data)
+    elif header == int(CompressionTier.TIER_2_STRUCTURED.value):
+        return decompress_tier2(data)
+    elif header == int(CompressionTier.TIER_3_FALLBACK.value):
+        return decompress_tier3(data)
+    else:
+        return decompress_tier3(data)
