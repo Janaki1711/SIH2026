@@ -180,30 +180,47 @@
             android:textSize="11sp" />
     </LinearLayout>
 
-    <!-- PTT Button -->
-    <Button
-        android:id="@+id/btnPttTalk"
+    <!-- Action Buttons Row: Play Speech & Hold PTT -->
+    <LinearLayout
+        android:id="@+id/llActionButtons"
         android:layout_width="match_parent"
-        android:layout_height="64dp"
-        android:text="HOLD TO TRANSMIT (PTT)"
-        android:textColor="#0B0E14"
-        android:textSize="16sp"
-        android:textStyle="bold"
-        android:backgroundTint="#00E5FF"
-        android:layout_marginTop="12dp"
-        app:layout_constraintTop_toBottomOf="@id/llTelemetry" />
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginTop="10dp"
+        app:layout_constraintTop_toBottomOf="@id/llTelemetry">
 
-    <!-- Emergency SOS Override Button -->
-    <Button
-        android:id="@+id/btnEmergencySos"
-        android:layout_width="match_parent"
-        android:layout_height="56dp"
-        android:text="EMERGENCY SOS OVERRIDE (100% VOL)"
-        android:textColor="#FFFFFF"
-        android:textSize="14sp"
-        android:textStyle="bold"
-        android:backgroundTint="#FF3D00"
-        android:layout_marginTop="8dp"
-        app:layout_constraintTop_toBottomOf="@id/btnPttTalk" />
+        <Button
+            android:id="@+id/btnPlayAudio"
+            android:layout_width="match_parent"
+            android:layout_height="54dp"
+            android:text="PLAY SPEECH (RX PLAYBACK)"
+            android:textColor="#0B0E14"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:backgroundTint="#00E676" />
+
+        <Button
+            android:id="@+id/btnPttTalk"
+            android:layout_width="match_parent"
+            android:layout_height="54dp"
+            android:layout_marginTop="6dp"
+            android:text="HOLD TO TRANSMIT (PTT)"
+            android:textColor="#0B0E14"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:backgroundTint="#00E5FF" />
+
+        <!-- Emergency SOS Override Button -->
+        <Button
+            android:id="@+id/btnEmergencySos"
+            android:layout_width="match_parent"
+            android:layout_height="54dp"
+            android:layout_marginTop="6dp"
+            android:text="EMERGENCY SOS OVERRIDE (100% VOL)"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:backgroundTint="#FF3D00" />
+    </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

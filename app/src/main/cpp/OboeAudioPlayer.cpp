@@ -20,8 +20,8 @@ bool OboeAudioPlayer::start(int32_t sampleRate, int32_t channelCount) {
 
     oboe::AudioStreamBuilder builder;
     builder.setDirection(oboe::Direction::Output)
-           ->setPerformanceMode(oboe::PerformanceMode::LowLatency)
-           ->setSharingMode(oboe::SharingMode::Exclusive)
+           ->setSharingMode(oboe::SharingMode::Shared)
+           ->setPerformanceMode(oboe::PerformanceMode::None)
            ->setFormat(oboe::AudioFormat::Float)
            ->setChannelCount(channelCount)
            ->setSampleRate(sampleRate)
@@ -30,7 +30,7 @@ bool OboeAudioPlayer::start(int32_t sampleRate, int32_t channelCount) {
 
     oboe::Result result = builder.openStream(stream_);
     if (result != oboe::Result::OK) {
-        LOGE("Failed to open Oboe audio output stream: %s", oboe::convertToText(result));
+        LOGE("Failed to open Oboe audio stream: %s", oboe::convertToText(result));
         return false;
     }
 

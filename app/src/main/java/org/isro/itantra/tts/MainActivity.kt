@@ -32,6 +32,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnPresetTe: Button
     private lateinit var btnPresetEn: Button
 
+    private lateinit var btnPlayAudio: Button
     private lateinit var btnPttTalk: Button
     private lateinit var btnEmergencySos: Button
 
@@ -40,6 +41,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvTransceiverState: TextView
 
     private val languages = listOf(
+        "English (en)" to "en",
         "Hindi (hi)" to "hi",
         "Tamil (ta)" to "ta",
         "Telugu (te)" to "te",
@@ -48,8 +50,7 @@ class MainActivity : AppCompatActivity() {
         "Marathi (mr)" to "mr",
         "Gujarati (gu)" to "gu",
         "Bengali (bn)" to "bn",
-        "Odia (or)" to "or",
-        "English (en)" to "en"
+        "Odia (or)" to "or"
     )
 
     @SuppressLint("ClickableViewAccessibility")
@@ -78,6 +79,7 @@ class MainActivity : AppCompatActivity() {
         btnPresetTe = findViewById(R.id.btnPresetTe)
         btnPresetEn = findViewById(R.id.btnPresetEn)
 
+        btnPlayAudio = findViewById(R.id.btnPlayAudio)
         btnPttTalk = findViewById(R.id.btnPttTalk)
         btnEmergencySos = findViewById(R.id.btnEmergencySos)
 
@@ -105,6 +107,17 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // Direct playback button
+        btnPlayAudio.setOnClickListener {
+            val langCode = languages[spinnerLanguage.selectedItemPosition].second
+            val text = etSpeechText.text.toString().ifEmpty { "Testing iTantra audio reception." }
+            tvTransceiverState.text = "STATE: PLAYING RECEIVED AUDIO"
+            tvPayloadSize.text = "PAYLOAD: " + (text.toByteArray().size + 16) + " BYTES"
+            tvLatency.text = "LATENCY: < 15ms"
+            ttsManager.speak(text, langCode)
+        }
+
+        // Hold-to-transmit PTT
         btnPttTalk.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
@@ -125,9 +138,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // Emergency SOS Override
         btnEmergencySos.setOnClickListener {
             val langCode = languages[spinnerLanguage.selectedItemPosition].second
-            val emergencyText = "EMERGENCY SOS ALERT! IMMEDIATE ASSISTANCE REQUIRED AT SECTOR ALPHA."
+            val emergencyText = etSpeechText.text.toString().ifEmpty {
+                "EMERGENCY SOS ALERT! IMMEDIATE ASSISTANCE REQUIRED AT SECTOR ALPHA."
+            }
             pttController.triggerEmergencySos(emergencyText, langCode)
             tvTransceiverState.text = "STATE: EMERGENCY OVERRIDE ACTIVE (100% VOL)"
             tvPayloadSize.text = "PAYLOAD: 40-BYTE SEMANTIC PACKET (PRIORITY 0)"
@@ -135,22 +151,22 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnPresetHi.setOnClickListener {
-            spinnerLanguage.setSelection(0)
+            spinnerLanguage.setSelection(1)
             etSpeechText.setText("यह इसरो आई-तंत्रा आपातकालीन संचार प्रणाली है।")
         }
 
         btnPresetTa.setOnClickListener {
-            spinnerLanguage.setSelection(1)
+            spinnerLanguage.setSelection(2)
             etSpeechText.setText("இது இஸ்ரோ ஐ-தந்திரா அவசர தொடர்பு அமைப்பு.")
         }
 
         btnPresetTe.setOnClickListener {
-            spinnerLanguage.setSelection(2)
+            spinnerLanguage.setSelection(3)
             etSpeechText.setText("ఇది ఇస్రో ఐ-తంత్ర అత్యవసర సమాచార వ్యవస్థ.")
         }
 
         btnPresetEn.setOnClickListener {
-            spinnerLanguage.setSelection(9)
+            spinnerLanguage.setSelection(0)
             etSpeechText.setText("ISRO iTantra Ultra-Low Bitrate Neural Transceiver link established.")
         }
     }
