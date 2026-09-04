@@ -343,9 +343,31 @@ class MainActivity : AppCompatActivity() {
 
             if (lastRecognizedText.isNotBlank()) {
                 val correctedText = autoCorrectAndFormatText(lastRecognizedText)
-                statusText.text = "Result:\nTranscript ($langCode): $correctedText"
+                var displayMsg = "Result:\nTranscript ($langCode): $correctedText"
+                if (org.isro.itantra.semantic.SemanticBridge.isLibraryLoaded) {
+                    try {
+                        val packet = org.isro.itantra.semantic.SemanticBridge.compressTranscript(
+                            correctedText, langCode, "en", "RESCUE_01", 1
+                        )
+                        displayMsg += "\n⚡ M3 Semantic Packet: ${packet.size}B (<38B ISRO limit)"
+                    } catch (e: Throwable) {
+                        Log.w(TAG, "Semantic compression notice: ${e.message}")
+                    }
+                }
+                statusText.text = displayMsg
             } else if (nativeMsg.isNotBlank()) {
-                statusText.text = "Result:\n$nativeMsg"
+                var displayMsg = "Result:\n$nativeMsg"
+                if (org.isro.itantra.semantic.SemanticBridge.isLibraryLoaded) {
+                    try {
+                        val packet = org.isro.itantra.semantic.SemanticBridge.compressTranscript(
+                            nativeMsg, langCode, "en", "RESCUE_01", 1
+                        )
+                        displayMsg += "\n⚡ M3 Semantic Packet: ${packet.size}B (<38B ISRO limit)"
+                    } catch (e: Throwable) {
+                        Log.w(TAG, "Semantic compression notice: ${e.message}")
+                    }
+                }
+                statusText.text = displayMsg
             } else {
                 statusText.text = "Result:\nNo speech detected (Silero VAD idle: 10s silence timeout)."
             }
