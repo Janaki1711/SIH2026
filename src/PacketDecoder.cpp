@@ -34,7 +34,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 #include "PacketDecoder.hpp"
-
+#include "PacketFramer.hpp"
 #include <stdexcept>
 
 itantra::protocol::VoicePacket PacketDecoder::decode(
@@ -46,32 +46,6 @@ itantra::protocol::VoicePacket PacketDecoder::decode(
         );
     }
 
-    itantra::protocol::VoicePacket packet;
-
-    // Reinterpret the byte vector as a string.
-    // Protobuf's ParseFromString() accepts std::string containing binary data.
-    // This is a single allocation; the bytes are owned by `data`.
-    std::string serialized(
-        reinterpret_cast<const char*>(data.data()),
-        data.size()
-    );
-
-    if (!packet.ParseFromString(serialized)) {
-        throw std::runtime_error(
-            "PacketDecoder::decode — Protobuf deserialization failed. "
-            "Possible causes: corrupted bytes, wrong schema version, "
-            "or non-iTantra packet."
-        );
-    }
-
-    // Phase 1: We trust the magic_header is present but do not hard-fail on it.
-    // This is a conscious Phase 1 decision — we are testing the serialization
-    // path, not the full protocol validation path.
-    //
-    // Phase 3 addition (do NOT implement now):
-    //   if (packet.magic_header() != 0x41475931) {
-    //       throw std::runtime_error("Invalid magic header — not an iTantra packet");
-    //   }
-
-    return packet;
+    return itantra::protocol::PacketFramer::parseAndValidateFrame(data);
 }
+
