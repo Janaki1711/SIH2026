@@ -63,8 +63,25 @@ override.tf.json
 .idea/
 *.swp
 *.swo
+*.iml
 .DS_Store
+# Android & Gradle
+.gradle/
+**/build/
+**/.cxx/
+.externalNativeBuild/
+local.properties
+*.apk
+*.aab
+*.ap_
+*.dex
+captures/
+.artifacts/
 
-# Python cache
-__pycache__/
-*.py[cod]
+# Allow prebuilt NDK libraries in jniLibs
+!**/jniLibs/**/*.so
+
+# Large ONNX split tensor data (GitHub 100MB limit)
+*.onnx.data
+onnx__*
+
