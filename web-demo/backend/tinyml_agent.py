@@ -146,12 +146,20 @@ class TinyMLAgent:
             code = ord(ch)
             if 0x0900 <= code <= 0x097F:
                 return "hi"
+            if 0x0980 <= code <= 0x09FF:
+                return "bn"
+            if 0x0A80 <= code <= 0x0AFF:
+                return "gu"
+            if 0x0B00 <= code <= 0x0B7F:
+                return "or"
             if 0x0B80 <= code <= 0x0BFF:
                 return "ta"
             if 0x0C00 <= code <= 0x0C7F:
                 return "te"
             if 0x0C80 <= code <= 0x0CFF:
                 return "kn"
+            if 0x0D00 <= code <= 0x0D7F:
+                return "ml"
         return "en"
 
     def _extract_person_count(self, text: str) -> int:
@@ -161,7 +169,11 @@ class TinyMLAgent:
             "छह": 6, "सात": 7, "आठ": 8, "नौ": 9, "दस": 10,
             "ஒன்று": 1, "இரண்டு": 2, "மூன்று": 3, "நான்கு": 4, "ஐந்து": 5,
             "ఒకటి": 1, "రెండు": 2, "మూడు": 3, "నాలుగు": 4, "ఐదు": 5,
-            "ಒಂದು": 1, "ಎರಡು": 2, "ಮೂರು": 3, "ನಾಲ್ಕು": 4, "ಐದು": 5
+            "ಒಂದು": 1, "ಎರಡು": 2, "ಮೂರು": 3, "ನಾಲ್ಕು": 4, "ಐದು": 5,
+            "એક": 1, "બે": 2, "ત્રણ": 3, "ચાર": 4, "પાંચ": 5,
+            "ഒന്ന്": 1, "രണ്ട്": 2, "മൂന്ന്": 3, "നാല്": 4, "അഞ്ച്": 5,
+            "এক": 1, "দুই": 2, "তিন": 3, "চার": 4, "পাঁচ": 5,
+            "ଏକ": 1, "ଦୁଇ": 2, "ତିନି": 3, "ଚାରି": 4, "ପାଞ୍ଚ": 5
         }
         for w, c in num_words.items():
             if w in text.lower():
@@ -191,7 +203,7 @@ class TinyMLAgent:
 
     def _extract_action_and_intent(self, text: str) -> tuple[ActionCode, ActionCode]:
         tl = text.lower()
-        if any(w in tl for w in ["rescue", "help", "trapped", "stuck", "मदद", "मदत", "बचाओ", "वाचवा", "फंसे", "உதவி", "காப்பாற்று", "సహాయం", "ಸಹಾಯ", "ರಕ್ಷಿಸಿ", "send help"]):
+        if any(w in tl for w in ["rescue", "help", "trapped", "stuck", "मदद", "मदत", "बचाओ", "वाचवा", "फंसे", "உதவி", "காப்பாற்று", "సహాయం", "ಸಹಾಯ", "ರಕ್ಷಿಸಿ", "send help", "મદદ", "બચાવો", "ફસાયા", "സഹായം", "രക്ഷിക്കൂ", "കുടുങ്ങി", "ସାହାଯ୍ୟ", "ରକ୍ଷା କର", "ଫସି", "সাহায্য", "বাঁচাও", "আটকে"]):
             if any(w in tl for w in ["boat", "नाव", "படகு"]):
                 return ActionCode.RESCUE_REQUEST, ActionCode.BOAT
             if any(w in tl for w in ["team", "दल", "भेजो", "पाठवा", "send", "ಅನುಪ್ಪು", "ಕಳುಹಿಸಿ"]):

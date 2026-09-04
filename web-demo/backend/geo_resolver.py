@@ -99,11 +99,13 @@ class GeoResolver:
     def _initialize_default_landmarks(self):
         self.register_landmark("Tolankere", GeoID.TOLANKERE, [
             "tolankere", "tholankere", "tolan care", "tolan care lake", "tolankere lake", "tolankere tank",
-            "तोलनकेरे", "தோலன்கெரே", "తోలంకెరె", "ತೊಳನಕೆರೆ"
+            "तोलनकेरे", "தோலன்கெரே", "తోలంకెరె", "ತೊಳನಕೆರೆ",
+            "તોલનકેરે", "തോളങ്കരെ", "ତୋଲାଙ୍କେରେ", "তোলনকেরে"
         ])
         self.register_landmark("Hubbli", GeoID.HUBBLI, [
             "hubbli", "hubli", "hübli", "hubballi", "hubly",
-            "हब्बली", "हुबली", "ஹூப்ளி", "ஹுப்பள்ளி", "హుబ్లి", "ಹುಬ್ಬಳ್ಳಿ"
+            "हब्बली", "हुबली", "ஹூப்ளி", "ஹுப்பள்ளி", "హుబ్లి", "ಹುಬ್ಬಳ್ಳಿ",
+            "હબ્બલી", "ഹുബ്ലി", "ହୁବ୍ଲି", "হুবলি"
         ])
         self.register_landmark("Base Camp", GeoID.BASE, [
             "base camp", "base", "hq", "headquarters", "command base",
@@ -158,7 +160,7 @@ class GeoResolver:
 
     def _normalize(self, text: str) -> str:
         # Lowercase, retain alphanumeric and non-ASCII Indic characters, normalize spaces
-        cleaned = re.sub(r'[^\w\s\u0900-\u097F\u0B80-\u0BFF\u0C00-\u0C7F\u0C80-\u0CFF]', ' ', text.lower())
+        cleaned = re.sub(r'[^\w\s\u0900-\u0D7F]', ' ', text.lower())
         return " ".join(cleaned.split())
 
     def resolve_location(self, text: str) -> LocationEntity:

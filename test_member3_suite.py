@@ -127,6 +127,11 @@ class TestMember3Suite(unittest.TestCase):
             ("ta", "தோலன்கெரே அருகில் வெள்ளம் வந்துள்ளது, உதவி தேவை", GeoID.TOLANKERE, ActionCode.RESCUE_REQUEST, 0),
             ("mr", "तोलनकेरे जवळ पूर आला आहे, तातडीने मदत पाठवा", GeoID.TOLANKERE, ActionCode.RESCUE_REQUEST, 0),
             ("en", "Five people are trapped near Tolankere because of flooding.", GeoID.TOLANKERE, ActionCode.RESCUE_REQUEST, 5),
+            ("gu", "તોલનકેરે નજીક પાંચ લોકો ફસાયા છે, તાત્કાલિક મદદ મોકલો", GeoID.TOLANKERE, ActionCode.RESCUE_REQUEST, 5),
+            ("ml", "തോളങ്കരെ സമീപം ആളുകൾ കുടുങ്ങിയിരിക്കുന്നു, ഉടൻ സഹായം അയക്കുക", GeoID.TOLANKERE, ActionCode.RESCUE_REQUEST, 0),
+            ("te", "తోలంకెరె వద్ద వరదలు వచ్చాయి, సహాయం పంపండి", GeoID.TOLANKERE, ActionCode.RESCUE_REQUEST, 0),
+            ("or", "ତୋଲାଙ୍କେରେ ନିକଟରେ ଲୋକ ଫସି ରହିଛନ୍ତି, ତୁରନ୍ତ ସାହାଯ୍ୟ ପଠାଅ", GeoID.TOLANKERE, ActionCode.RESCUE_REQUEST, 0),
+            ("bn", "তোলনকেরে এর কাছে মানুষ আটকে আছে, অবিলম্বে সাহায্য পাঠান", GeoID.TOLANKERE, ActionCode.RESCUE_REQUEST, 0),
         ]
 
         for lang, text, expected_geoid, expected_intent, expected_count in test_cases:

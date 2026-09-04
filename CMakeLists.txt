@@ -81,6 +81,20 @@ file(MAKE_DIRECTORY "${GENERATED_DIR}")
 # For older versions, we use the two-argument form which puts files in CMAKE_CURRENT_BINARY_DIR
 protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${PROTO_FILE})
 
+# ── Core Sources ─────────────────────────────────────────────────────────────
+set(ITANTRA_CORE_SRCS
+    src/Member3Integration.cpp
+    src/SemanticCompressor.cpp
+    src/SemanticCodebook.cpp
+    src/TinyMLAgent.cpp
+    src/GeoResolver.cpp
+    src/TranslationBridge.cpp
+    src/PacketFramer.cpp
+    src/PacketEncoder.cpp
+    src/PacketDecoder.cpp
+    ${PROTO_SRCS}
+)
+
 # ── Main Executable ──────────────────────────────────────────────────────────
 add_executable(itantra_phase1
     src/main.cpp
@@ -103,18 +117,71 @@ target_link_libraries(itantra_phase1 PRIVATE
     protobuf::libprotobuf
 )
 
+# ── Member 3 C++ Unit Tests ──────────────────────────────────────────────────
+add_executable(itantra_m3_tests
+    src/tests_member3.cpp
+    ${ITANTRA_CORE_SRCS}
+)
+
+target_include_directories(itantra_m3_tests PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/src"
+    "${CMAKE_CURRENT_BINARY_DIR}"
+    "${Protobuf_INCLUDE_DIRS}"
+)
+
+target_link_libraries(itantra_m3_tests PRIVATE
+    protobuf::libprotobuf
+)
+
+# ── Android NDK / JNI Shared Library (libitantra_core.so) ────────────────────
+if(ANDROID)
+    find_library(log-lib log)
+    add_library(itantra_core SHARED
+        src/native_bridge.cpp
+        ${ITANTRA_CORE_SRCS}
+    )
+    target_include_directories(itantra_core PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src"
+        "${CMAKE_CURRENT_BINARY_DIR}"
+        "${Protobuf_INCLUDE_DIRS}"
+    )
+    target_link_libraries(itantra_core PRIVATE
+        ${log-lib}
+        protobuf::libprotobuf-lite
+    )
+else()
+    find_package(JNI QUIET)
+    if(JNI_FOUND)
+        add_library(itantra_core SHARED
+            src/native_bridge.cpp
+            ${ITANTRA_CORE_SRCS}
+        )
+        target_include_directories(itantra_core PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/src"
+            "${CMAKE_CURRENT_BINARY_DIR}"
+            "${Protobuf_INCLUDE_DIRS}"
+            ${JNI_INCLUDE_DIRS}
+        )
+        target_link_libraries(itantra_core PRIVATE
+            protobuf::libprotobuf
+        )
+    endif()
+endif()
+
 # ── Windows-specific: ensure console uses UTF-8 ──────────────────────────────
 if(WIN32)
     # /utf-8 tells MSVC to interpret source files as UTF-8
     # The runtime chcp 65001 call in main.cpp handles console output
     target_compile_options(itantra_phase1 PRIVATE /utf-8)
+    target_compile_options(itantra_m3_tests PRIVATE /utf-8)
 endif()
 
 # ── Status Output ─────────────────────────────────────────────────────────────
 message(STATUS "")
-message(STATUS "iTantra M3 Phase 1 build configuration:")
+message(STATUS "iTantra M3 build configuration:")
 message(STATUS "  C++ standard  : ${CMAKE_CXX_STANDARD}")
 message(STATUS "  Build type    : ${CMAKE_BUILD_TYPE}")
 message(STATUS "  Proto file    : ${PROTO_FILE}")
 message(STATUS "  Generated dir : ${CMAKE_CURRENT_BINARY_DIR}")
 message(STATUS "")
+
