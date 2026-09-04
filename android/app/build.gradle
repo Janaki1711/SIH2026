@@ -3,8 +3,11 @@ plugins {
     id 'org.jetbrains.kotlin.android'
 }
 
-// Redirect build directories outside OneDrive to prevent Windows file lock conflicts
-layout.buildDirectory = file("C:/Users/chhav/build_SIH2026/app")
+// Redirect build directories outside OneDrive to prevent Windows file lock conflicts if directory exists
+if (file("C:/Users/chhav").exists()) {
+    layout.buildDirectory = file("C:/Users/chhav/build_SIH2026/app")
+}
+
 
 android {
     namespace 'org.isro.itantra'
@@ -51,7 +54,9 @@ android {
         cmake {
             path file("src/main/cpp/CMakeLists.txt")
             version "3.22.1"
-            buildStagingDirectory file("C:/Users/chhav/build_SIH2026/cxx")
+            if (file("C:/Users/chhav").exists()) {
+                buildStagingDirectory file("C:/Users/chhav/build_SIH2026/cxx")
+            }
         }
     }
 

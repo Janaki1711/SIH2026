@@ -192,7 +192,7 @@ def _realize_mr(action, entity, target, loc_text, hazard, qty):
 # 5. KANNADA (kn)
 # ==============================================================================
 def _realize_kn(action, entity, target, loc_text, hazard, qty):
-    LOCS = {"HUBBLI": "ಹುಬ್ಬಳ್ಳಿಗೆ", "TOLANKERE": "ತೋಲನಕೆರೆಗೆ", "BASE": "ನೆಲೆಗೆ", "SECTOR_4": "ಸೆಕ್ಟರ್ 4 ಕ್ಕೆ", "HOSPITAL": "ಆಸ್ಪತ್ರೆಗೆ"}
+    LOCS = {"HUBBLI": "ಹುಬ್ಬಳ್ಳಿಗೆ", "TOLANKERE": "ತೊಳನಕೆರೆಗೆ", "BASE": "ನೆಲೆಗೆ", "SECTOR_4": "ಸೆಕ್ಟರ್ 4 ಕ್ಕೆ", "HOSPITAL": "ಆಸ್ಪತ್ರೆಗೆ"}
     ENTITIES = {"RESCUE": "ರಕ್ಷಣಾ ತಂಡ", "RESCUE_REQUEST": "ರಕ್ಷಣಾ ತಂಡ", "MEDICAL": "ವೈದ್ಯಕೀಯ ತಂಡ", "AMBULANCE": "ಆಂಬ್ಯುಲೆನ್ಸ್", "FIRE": "ಅಗ್ನಿಶಾಮಕ ದಳ", "FIRE_TEAM": "ಅಗ್ನಿಶಾಮಕ ಸಿಬ್ಬಂದಿ"}
     l_str = LOCS.get(target, (loc_text + "ಗೆ") if loc_text else (target + "ಗೆ" if target else ""))
     e_str = ENTITIES.get(entity, "ತಂಡ")
