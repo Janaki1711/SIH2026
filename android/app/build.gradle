@@ -1,0 +1,81 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+// Redirect build directories outside OneDrive to prevent Windows file lock conflicts
+layout.buildDirectory = file("C:/Users/chhav/build_SIH2026/app")
+
+android {
+    namespace 'org.isro.itantra'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "org.isro.itantra"
+        minSdk 24
+        targetSdk 35
+        versionCode 1
+        versionName "1.0"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        
+        externalNativeBuild {
+            cmake {
+                cppFlags "-std=c++20"
+                arguments "-DANDROID_STL=c++_shared", "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384"
+            }
+        }
+        
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file("src/main/cpp/CMakeLists.txt")
+            version "3.22.1"
+            buildStagingDirectory file("C:/Users/chhav/build_SIH2026/cxx")
+        }
+    }
+
+    buildFeatures {
+        viewBinding true
+        prefab true
+    }
+
+    ndkVersion "30.0.16138531"
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    
+    // Google Oboe for low-latency native audio capture
+    implementation 'com.google.oboe:oboe:1.8.0'
+
+    // Microsoft ONNX Runtime Mobile for C++ NDK inference
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.18.0'
+    
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+}
