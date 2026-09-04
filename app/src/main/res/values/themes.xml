@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.ITantraTTS" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">#00E5FF</item>
+        <item name="colorOnPrimary">#000000</item>
+        <item name="colorSecondary">#FF3D00</item>
+        <item name="android:statusBarColor">#0B0E14</item>
+        <item name="android:navigationBarColor">#0B0E14</item>
+    </style>
+</resources>
