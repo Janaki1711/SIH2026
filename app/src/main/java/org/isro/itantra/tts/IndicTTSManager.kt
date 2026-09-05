@@ -10,7 +10,6 @@ import android.os.Handler
 import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
-import android.speech.tts.Voice
 import android.util.Log
 import java.util.Locale
 import java.util.concurrent.Executors
@@ -44,7 +43,7 @@ class IndicTTSManager(
             val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
             val currentVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
             if (currentVol < maxVol / 2) {
-                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, (maxVol * 0.9).toInt(), 0)
+                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, (maxVol * 0.95).toInt(), 0)
             }
         } catch (e: Exception) {
             Log.w(TAG, "Volume error: " + e.message)
@@ -64,7 +63,7 @@ class IndicTTSManager(
             isTtsReady = true
             androidTts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) {
-                    postStatus("SPEAKING: Indic Speech Output Active")
+                    postStatus("SPEAKING: Live Speech Output Active")
                 }
                 override fun onDone(utteranceId: String?) {
                     postStatus("STATE: PLAYBACK COMPLETE (RX READY)")
@@ -85,15 +84,15 @@ class IndicTTSManager(
         if (text.isBlank()) return
 
         postStatus("SYNTHESIZING: '" + text.take(25) + "...' [" + langCode.uppercase() + "]")
-        Log.i(TAG, "Synthesizing custom input: text='$text', lang='$langCode'")
+        Log.i(TAG, "Synthesizing input: text='$text', lang='$langCode'")
         initSystemVolume()
 
-        // 1. Synthesize and play via Native C++20 Indic Formant Engine
+        // 1. Play native C++20 Formant Synthesizer PCM in background
         audioExecutor.execute {
             try {
                 val pcm = nativeBridge.synthesize(text, langCode, prosody)
                 if (pcm.isNotEmpty()) {
-                    Log.i(TAG, "Native C++ PCM generated: " + pcm.size + " samples for custom input")
+                    Log.i(TAG, "Native C++ PCM generated: " + pcm.size + " samples.")
                     playPcmStreaming(pcm, isAlarm = false)
                 }
             } catch (e: Exception) {
@@ -101,40 +100,28 @@ class IndicTTSManager(
             }
         }
 
-        // 2. Play via Android TextToSpeech engine with fallback
+        // 2. Play speech through Android TextToSpeech engine with guaranteed voice routing
         if (isTtsReady && androidTts != null) {
             mainHandler.post {
                 try {
                     val targetLocale = getLocaleForLang(langCode)
-                    var matchedNativeVoice = false
-
-                    // Look for an installed voice matching the target Indic language on the phone
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                        val voices = androidTts?.voices
-                        if (voices != null) {
-                            for (v in voices) {
-                                if (v.locale.language.equals(langCode, ignoreCase = true) ||
-                                    (v.locale.country.equals("IN", ignoreCase = true) && v.name.contains(langCode, ignoreCase = true))) {
-                                    androidTts?.voice = v
-                                    matchedNativeVoice = true
-                                    break
-                                }
-                            }
-                        }
-                    }
-
-                    val langResult = androidTts?.setLanguage(targetLocale)
-                    val isLangAvailable = (langResult != TextToSpeech.LANG_MISSING_DATA && langResult != TextToSpeech.LANG_NOT_SUPPORTED)
-
-                    if (matchedNativeVoice || isLangAvailable) {
-                        // The phone has native Indic voice data installed (e.g. Hindi, Tamil, Telugu)
+                    val langAvail = androidTts?.isLanguageAvailable(targetLocale) ?: TextToSpeech.LANG_NOT_SUPPORTED
+                    
+                    if (langAvail >= TextToSpeech.LANG_AVAILABLE && langCode.lowercase() != "en") {
+                        // The phone supports native Indic font reading for this language (e.g. Hindi, Tamil)
+                        androidTts?.language = targetLocale
                         androidTts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "iTantra_" + System.currentTimeMillis())
-                    } else {
-                        // The phone does not have the voice pack downloaded (e.g. Kannada, Odia on some ROMs)
-                        // Convert to fluent phonetic syllable romanization so Google TTS speaks the exact words
-                        val phoneticSpeech = transliterateIndicToSyllables(text)
+                    } else if (langCode.lowercase() == "en") {
+                        // Pure English
                         androidTts?.language = Locale.ENGLISH
-                        androidTts?.speak(phoneticSpeech, TextToSpeech.QUEUE_FLUSH, null, "iTantra_phonetic")
+                        androidTts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "iTantra_en")
+                    } else {
+                        // Language voice data not pre-downloaded in Google Play (e.g. Kannada, Odia, Gujarati on some devices)
+                        // Convert Unicode script into fluent phonetic words so the voice speaks the exact Indian words
+                        val speakablePhonetic = transliterateIndicToSyllables(text)
+                        Log.i(TAG, "Speaking via syllable phonetics: '$speakablePhonetic'")
+                        androidTts?.language = Locale("en", "IN")
+                        androidTts?.speak(speakablePhonetic, TextToSpeech.QUEUE_FLUSH, null, "iTantra_syllable")
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Android TTS speak error", e)
