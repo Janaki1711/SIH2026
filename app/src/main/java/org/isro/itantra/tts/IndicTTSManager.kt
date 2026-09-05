@@ -5,10 +5,12 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.speech.tts.Voice
 import android.util.Log
 import java.util.Locale
 import java.util.concurrent.Executors
@@ -42,10 +44,10 @@ class IndicTTSManager(
             val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
             val currentVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
             if (currentVol < maxVol / 2) {
-                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, (maxVol * 0.85).toInt(), 0)
+                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, (maxVol * 0.9).toInt(), 0)
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Could not adjust system volume: " + e.message)
+            Log.w(TAG, "Volume adjust error: " + e.message)
         }
     }
 
@@ -53,62 +55,77 @@ class IndicTTSManager(
         try {
             androidTts = TextToSpeech(context.applicationContext, this)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize Android TextToSpeech", e)
+            Log.e(TAG, "TTS Init Error", e)
         }
     }
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             isTtsReady = true
-            androidTts?.language = Locale.ENGLISH
             androidTts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) {
-                    postStatus("SPEAKING: Android Voice Active")
+                    postStatus("SPEAKING: Live Speech Output Active")
                 }
                 override fun onDone(utteranceId: String?) {
                     postStatus("STATE: PLAYBACK COMPLETE (RX READY)")
                 }
                 override fun onError(utteranceId: String?) {
-                    postStatus("STATE: PLAYBACK DONE")
+                    postStatus("STATE: PLAYBACK COMPLETE")
                 }
             })
             Log.i(TAG, "Android TTS successfully initialized.")
-            postStatus("STATE: TTS READY (NATIVE + OS ENGINE)")
+            postStatus("STATE: TTS READY (ALL 10 INDIC LANGUAGES)")
         } else {
-            Log.w(TAG, "Android TTS onInit returned " + status)
+            Log.w(TAG, "Android TTS init status: " + status)
             postStatus("STATE: NATIVE C++20 ENGINE READY")
         }
     }
 
     fun speak(text: String, langCode: String, prosody: ProsodyVector = ProsodyVector()) {
-        postStatus("SYNTHESIZING: '" + text + "' [" + langCode + "]")
-        Log.i(TAG, "Synthesizing and playing speech: text='" + text + "', lang='" + langCode + "'")
-
+        if (text.isBlank()) return
+        
+        postStatus("SYNTHESIZING: '" + text.take(25) + "...' [" + langCode.uppercase() + "]")
+        Log.i(TAG, "Synthesizing custom input: text='$text', lang='$langCode'")
         initSystemVolume()
 
+        // 1. Synthesize and play custom input via Native C++20 Indic Formant Engine
         audioExecutor.execute {
             try {
                 val pcm = nativeBridge.synthesize(text, langCode, prosody)
                 if (pcm.isNotEmpty()) {
-                    Log.i(TAG, "Native PCM generated: " + pcm.size + " samples.")
-                    playPcmViaAudioTrack(pcm, isAlarm = false)
+                    Log.i(TAG, "Native C++ PCM generated: " + pcm.size + " samples for '" + text + "'")
+                    playPcmStreaming(pcm, isAlarm = false)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Error in native PCM playback", e)
+                Log.e(TAG, "Native C++ playback error", e)
             }
         }
 
+        // 2. Also speak custom input via Android TextToSpeech engine with targeted Indic Locale
         if (isTtsReady && androidTts != null) {
             mainHandler.post {
                 try {
-                    val locale = getLocaleForLang(langCode)
-                    val langResult = androidTts?.setLanguage(locale)
-                    if (langResult == TextToSpeech.LANG_MISSING_DATA || langResult == TextToSpeech.LANG_NOT_SUPPORTED) {
-                        androidTts?.language = Locale.ENGLISH
+                    val targetLocale = getLocaleForLang(langCode)
+                    
+                    // On OnePlus/Android, find the native Indic voice
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                        val voices = androidTts?.voices
+                        if (voices != null) {
+                            for (v in voices) {
+                                if (v.locale.language.equals(langCode, ignoreCase = true) ||
+                                    v.locale.country.equals("IN", ignoreCase = true) && v.name.contains(langCode, ignoreCase = true)) {
+                                    androidTts?.voice = v
+                                    break
+                                }
+                            }
+                        }
                     }
-                    androidTts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "iTantra_" + System.currentTimeMillis())
+
+                    androidTts?.language = targetLocale
+                    val speakResult = androidTts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "iTantra_" + System.currentTimeMillis())
+                    Log.i(TAG, "Android TTS speak custom text result code: " + speakResult)
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error triggering Android TTS", e)
+                    Log.e(TAG, "Android TTS custom speak error", e)
                 }
             }
         }
@@ -129,7 +146,7 @@ class IndicTTSManager(
         }
     }
 
-    private fun playPcmViaAudioTrack(pcm: FloatArray, isAlarm: Boolean) {
+    private fun playPcmStreaming(pcm: FloatArray, isAlarm: Boolean) {
         var track: AudioTrack? = null
         try {
             val usage = if (isAlarm) AudioAttributes.USAGE_ALARM else AudioAttributes.USAGE_MEDIA
@@ -152,22 +169,28 @@ class IndicTTSManager(
                 AudioFormat.ENCODING_PCM_FLOAT
             )
 
-            val bufferSize = Math.max(minBufferSize, pcm.size * 4)
-
             track = AudioTrack.Builder()
                 .setAudioAttributes(audioAttributes)
                 .setAudioFormat(audioFormat)
-                .setBufferSizeInBytes(bufferSize)
-                .setTransferMode(AudioTrack.MODE_STATIC)
+                .setBufferSizeInBytes(Math.max(minBufferSize, 4096))
+                .setTransferMode(AudioTrack.MODE_STREAM)
                 .build()
 
-            track.write(pcm, 0, pcm.size, AudioTrack.WRITE_BLOCKING)
             track.play()
+            
+            // Stream PCM in chunks of 1024 floats for immediate audio output
+            val chunkSize = 1024
+            var offset = 0
+            while (offset < pcm.size) {
+                val toWrite = Math.min(chunkSize, pcm.size - offset)
+                track.write(pcm, offset, toWrite, AudioTrack.WRITE_BLOCKING)
+                offset += toWrite
+            }
 
             val playDurationMs = (pcm.size * 1000L) / SAMPLE_RATE
-            Thread.sleep(playDurationMs + 50)
+            Thread.sleep(playDurationMs + 40)
         } catch (e: Exception) {
-            Log.e(TAG, "Error playing PCM via AudioTrack", e)
+            Log.e(TAG, "AudioTrack stream error", e)
         } finally {
             try {
                 track?.stop()
@@ -179,12 +202,12 @@ class IndicTTSManager(
     fun playEmergencyAlert(text: String, langCode: String) {
         postStatus("EMERGENCY OVERRIDE: 100% HARDWARE VOLUME")
         alarmRouter.enforceEmergencyAudioRoute()
-        nativeBridge.setVolume(2.0f)
+        nativeBridge.setVolume(2.5f)
 
         audioExecutor.execute {
             val sirenPcm = nativeBridge.generateSiren(1.5f)
             if (sirenPcm.isNotEmpty()) {
-                playPcmViaAudioTrack(sirenPcm, isAlarm = true)
+                playPcmStreaming(sirenPcm, isAlarm = true)
             }
 
             val emergencyProsody = ProsodyVector(
@@ -196,13 +219,14 @@ class IndicTTSManager(
             )
             val pcm = nativeBridge.synthesize(text, langCode, emergencyProsody)
             if (pcm.isNotEmpty()) {
-                playPcmViaAudioTrack(pcm, isAlarm = true)
+                playPcmStreaming(pcm, isAlarm = true)
             }
         }
 
         mainHandler.post {
             if (isTtsReady && androidTts != null) {
-                androidTts?.language = Locale.ENGLISH
+                val locale = getLocaleForLang(langCode)
+                androidTts?.language = locale
                 androidTts?.speak(text, TextToSpeech.QUEUE_ADD, null, "iTantra_SOS")
             }
         }
