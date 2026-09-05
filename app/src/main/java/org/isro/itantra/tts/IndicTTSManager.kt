@@ -93,7 +93,7 @@ class IndicTTSManager(
             try {
                 val pcm = nativeBridge.synthesize(text, langCode, prosody)
                 if (pcm.isNotEmpty()) {
-                    Log.i(TAG, "Native C++ PCM generated: " + pcm.size + " samples for '" + text + "'")
+                    Log.i(TAG, "Native C++ PCM generated: " + pcm.size + " samples for custom input")
                     playPcmStreaming(pcm, isAlarm = false)
                 }
             } catch (e: Exception) {
@@ -101,20 +101,21 @@ class IndicTTSManager(
             }
         }
 
-        // 2. Also speak custom input via Android TextToSpeech engine with targeted Indic Locale
+        // 2. Play custom input via Android TextToSpeech engine
         if (isTtsReady && androidTts != null) {
             mainHandler.post {
                 try {
                     val targetLocale = getLocaleForLang(langCode)
+                    var matchedVoice = false
                     
-                    // On OnePlus/Android, find the native Indic voice
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                         val voices = androidTts?.voices
                         if (voices != null) {
                             for (v in voices) {
                                 if (v.locale.language.equals(langCode, ignoreCase = true) ||
-                                    v.locale.country.equals("IN", ignoreCase = true) && v.name.contains(langCode, ignoreCase = true)) {
+                                    (v.locale.country.equals("IN", ignoreCase = true) && v.name.contains(langCode, ignoreCase = true))) {
                                     androidTts?.voice = v
+                                    matchedVoice = true
                                     break
                                 }
                             }
@@ -122,12 +123,135 @@ class IndicTTSManager(
                     }
 
                     androidTts?.language = targetLocale
+                    
+                    // If the text contains Indic script, try speaking original text first
                     val speakResult = androidTts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "iTantra_" + System.currentTimeMillis())
-                    Log.i(TAG, "Android TTS speak custom text result code: " + speakResult)
+                    
+                    // If system TTS does not support the native Indic script directly,
+                    // dynamically convert the EXACT user-typed sentence into phonetic text
+                    if (!matchedVoice && containsIndicUnicode(text)) {
+                        val dynamicPhonetic = convertIndicToPhonetic(text)
+                        if (dynamicPhonetic.isNotBlank()) {
+                            mainHandler.postDelayed({
+                                try {
+                                    androidTts?.language = Locale.ENGLISH
+                                    androidTts?.speak(dynamicPhonetic, TextToSpeech.QUEUE_ADD, null, "iTantra_dyn")
+                                } catch (ignored: Exception) {}
+                            }, 50)
+                        }
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Android TTS custom speak error", e)
                 }
             }
+        }
+    }
+
+    private fun containsIndicUnicode(text: String): Boolean {
+        for (ch in text) {
+            val code = ch.code
+            if (code in 0x0900..0x0D7F) return true
+        }
+        return false
+    }
+
+    // Dynamic Unicode to Phonetic Romanization (Character by Character)
+    private fun convertIndicToPhonetic(input: String): String {
+        val sb = StringBuilder()
+        var i = 0
+        val len = input.length
+
+        while (i < len) {
+            val ch = input[i]
+            val code = ch.code
+
+            // ASCII characters (pass through directly)
+            if (code < 0x80) {
+                sb.append(ch)
+                i++
+                continue
+            }
+
+            // Brahmi Indic scripts: Devanagari (0x0900), Bengali (0x0980), Gujarati (0x0A80),
+            // Odia (0x0B00), Tamil (0x0B80), Telugu (0x0C00), Kannada (0x0C80), Malayalam (0x0D00)
+            var base = 0
+            if (code in 0x0900..0x097F) base = 0x0900
+            else if (code in 0x0980..0x09FF) base = 0x0980
+            else if (code in 0x0A80..0x0AFF) base = 0x0A80
+            else if (code in 0x0B00..0x0B7F) base = 0x0B00
+            else if (code in 0x0B80..0x0BFF) base = 0x0B80
+            else if (code in 0x0C00..0x0C7F) base = 0x0C00
+            else if (code in 0x0C80..0x0CFF) base = 0x0C80
+            else if (code in 0x0D00..0x0D7F) base = 0x0D00
+
+            if (base != 0) {
+                val offset = code - base
+                when (offset) {
+                    // Independent Vowels
+                    0x05 -> sb.append("a")
+                    0x06 -> sb.append("aa")
+                    0x07 -> sb.append("i")
+                    0x08 -> sb.append("ee")
+                    0x09 -> sb.append("u")
+                    0x0A -> sb.append("oo")
+                    0x0E, 0x0F -> sb.append("e")
+                    0x10 -> sb.append("ai")
+                    0x12, 0x13 -> sb.append("o")
+                    0x14 -> sb.append("au")
+
+                    // Consonants (with inherent vowel 'a')
+                    0x15 -> sb.append("k ")
+                    0x16 -> sb.append("kh ")
+                    0x17 -> sb.append("g ")
+                    0x18 -> sb.append("gh ")
+                    0x1A -> sb.append("ch ")
+                    0x1B -> sb.append("chh ")
+                    0x1C -> sb.append("j ")
+                    0x1D -> sb.append("jh ")
+                    0x1F, 0x24 -> sb.append("t ")
+                    0x20, 0x25 -> sb.append("th ")
+                    0x21, 0x26 -> sb.append("d ")
+                    0x22, 0x27 -> sb.append("dh ")
+                    0x28, 0x29 -> sb.append("n ")
+                    0x2A -> sb.append("p ")
+                    0x2B -> sb.append("ph ")
+                    0x2C -> sb.append("b ")
+                    0x2D -> sb.append("bh ")
+                    0x2E -> sb.append("m ")
+                    0x2F -> sb.append("y ")
+                    0x30, 0x31 -> sb.append("r ")
+                    0x32, 0x33, 0x34 -> sb.append("l ")
+                    0x35 -> sb.append("v ")
+                    0x36, 0x37 -> sb.append("sh ")
+                    0x38 -> sb.append("s ")
+                    0x39 -> sb.append("h ")
+
+                    // Dependent Vowels (Matras)
+                    0x3E -> { trimTrailingSpace(sb); sb.append("aa ") }
+                    0x3F -> { trimTrailingSpace(sb); sb.append("i ") }
+                    0x40 -> { trimTrailingSpace(sb); sb.append("ee ") }
+                    0x41 -> { trimTrailingSpace(sb); sb.append("u ") }
+                    0x42 -> { trimTrailingSpace(sb); sb.append("oo ") }
+                    0x46, 0x47 -> { trimTrailingSpace(sb); sb.append("e ") }
+                    0x48 -> { trimTrailingSpace(sb); sb.append("ai ") }
+                    0x4A, 0x4B -> { trimTrailingSpace(sb); sb.append("o ") }
+                    0x4C -> { trimTrailingSpace(sb); sb.append("au ") }
+                    0x4D -> { trimTrailingSpace(sb) } // Halant (remove inherent vowel)
+                    0x02 -> { sb.append("n ") }      // Anusvara
+                    0x03 -> { sb.append("h ") }      // Visarga
+                    else -> sb.append(" ")
+                }
+            } else {
+                sb.append(" ")
+            }
+            i++
+        }
+        return sb.toString().trim().replace(Regex("\\s+"), " ")
+    }
+
+    private fun trimTrailingSpace(sb: StringBuilder) {
+        if (sb.isNotEmpty() && sb.last() == ' ') {
+            sb.setLength(sb.length - 1)
         }
     }
 
@@ -178,7 +302,6 @@ class IndicTTSManager(
 
             track.play()
             
-            // Stream PCM in chunks of 1024 floats for immediate audio output
             val chunkSize = 1024
             var offset = 0
             while (offset < pcm.size) {
