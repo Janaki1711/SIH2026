@@ -60,10 +60,13 @@ class MainActivity : AppCompatActivity() {
 
         checkAndRequestPermissions()
 
-        ttsManager = IndicTTSManager(this)
+        initViews()
+
+        ttsManager = IndicTTSManager(this) { statusMsg ->
+            tvTransceiverState.text = statusMsg
+        }
         pttController = PTTTransceiverController(this, ttsManager)
 
-        initViews()
         setupListeners()
     }
 
@@ -107,24 +110,20 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Direct playback button
         btnPlayAudio.setOnClickListener {
             val langCode = languages[spinnerLanguage.selectedItemPosition].second
             val text = etSpeechText.text.toString().ifEmpty { "Testing iTantra audio reception." }
-            tvTransceiverState.text = "STATE: PLAYING RECEIVED AUDIO"
             tvPayloadSize.text = "PAYLOAD: " + (text.toByteArray().size + 16) + " BYTES"
             tvLatency.text = "LATENCY: < 15ms"
             ttsManager.speak(text, langCode)
         }
 
-        // Hold-to-transmit PTT
         btnPttTalk.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
                     val langCode = languages[spinnerLanguage.selectedItemPosition].second
                     val text = etSpeechText.text.toString().ifEmpty { "Testing iTantra transmission" }
                     pttController.onPttPressed(text, langCode)
-                    tvTransceiverState.text = "STATE: TRANSMITTING (TX ACTIVE)"
                     tvPayloadSize.text = "PAYLOAD: " + (text.toByteArray().size + 16) + " BYTES"
                     tvLatency.text = "LATENCY: < 15ms"
                     true
@@ -138,14 +137,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Emergency SOS Override
         btnEmergencySos.setOnClickListener {
             val langCode = languages[spinnerLanguage.selectedItemPosition].second
             val emergencyText = etSpeechText.text.toString().ifEmpty {
                 "EMERGENCY SOS ALERT! IMMEDIATE ASSISTANCE REQUIRED AT SECTOR ALPHA."
             }
             pttController.triggerEmergencySos(emergencyText, langCode)
-            tvTransceiverState.text = "STATE: EMERGENCY OVERRIDE ACTIVE (100% VOL)"
             tvPayloadSize.text = "PAYLOAD: 40-BYTE SEMANTIC PACKET (PRIORITY 0)"
             tvLatency.text = "LATENCY: 8ms HARDWARE INTR"
         }

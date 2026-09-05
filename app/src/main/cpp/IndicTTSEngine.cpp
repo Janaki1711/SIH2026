@@ -49,7 +49,7 @@ std::vector<std::string> IndicTTSEngine::textToPhonemes(const std::string& text,
 
     for (size_t i = 0; i < text.length(); ++i) {
         char c = text[i];
-        if (c == ' ' || c == ',' || c == '.' || c == '!') {
+        if (c == ' ' || c == ',' || c == '.' || c == '!' || c == '?') {
             phonemes.push_back("sil");
         } else if (c == 'a' || c == 'A') {
             phonemes.push_back("a");
@@ -73,6 +73,10 @@ std::vector<std::string> IndicTTSEngine::textToPhonemes(const std::string& text,
             phonemes.push_back("t");
         } else if (c == 'k' || c == 'K') {
             phonemes.push_back("k");
+        } else if (c == 'p' || c == 'P') {
+            phonemes.push_back("p");
+        } else if (c == 'l' || c == 'L') {
+            phonemes.push_back("l");
         } else {
             if ((static_cast<unsigned char>(c) & 0xC0) != 0x80) {
                 phonemes.push_back("a");
@@ -103,7 +107,7 @@ void IndicTTSEngine::synthesizePhoneme(
         float omega = 2.0f * M_PI * freq / sampleRate;
         a1 = -2.0f * r * std::cos(omega);
         a2 = r * r;
-        b0 = 1.0f - r;
+        b0 = (1.0f - r) * 4.0f;
     };
 
     float a1_1, a2_1, b0_1;
@@ -145,8 +149,8 @@ void IndicTTSEngine::synthesizePhoneme(
         y2_3 = y1_3;
         y1_3 = out3;
 
-        float mixed = (out1 * 0.5f + out2 * 0.3f + out3 * 0.2f) * energy;
-        outPcm.push_back(std::clamp(mixed, -1.0f, 1.0f));
+        float mixed = (out1 * 0.5f + out2 * 0.35f + out3 * 0.25f) * energy;
+        outPcm.push_back(std::clamp(mixed, -0.95f, 0.95f));
     }
 }
 
@@ -160,11 +164,11 @@ void IndicTTSEngine::synthesize(
     outAudioPCM.clear();
     std::vector<std::string> phonemes = textToPhonemes(text, langCode);
 
-    float pitch = (prosody.f0_pitch_mean > 50.0f) ? prosody.f0_pitch_mean : 140.0f;
+    float pitch = (prosody.f0_pitch_mean > 50.0f) ? prosody.f0_pitch_mean : 150.0f;
     float cadence = (prosody.cadence_rate > 0.1f) ? prosody.cadence_rate : 1.0f;
-    float energy = (prosody.rms_energy > 0.0f) ? prosody.rms_energy : 0.6f;
+    float energy = (prosody.rms_energy > 0.0f) ? prosody.rms_energy : 0.85f;
 
-    float baseDur = 0.08f / cadence;
+    float baseDur = 0.09f / cadence;
 
     for (const auto& ph : phonemes) {
         auto it = phonemeFormants_.find(ph);
@@ -172,6 +176,17 @@ void IndicTTSEngine::synthesize(
             synthesizePhoneme(it->second, baseDur, pitch, energy, outAudioPCM, sampleRate);
         } else {
             synthesizePhoneme(phonemeFormants_["a"], baseDur, pitch, energy, outAudioPCM, sampleRate);
+        }
+    }
+
+    float maxAmp = 0.0f;
+    for (float sample : outAudioPCM) {
+        maxAmp = std::max(maxAmp, std::abs(sample));
+    }
+    if (maxAmp > 0.01f && maxAmp < 0.7f) {
+        float gain = 0.85f / maxAmp;
+        for (float& sample : outAudioPCM) {
+            sample *= gain;
         }
     }
 }
