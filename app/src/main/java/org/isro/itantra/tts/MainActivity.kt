@@ -27,9 +27,16 @@ class MainActivity : AppCompatActivity() {
     private lateinit var spinnerLanguage: Spinner
     private lateinit var etSpeechText: EditText
 
+    // 10 Preset Buttons for all 10 Indian Languages
     private lateinit var btnPresetHi: Button
     private lateinit var btnPresetTa: Button
     private lateinit var btnPresetTe: Button
+    private lateinit var btnPresetKn: Button
+    private lateinit var btnPresetMl: Button
+    private lateinit var btnPresetMr: Button
+    private lateinit var btnPresetGu: Button
+    private lateinit var btnPresetBn: Button
+    private lateinit var btnPresetOr: Button
     private lateinit var btnPresetEn: Button
 
     private lateinit var btnPlayAudio: Button
@@ -40,8 +47,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvLatency: TextView
     private lateinit var tvTransceiverState: TextView
 
+    // 10 Indian Languages
     private val languages = listOf(
-        "English (en)" to "en",
         "Hindi (hi)" to "hi",
         "Tamil (ta)" to "ta",
         "Telugu (te)" to "te",
@@ -50,7 +57,8 @@ class MainActivity : AppCompatActivity() {
         "Marathi (mr)" to "mr",
         "Gujarati (gu)" to "gu",
         "Bengali (bn)" to "bn",
-        "Odia (or)" to "or"
+        "Odia (or)" to "or",
+        "English (en)" to "en"
     )
 
     @SuppressLint("ClickableViewAccessibility")
@@ -77,9 +85,16 @@ class MainActivity : AppCompatActivity() {
         spinnerLanguage = findViewById(R.id.spinnerLanguage)
         etSpeechText = findViewById(R.id.etSpeechText)
 
+        // 10 Language Presets
         btnPresetHi = findViewById(R.id.btnPresetHi)
         btnPresetTa = findViewById(R.id.btnPresetTa)
         btnPresetTe = findViewById(R.id.btnPresetTe)
+        btnPresetKn = findViewById(R.id.btnPresetKn)
+        btnPresetMl = findViewById(R.id.btnPresetMl)
+        btnPresetMr = findViewById(R.id.btnPresetMr)
+        btnPresetGu = findViewById(R.id.btnPresetGu)
+        btnPresetBn = findViewById(R.id.btnPresetBn)
+        btnPresetOr = findViewById(R.id.btnPresetOr)
         btnPresetEn = findViewById(R.id.btnPresetEn)
 
         btnPlayAudio = findViewById(R.id.btnPlayAudio)
@@ -147,23 +162,64 @@ class MainActivity : AppCompatActivity() {
             tvLatency.text = "LATENCY: 8ms HARDWARE INTR"
         }
 
+        // --- All 10 Language Preset Listeners ---
+        // 1. Hindi
         btnPresetHi.setOnClickListener {
-            spinnerLanguage.setSelection(1)
+            spinnerLanguage.setSelection(0)
             etSpeechText.setText("यह इसरो आई-तंत्रा आपातकालीन संचार प्रणाली है।")
         }
 
+        // 2. Tamil
         btnPresetTa.setOnClickListener {
-            spinnerLanguage.setSelection(2)
+            spinnerLanguage.setSelection(1)
             etSpeechText.setText("இது இஸ்ரோ ஐ-தந்திரா அவசர தொடர்பு அமைப்பு.")
         }
 
+        // 3. Telugu
         btnPresetTe.setOnClickListener {
-            spinnerLanguage.setSelection(3)
-            etSpeechText.setText("ఇది ఇస్రో ఐ-తంత్ర అత్యవసర సమాచార వ్యవస్థ.")
+            spinnerLanguage.setSelection(2)
+            etSpeechText.setText("ఇది ಇಸ್ರೋ ಐ-ತಂತ್ರ అత్యవసర సమాచార వ్యవస్థ.")
         }
 
+        // 4. Kannada
+        btnPresetKn.setOnClickListener {
+            spinnerLanguage.setSelection(3)
+            etSpeechText.setText("ಇಸ್ರೋ ಐ-ತಂತ್ರ ತುರ್ತು ಸಂದೇಶ ಸಂಪರ್ಕ ಸ್ಥಾಪಿಸಲಾಗಿದೆ.")
+        }
+
+        // 5. Malayalam
+        btnPresetMl.setOnClickListener {
+            spinnerLanguage.setSelection(4)
+            etSpeechText.setText("ഇത് ഐഎസ്ആർഒ ഐ-തന്ത്ര അടിയന്തര ആശയവിനിമയ സംവിധാനമാണ്.")
+        }
+
+        // 6. Marathi
+        btnPresetMr.setOnClickListener {
+            spinnerLanguage.setSelection(5)
+            etSpeechText.setText("ही इस्रो आय-तंत्र आणीबाणी संप्रेषण प्रणाली आहे.")
+        }
+
+        // 7. Gujarati
+        btnPresetGu.setOnClickListener {
+            spinnerLanguage.setSelection(6)
+            etSpeechText.setText("આ ઈસરો આઈ-તંત્ર કટોકટી સંચાર પ્રણાલી છે.")
+        }
+
+        // 8. Bengali
+        btnPresetBn.setOnClickListener {
+            spinnerLanguage.setSelection(7)
+            etSpeechText.setText("এটি ইসরো আই-তন্ত্র জরুরী যোগাযোগ ব্যবস্থা।")
+        }
+
+        // 9. Odia
+        btnPresetOr.setOnClickListener {
+            spinnerLanguage.setSelection(8)
+            etSpeechText.setText("ଏହା ଇସ୍ରୋ ଆଇ-ତନ୍ତ୍ର ଜରୁରୀକାଳୀନ ଯୋଗାଯୋଗ ବ୍ୟବସ୍ଥା।")
+        }
+
+        // 10. English
         btnPresetEn.setOnClickListener {
-            spinnerLanguage.setSelection(0)
+            spinnerLanguage.setSelection(9)
             etSpeechText.setText("ISRO iTantra Ultra-Low Bitrate Neural Transceiver link established.")
         }
     }
