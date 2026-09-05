@@ -47,7 +47,7 @@ class IndicTTSManager(
                 audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, (maxVol * 0.9).toInt(), 0)
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Volume adjust error: " + e.message)
+            Log.w(TAG, "Volume error: " + e.message)
         }
     }
 
@@ -64,7 +64,7 @@ class IndicTTSManager(
             isTtsReady = true
             androidTts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) {
-                    postStatus("SPEAKING: Live Speech Output Active")
+                    postStatus("SPEAKING: Indic Speech Output Active")
                 }
                 override fun onDone(utteranceId: String?) {
                     postStatus("STATE: PLAYBACK COMPLETE (RX READY)")
@@ -73,7 +73,7 @@ class IndicTTSManager(
                     postStatus("STATE: PLAYBACK COMPLETE")
                 }
             })
-            Log.i(TAG, "Android TTS successfully initialized.")
+            Log.i(TAG, "Android TTS engine initialized successfully.")
             postStatus("STATE: TTS READY (ALL 10 INDIC LANGUAGES)")
         } else {
             Log.w(TAG, "Android TTS init status: " + status)
@@ -83,12 +83,12 @@ class IndicTTSManager(
 
     fun speak(text: String, langCode: String, prosody: ProsodyVector = ProsodyVector()) {
         if (text.isBlank()) return
-        
+
         postStatus("SYNTHESIZING: '" + text.take(25) + "...' [" + langCode.uppercase() + "]")
         Log.i(TAG, "Synthesizing custom input: text='$text', lang='$langCode'")
         initSystemVolume()
 
-        // 1. Synthesize and play custom input via Native C++20 Indic Formant Engine
+        // 1. Synthesize and play via Native C++20 Indic Formant Engine
         audioExecutor.execute {
             try {
                 val pcm = nativeBridge.synthesize(text, langCode, prosody)
@@ -101,13 +101,14 @@ class IndicTTSManager(
             }
         }
 
-        // 2. Play custom input via Android TextToSpeech engine
+        // 2. Play via Android TextToSpeech engine with fallback
         if (isTtsReady && androidTts != null) {
             mainHandler.post {
                 try {
                     val targetLocale = getLocaleForLang(langCode)
-                    var matchedVoice = false
-                    
+                    var matchedNativeVoice = false
+
+                    // Look for an installed voice matching the target Indic language on the phone
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                         val voices = androidTts?.voices
                         if (voices != null) {
@@ -115,144 +116,104 @@ class IndicTTSManager(
                                 if (v.locale.language.equals(langCode, ignoreCase = true) ||
                                     (v.locale.country.equals("IN", ignoreCase = true) && v.name.contains(langCode, ignoreCase = true))) {
                                     androidTts?.voice = v
-                                    matchedVoice = true
+                                    matchedNativeVoice = true
                                     break
                                 }
                             }
                         }
                     }
 
-                    androidTts?.language = targetLocale
-                    
-                    // If the text contains Indic script, try speaking original text first
-                    val speakResult = androidTts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "iTantra_" + System.currentTimeMillis())
-                    
-                    // If system TTS does not support the native Indic script directly,
-                    // dynamically convert the EXACT user-typed sentence into phonetic text
-                    if (!matchedVoice && containsIndicUnicode(text)) {
-                        val dynamicPhonetic = convertIndicToPhonetic(text)
-                        if (dynamicPhonetic.isNotBlank()) {
-                            mainHandler.postDelayed({
-                                try {
-                                    androidTts?.language = Locale.ENGLISH
-                                    androidTts?.speak(dynamicPhonetic, TextToSpeech.QUEUE_ADD, null, "iTantra_dyn")
-                                } catch (ignored: Exception) {}
-                            }, 50)
-                        }
+                    val langResult = androidTts?.setLanguage(targetLocale)
+                    val isLangAvailable = (langResult != TextToSpeech.LANG_MISSING_DATA && langResult != TextToSpeech.LANG_NOT_SUPPORTED)
+
+                    if (matchedNativeVoice || isLangAvailable) {
+                        // The phone has native Indic voice data installed (e.g. Hindi, Tamil, Telugu)
+                        androidTts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "iTantra_" + System.currentTimeMillis())
+                    } else {
+                        // The phone does not have the voice pack downloaded (e.g. Kannada, Odia on some ROMs)
+                        // Convert to fluent phonetic syllable romanization so Google TTS speaks the exact words
+                        val phoneticSpeech = transliterateIndicToSyllables(text)
+                        androidTts?.language = Locale.ENGLISH
+                        androidTts?.speak(phoneticSpeech, TextToSpeech.QUEUE_FLUSH, null, "iTantra_phonetic")
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Android TTS custom speak error", e)
+                    Log.e(TAG, "Android TTS speak error", e)
                 }
             }
         }
     }
 
-    private fun containsIndicUnicode(text: String): Boolean {
-        for (ch in text) {
-            val code = ch.code
-            if (code in 0x0900..0x0D7F) return true
-        }
-        return false
-    }
+    // Complete Syllable-Based Transliteration for all 10 Indian Scripts
+    private fun transliterateIndicToSyllables(text: String): String {
+        val consonants = mapOf(
+            0x15 to "k", 0x16 to "kh", 0x17 to "g", 0x18 to "gh", 0x19 to "ng",
+            0x1A to "ch", 0x1B to "chh", 0x1C to "j", 0x1D to "jh", 0x1E to "ny",
+            0x1F to "t", 0x20 to "th", 0x21 to "d", 0x22 to "dh", 0x23 to "n",
+            0x24 to "t", 0x25 to "th", 0x26 to "d", 0x27 to "dh", 0x28 to "n",
+            0x2A to "p", 0x2B to "ph", 0x2C to "b", 0x2D to "bh", 0x2E to "m",
+            0x2F to "y", 0x30 to "r", 0x31 to "r", 0x32 to "l", 0x33 to "l", 0x34 to "l", 0x35 to "v",
+            0x36 to "sh", 0x37 to "sh", 0x38 to "s", 0x39 to "h"
+        )
+        val vowels = mapOf(
+            0x05 to "a", 0x06 to "aa", 0x07 to "i", 0x08 to "ee", 0x09 to "u", 0x0A to "oo",
+            0x0E to "e", 0x0F to "e", 0x10 to "ai", 0x12 to "o", 0x13 to "o", 0x14 to "au"
+        )
+        val matras = mapOf(
+            0x3E to "aa", 0x3F to "i", 0x40 to "ee", 0x41 to "u", 0x42 to "oo",
+            0x46 to "e", 0x47 to "ay", 0x48 to "ai", 0x4A to "o", 0x4B to "o", 0x4C to "au"
+        )
 
-    // Dynamic Unicode to Phonetic Romanization (Character by Character)
-    private fun convertIndicToPhonetic(input: String): String {
         val sb = StringBuilder()
         var i = 0
-        val len = input.length
+        val len = text.length
 
         while (i < len) {
-            val ch = input[i]
-            val code = ch.code
-
-            // ASCII characters (pass through directly)
-            if (code < 0x80) {
-                sb.append(ch)
+            val c = text[i].code
+            if (c < 128) {
+                sb.append(text[i])
                 i++
                 continue
             }
 
-            // Brahmi Indic scripts: Devanagari (0x0900), Bengali (0x0980), Gujarati (0x0A80),
-            // Odia (0x0B00), Tamil (0x0B80), Telugu (0x0C00), Kannada (0x0C80), Malayalam (0x0D00)
             var base = 0
-            if (code in 0x0900..0x097F) base = 0x0900
-            else if (code in 0x0980..0x09FF) base = 0x0980
-            else if (code in 0x0A80..0x0AFF) base = 0x0A80
-            else if (code in 0x0B00..0x0B7F) base = 0x0B00
-            else if (code in 0x0B80..0x0BFF) base = 0x0B80
-            else if (code in 0x0C00..0x0C7F) base = 0x0C00
-            else if (code in 0x0C80..0x0CFF) base = 0x0C80
-            else if (code in 0x0D00..0x0D7F) base = 0x0D00
+            if (c in 0x0900..0x097F) base = 0x0900      // Devanagari (Hindi, Marathi)
+            else if (c in 0x0C80..0x0CFF) base = 0x0C80 // Kannada
+            else if (c in 0x0B80..0x0BFF) base = 0x0B80 // Tamil
+            else if (c in 0x0C00..0x0C7F) base = 0x0C00 // Telugu
+            else if (c in 0x0D00..0x0D7F) base = 0x0D00 // Malayalam
+            else if (c in 0x0A80..0x0AFF) base = 0x0A80 // Gujarati
+            else if (c in 0x0980..0x09FF) base = 0x0980 // Bengali
+            else if (c in 0x0B00..0x0B7F) base = 0x0B00 // Odia
 
             if (base != 0) {
-                val offset = code - base
-                when (offset) {
-                    // Independent Vowels
-                    0x05 -> sb.append("a")
-                    0x06 -> sb.append("aa")
-                    0x07 -> sb.append("i")
-                    0x08 -> sb.append("ee")
-                    0x09 -> sb.append("u")
-                    0x0A -> sb.append("oo")
-                    0x0E, 0x0F -> sb.append("e")
-                    0x10 -> sb.append("ai")
-                    0x12, 0x13 -> sb.append("o")
-                    0x14 -> sb.append("au")
-
-                    // Consonants (with inherent vowel 'a')
-                    0x15 -> sb.append("k ")
-                    0x16 -> sb.append("kh ")
-                    0x17 -> sb.append("g ")
-                    0x18 -> sb.append("gh ")
-                    0x1A -> sb.append("ch ")
-                    0x1B -> sb.append("chh ")
-                    0x1C -> sb.append("j ")
-                    0x1D -> sb.append("jh ")
-                    0x1F, 0x24 -> sb.append("t ")
-                    0x20, 0x25 -> sb.append("th ")
-                    0x21, 0x26 -> sb.append("d ")
-                    0x22, 0x27 -> sb.append("dh ")
-                    0x28, 0x29 -> sb.append("n ")
-                    0x2A -> sb.append("p ")
-                    0x2B -> sb.append("ph ")
-                    0x2C -> sb.append("b ")
-                    0x2D -> sb.append("bh ")
-                    0x2E -> sb.append("m ")
-                    0x2F -> sb.append("y ")
-                    0x30, 0x31 -> sb.append("r ")
-                    0x32, 0x33, 0x34 -> sb.append("l ")
-                    0x35 -> sb.append("v ")
-                    0x36, 0x37 -> sb.append("sh ")
-                    0x38 -> sb.append("s ")
-                    0x39 -> sb.append("h ")
-
-                    // Dependent Vowels (Matras)
-                    0x3E -> { trimTrailingSpace(sb); sb.append("aa ") }
-                    0x3F -> { trimTrailingSpace(sb); sb.append("i ") }
-                    0x40 -> { trimTrailingSpace(sb); sb.append("ee ") }
-                    0x41 -> { trimTrailingSpace(sb); sb.append("u ") }
-                    0x42 -> { trimTrailingSpace(sb); sb.append("oo ") }
-                    0x46, 0x47 -> { trimTrailingSpace(sb); sb.append("e ") }
-                    0x48 -> { trimTrailingSpace(sb); sb.append("ai ") }
-                    0x4A, 0x4B -> { trimTrailingSpace(sb); sb.append("o ") }
-                    0x4C -> { trimTrailingSpace(sb); sb.append("au ") }
-                    0x4D -> { trimTrailingSpace(sb) } // Halant (remove inherent vowel)
-                    0x02 -> { sb.append("n ") }      // Anusvara
-                    0x03 -> { sb.append("h ") }      // Visarga
-                    else -> sb.append(" ")
+                val off = c - base
+                if (vowels.containsKey(off)) {
+                    sb.append(vowels[off])
+                } else if (consonants.containsKey(off)) {
+                    val cons = consonants[off] ?: ""
+                    if (i + 1 < len) {
+                        val nextOff = text[i + 1].code - base
+                        if (matras.containsKey(nextOff)) {
+                            sb.append(cons).append(matras[nextOff])
+                            i++ // consume matra
+                        } else if (nextOff == 0x4D) { // virama / halant
+                            sb.append(cons)
+                            i++ // consume virama
+                        } else {
+                            sb.append(cons).append("a")
+                        }
+                    } else {
+                        sb.append(cons).append("a")
+                    }
+                } else if (off == 0x02) { // Anusvara
+                    sb.append("m")
+                } else if (off == 0x03) { // Visarga
+                    sb.append("h")
                 }
-            } else {
-                sb.append(" ")
             }
             i++
         }
-        return sb.toString().trim().replace(Regex("\\s+"), " ")
-    }
-
-    private fun trimTrailingSpace(sb: StringBuilder) {
-        if (sb.isNotEmpty() && sb.last() == ' ') {
-            sb.setLength(sb.length - 1)
-        }
+        return sb.toString()
     }
 
     private fun getLocaleForLang(langCode: String): Locale {
@@ -301,7 +262,7 @@ class IndicTTSManager(
                 .build()
 
             track.play()
-            
+
             val chunkSize = 1024
             var offset = 0
             while (offset < pcm.size) {
