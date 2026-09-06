@@ -258,7 +258,7 @@ def _realize_ta(action, entity, target, loc_text, hazard, qty):
 # 8. TELUGU (te)
 # ==============================================================================
 def _realize_te(action, entity, target, loc_text, hazard, qty):
-    LOCS = {"HUBBLI": "హుబ్లీకి", "TOLANKERE": "తోలన్కెరెకు", "BASE": "బేస్‌కు", "SECTOR_4": "సెక్టార్ 4 కు", "HOSPITAL": "ఆసుపత్రికి"}
+    LOCS = {"HUBBLI": "హుబ్లీకి", "TOLANKERE": "తోలంకెరెకు", "BASE": "బేస్‌కు", "SECTOR_4": "సెక్టార్ 4 కు", "HOSPITAL": "ఆసుపత్రికి"}
     ENTITIES = {"RESCUE": "రక్షణ బృందాన్ని", "RESCUE_REQUEST": "రక్షణ బృందాన్ని", "MEDICAL": "వైద్య బృందాన్ని", "AMBULANCE": "అంబులెన్స్", "FIRE": "అగ్నిమాపక దళాన్ని", "FIRE_TEAM": "అగ్నిమాపక సిబ్బందిని"}
     l_str = LOCS.get(target, (loc_text + "కు") if loc_text else (target + "కు" if target else ""))
     e_str = ENTITIES.get(entity, "బృందాన్ని")

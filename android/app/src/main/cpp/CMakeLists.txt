@@ -42,3 +42,26 @@ target_link_libraries(
     onnxruntime
     ${log-lib}
 )
+
+# Source files for Member 2 Audio TTS Core
+set(AUDIO_TTS_SOURCES
+    OboeAudioPlayer.cpp
+    VoiceToneCloner.cpp
+    IndicTTSEngine.cpp
+    NativeTTSBridge.cpp
+)
+
+# Build Shared Library libaudio_tts_core.so
+add_library(
+    audio_tts_core
+    SHARED
+    ${AUDIO_TTS_SOURCES}
+)
+
+# Link Libraries for TTS
+target_link_libraries(
+    audio_tts_core
+    oboe::oboe
+    ${log-lib}
+)
+
