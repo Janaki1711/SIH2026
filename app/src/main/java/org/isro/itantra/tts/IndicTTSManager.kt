@@ -63,7 +63,7 @@ class IndicTTSManager(
             isTtsReady = true
             androidTts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                 override fun onStart(utteranceId: String?) {
-                    postStatus("SPEAKING: Live Speech Output Active")
+                    postStatus("SPEAKING: Clear Voice Output Active")
                 }
                 override fun onDone(utteranceId: String?) {
                     postStatus("STATE: PLAYBACK COMPLETE (RX READY)")
@@ -84,48 +84,55 @@ class IndicTTSManager(
         if (text.isBlank()) return
 
         postStatus("SYNTHESIZING: '" + text.take(25) + "...' [" + langCode.uppercase() + "]")
-        Log.i(TAG, "Synthesizing input: text='$text', lang='$langCode'")
+        Log.i(TAG, "Synthesizing: text='$text', lang='$langCode', pitch=${prosody.f0PitchMean}, cadence=${prosody.cadenceRate}")
         initSystemVolume()
 
-        // 1. Play native C++20 Formant Synthesizer PCM in background
-        audioExecutor.execute {
-            try {
-                val pcm = nativeBridge.synthesize(text, langCode, prosody)
-                if (pcm.isNotEmpty()) {
-                    Log.i(TAG, "Native C++ PCM generated: " + pcm.size + " samples.")
-                    playPcmStreaming(pcm, isAlarm = false)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Native C++ playback error", e)
-            }
-        }
-
-        // 2. Play speech through Android TextToSpeech engine with guaranteed voice routing
         if (isTtsReady && androidTts != null) {
             mainHandler.post {
                 try {
+                    // Apply Voice Conditioning from 16-byte Prosody Vector
+                    // Base baseline human pitch = 140Hz (scale 0.5 to 2.0)
+                    val pitchFactor = (prosody.f0PitchMean / 140.0f).coerceIn(0.5f, 2.0f)
+                    val rateFactor = prosody.cadenceRate.coerceIn(0.5f, 2.0f)
+
+                    androidTts?.setPitch(pitchFactor)
+                    androidTts?.setSpeechRate(rateFactor)
+
                     val targetLocale = getLocaleForLang(langCode)
                     val langAvail = androidTts?.isLanguageAvailable(targetLocale) ?: TextToSpeech.LANG_NOT_SUPPORTED
-                    
+
                     if (langAvail >= TextToSpeech.LANG_AVAILABLE && langCode.lowercase() != "en") {
-                        // The phone supports native Indic font reading for this language (e.g. Hindi, Tamil)
                         androidTts?.language = targetLocale
                         androidTts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "iTantra_" + System.currentTimeMillis())
                     } else if (langCode.lowercase() == "en") {
-                        // Pure English
                         androidTts?.language = Locale.ENGLISH
                         androidTts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "iTantra_en")
                     } else {
-                        // Language voice data not pre-downloaded in Google Play (e.g. Kannada, Odia, Gujarati on some devices)
-                        // Convert Unicode script into fluent phonetic words so the voice speaks the exact Indian words
                         val speakablePhonetic = transliterateIndicToSyllables(text)
-                        Log.i(TAG, "Speaking via syllable phonetics: '$speakablePhonetic'")
                         androidTts?.language = Locale("en", "IN")
                         androidTts?.speak(speakablePhonetic, TextToSpeech.QUEUE_FLUSH, null, "iTantra_syllable")
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Android TTS speak error", e)
+                    // Fallback to Native C++ Formant Synthesizer only if OS TTS throws an error
+                    playViaNativeCpp(text, langCode, prosody)
                 }
+            }
+        } else {
+            // If OS TTS is not available on device, use Native C++20 Formant Synthesizer
+            playViaNativeCpp(text, langCode, prosody)
+        }
+    }
+
+    private fun playViaNativeCpp(text: String, langCode: String, prosody: ProsodyVector) {
+        audioExecutor.execute {
+            try {
+                val pcm = nativeBridge.synthesize(text, langCode, prosody)
+                if (pcm.isNotEmpty()) {
+                    playPcmStreaming(pcm, isAlarm = false)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Native C++ playback error", e)
             }
         }
     }
@@ -182,19 +189,19 @@ class IndicTTSManager(
                         val nextOff = text[i + 1].code - base
                         if (matras.containsKey(nextOff)) {
                             sb.append(cons).append(matras[nextOff])
-                            i++ // consume matra
-                        } else if (nextOff == 0x4D) { // virama / halant
+                            i++
+                        } else if (nextOff == 0x4D) {
                             sb.append(cons)
-                            i++ // consume virama
+                            i++
                         } else {
                             sb.append(cons).append("a")
                         }
                     } else {
                         sb.append(cons).append("a")
                     }
-                } else if (off == 0x02) { // Anusvara
+                } else if (off == 0x02) {
                     sb.append("m")
-                } else if (off == 0x03) { // Visarga
+                } else if (off == 0x03) {
                     sb.append("h")
                 }
             }
@@ -281,24 +288,14 @@ class IndicTTSManager(
                 playPcmStreaming(sirenPcm, isAlarm = true)
             }
 
-            val emergencyProsody = ProsodyVector(
-                f0PitchMean = 220.0f,
-                f0PitchVariance = 30.0f,
-                cadenceRate = 1.3f,
-                rmsEnergy = 1.0f,
-                urgencyLevel = 2
-            )
-            val pcm = nativeBridge.synthesize(text, langCode, emergencyProsody)
-            if (pcm.isNotEmpty()) {
-                playPcmStreaming(pcm, isAlarm = true)
-            }
-        }
-
-        mainHandler.post {
-            if (isTtsReady && androidTts != null) {
-                val locale = getLocaleForLang(langCode)
-                androidTts?.language = locale
-                androidTts?.speak(text, TextToSpeech.QUEUE_ADD, null, "iTantra_SOS")
+            mainHandler.post {
+                if (isTtsReady && androidTts != null) {
+                    val locale = getLocaleForLang(langCode)
+                    androidTts?.language = locale
+                    androidTts?.setPitch(1.3f)
+                    androidTts?.setSpeechRate(1.2f)
+                    androidTts?.speak(text, TextToSpeech.QUEUE_ADD, null, "iTantra_SOS")
+                }
             }
         }
     }
