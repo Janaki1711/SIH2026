@@ -1,7 +1,7 @@
 package org.isro.itantra.transport.wfbng
 
 import org.isro.itantra.transport.ChaCha20Poly1305Engine
-import org.isro.itantra.transport.ReedSolomonReedSolomonFECEngine
+import org.isro.itantra.transport.ReedSolomonFECEngine
 import org.isro.itantra.transport.mesh.MeshRouter
 import org.isro.itantra.transport.udp.UdpTransceiver
 import java.nio.ByteBuffer
@@ -10,19 +10,21 @@ import java.util.concurrent.atomic.AtomicInteger
 
 class WfbngManager(
     val callsign: String,
-    cryptoKey: ByteArray
+    cryptoKey: ByteArray,
+    val targetIp: String = "255.255.255.255",
+    val port: Int = 8988
 ) {
     val crypto = ChaCha20Poly1305Engine(cryptoKey)
     val fec = ReedSolomonFECEngine(8, 4)
     val mesh = MeshRouter(callsign)
-    val udp = UdpTransceiver()
+    val udp = UdpTransceiver(port)
 
     private val sequenceCounter = AtomicInteger(0)
     var onVoicePayloadDelivered: ((String, String, Byte, ByteArray) -> Unit)? = null
 
     init {
         mesh.onUdpBroadcast = { packetBytes ->
-            udp.sendPacket(packetBytes)
+            udp.sendPacket(packetBytes, targetIp, port)
         }
 
         mesh.onLocalDeliver = { origin, encryptedPayload ->
@@ -68,4 +70,5 @@ class WfbngManager(
         mesh.sendNewPacket(targetCallsign, sequence, encrypted)
     }
 }
+
 

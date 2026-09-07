@@ -100,7 +100,9 @@ target_include_directories(itantra_core PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/semantic
 )
 
+add_dependencies(itantra_core libprotobuf-lite)
 target_link_libraries(itantra_core PRIVATE
     ${log-lib}
     libprotobuf-lite
 )
+
