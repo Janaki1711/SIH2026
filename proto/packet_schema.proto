@@ -1,4 +1,5 @@
 syntax = "proto3";
+option optimize_for = LITE_RUNTIME;
 
 package itantra.protocol;
 
@@ -69,4 +70,5 @@ message VoicePacket {
     // CRC16-CCITT checksum for end-to-end frame verification.
     uint32 crc16_checksum = 9;
 }
+
 

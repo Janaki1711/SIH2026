@@ -1,5 +1,7 @@
 package org.isro.itantra.tts
 
+import org.isro.itantra.R
+
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
@@ -244,3 +246,4 @@ class MainActivity : AppCompatActivity() {
         ttsManager.shutdown()
     }
 }
+

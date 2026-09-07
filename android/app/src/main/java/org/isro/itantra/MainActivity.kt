@@ -20,6 +20,37 @@ import org.isro.itantra.audio.NativeSTTBridge
 import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
+    private lateinit var stateMachine: org.isro.itantra.runtime.PTTStateMachine
+    private lateinit var pttAudioAdapter: org.isro.itantra.runtime.PttAudioAdapter
+
+    private fun initPTTFoundation() {
+        val database = org.isro.itantra.database.MessageDatabase.getDatabase(this)
+        val logger = org.isro.itantra.runtime.CompositeTransitionLogger(
+            listOf(
+                org.isro.itantra.runtime.LogcatTransitionLogger(),
+                org.isro.itantra.database.DatabaseTransitionLogger(database)
+            )
+        )
+        stateMachine = org.isro.itantra.runtime.PTTStateMachine(logger = logger)
+        org.isro.itantra.input.PttInputController(
+            stateMachine = stateMachine,
+            inputProvider = org.isro.itantra.input.ForegroundVolumePttProvider
+        )
+        pttAudioAdapter = org.isro.itantra.runtime.PttAudioAdapter(stateMachine)
+        pttAudioAdapter.onTranscriptionResult = { text ->
+            runOnUiThread { statusText.text = text }
+        }
+        
+        val serviceIntent = Intent(this, org.isro.itantra.service.RadioDaemonService::class.java)
+        startForegroundService(serviceIntent)
+    }
+
+    override fun dispatchKeyEvent(event: android.view.KeyEvent?): Boolean {
+        if (org.isro.itantra.input.ForegroundVolumePttProvider.onDispatchKeyEvent(event)) {
+            return true
+        }
+        return super.dispatchKeyEvent(event)
+    }
 
     companion object {
         private const val TAG = "iTantra_MainActivity"
@@ -92,6 +123,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        initPTTFoundation()
 
         statusText = findViewById(R.id.statusText)
         langSpinner = findViewById(R.id.langSpinner)
@@ -457,3 +489,5 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {}
     }
 }
+
+

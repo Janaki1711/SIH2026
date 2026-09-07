@@ -124,6 +124,48 @@ JNIEXPORT void JNICALL Java_org_isro_itantra_audio_NativeSTTBridge_pushAudioPCM(
         LOGE("Exception in pushAudioPCM");
     }
 }
+} // Close extern "C"
+#include "AudioRingBuffer.hpp"
+std::shared_ptr<AudioRingBuffer> getGlobalRingBuffer();
+
+extern "C" {
+
+JNIEXPORT void JNICALL Java_org_isro_itantra_audio_NativeSTTBridge_pumpRingBuffer(
+    JNIEnv *env,
+    jclass clazz
+) {
+    try {
+        auto rb = getGlobalRingBuffer();
+        if (!rb) return;
+
+        std::lock_guard<std::mutex> lock(g_audioMutex);
+        float temp[512];
+        while (rb->available() >= 512) {
+            if (rb->read(temp, 512)) {
+                for (int i = 0; i < 512; ++i) {
+                    g_rawAudioBuffer.push_back(temp[i]);
+                    g_vadChunkBuffer.push_back(temp[i]);
+                }
+                
+                float speechProb = 1.0f;
+                if (g_vadEngine) {
+                    speechProb = g_vadEngine->processChunk(g_vadChunkBuffer.data());
+                }
+
+                if (speechProb > 0.25f) {
+                    g_accumulatedSpeechBuffer.insert(
+                        g_accumulatedSpeechBuffer.end(),
+                        g_vadChunkBuffer.begin(),
+                        g_vadChunkBuffer.end()
+                    );
+                }
+                g_vadChunkBuffer.clear();
+            }
+        }
+    } catch (...) {
+        LOGE("Exception in pumpRingBuffer");
+    }
+}
 
 JNIEXPORT jstring JNICALL Java_org_isro_itantra_audio_NativeSTTBridge_stopAudioCaptureAndTranscribe(
     JNIEnv *env,
@@ -180,3 +222,4 @@ JNIEXPORT void JNICALL Java_org_isro_itantra_audio_NativeSTTBridge_releaseNative
     } catch (...) {}
 }
 }
+
