@@ -56,6 +56,15 @@ object NativeSTTBridge {
         }
     }
 
+    fun safePumpRingBuffer() {
+        if (!isLibraryLoaded) return
+        try {
+            pumpRingBuffer()
+        } catch (e: Throwable) {
+            Log.w(TAG, "pumpRingBuffer notice: ${e.message}")
+        }
+    }
+
     fun safeStopAudioCaptureAndTranscribe(langCode: String): String {
         if (!isLibraryLoaded) return ""
         return try {
@@ -80,8 +89,12 @@ object NativeSTTBridge {
     external fun pushAudioPCM(pcmData: ShortArray, length: Int)
 
     @JvmStatic
+    external fun pumpRingBuffer()
+
+    @JvmStatic
     external fun stopAudioCaptureAndTranscribe(langCode: String): String
 
     @JvmStatic
     external fun releaseNativeEngine()
 }
+

@@ -23,6 +23,7 @@ set_target_properties(onnxruntime PROPERTIES
 # Source files for Member 1 (Chhavi) Audio STT Core
 set(AUDIO_STT_SOURCES
     NativeSTTBridge.cpp
+    native_bridge.cpp
     OboeAudioRecorder.cpp
     SileroVAD.cpp
     IndicSTTEngine.cpp
@@ -65,3 +66,41 @@ target_link_libraries(
     ${log-lib}
 )
 
+
+
+# --- Member 3: Semantic Engine (itantra_core) ---
+include(FetchContent)
+FetchContent_Declare(
+    protobuf
+    GIT_REPOSITORY https://github.com/protocolbuffers/protobuf.git
+    GIT_TAG        v3.21.12
+)
+set(protobuf_BUILD_TESTS OFF CACHE BOOL "Disable tests" FORCE)
+set(protobuf_BUILD_PROTOC_BINARIES OFF CACHE BOOL "Disable protoc" FORCE)
+set(protobuf_BUILD_SHARED_LIBS OFF CACHE BOOL "Static build" FORCE)
+FetchContent_MakeAvailable(protobuf)
+
+set(ITANTRA_CORE_SRCS
+    semantic/semantic_jni_bridge.cpp
+    semantic/Member3Integration.cpp
+    semantic/SemanticCompressor.cpp
+    semantic/SemanticCodebook.cpp
+    semantic/TinyMLAgent.cpp
+    semantic/GeoResolver.cpp
+    semantic/TranslationBridge.cpp
+    semantic/PacketFramer.cpp
+    semantic/PacketEncoder.cpp
+    semantic/PacketDecoder.cpp
+    semantic/packet_schema.pb.cc
+)
+
+add_library(itantra_core SHARED ${ITANTRA_CORE_SRCS})
+
+target_include_directories(itantra_core PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/semantic
+)
+
+target_link_libraries(itantra_core PRIVATE
+    ${log-lib}
+    libprotobuf-lite
+)
