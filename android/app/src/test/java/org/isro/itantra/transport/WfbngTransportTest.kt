@@ -1,7 +1,7 @@
 package org.isro.itantra.transport
 
-import org.isro.itantra.transport.crypto.CryptoEngine
-import org.isro.itantra.transport.fec.FecEngine
+import org.isro.itantra.transport.ChaCha20Poly1305Engine
+import org.isro.itantra.transport.ReedSolomonReedSolomonFECEngine
 import org.isro.itantra.transport.mesh.MeshRouter
 import org.isro.itantra.transport.udp.UdpTransceiver
 import org.isro.itantra.transport.wfbng.WfbngManager
@@ -39,7 +39,7 @@ class WfbngTransportTest {
     @Test
     fun testEncryptionDecryption() {
         val key = ByteArray(32) { it.toByte() }
-        val crypto = CryptoEngine(key)
+        val crypto = ChaCha20Poly1305Engine(key)
         
         val plaintext = "TopSecretMessage".toByteArray()
         val ciphertext = crypto.encrypt(plaintext)
@@ -54,7 +54,7 @@ class WfbngTransportTest {
 
     @Test
     fun testFecEncodeRecovery() {
-        val fec = FecEngine(k = 4, m = 2)
+        val fec = ReedSolomonFECEngine(k = 4, m = 2)
         val shardSize = 10
         val dataShards = Array(4) { i -> ByteArray(shardSize) { (i + 1).toByte() } }
         
@@ -140,5 +140,6 @@ class WfbngTransportTest {
         assertTrue(received)
     }
 }
+
 
 
