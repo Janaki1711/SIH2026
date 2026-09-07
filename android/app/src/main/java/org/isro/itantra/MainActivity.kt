@@ -22,6 +22,7 @@ import java.util.Locale
 class MainActivity : AppCompatActivity() {
     private lateinit var stateMachine: org.isro.itantra.runtime.PTTStateMachine
     private lateinit var pttAudioAdapter: org.isro.itantra.runtime.PttAudioAdapter
+    private var transport: org.isro.itantra.transport.wfbng.WfbngManager? = null
 
     private fun initPTTFoundation() {
         val database = org.isro.itantra.database.MessageDatabase.getDatabase(this)
@@ -124,6 +125,34 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         initPTTFoundation()
+
+        // Init WFB-ng Transport & Receiver Pipeline
+        try {
+            val key = ByteArray(32) { 0x42 } // 32-byte shared AES-256 key
+            transport = org.isro.itantra.transport.wfbng.WfbngManager("RESCUE_01", key, "10.0.2.255", 8988)
+            transport?.onVoicePayloadDelivered = { origin, language, priority, payload ->
+                runOnUiThread { statusText.text = "s Received packet from $origin\nDecompressing..." }
+                if (org.isro.itantra.semantic.SemanticBridge.isLibraryLoaded) {
+                    try {
+                        val decodedText = org.isro.itantra.semantic.SemanticBridge.decompressAndTranslate(payload, language)
+                        runOnUiThread { statusText.text = "s Msg from $origin ($language):\n$decodedText" }
+                        if (org.isro.itantra.tts.NativeTTSBridge.isNativeAvailable()) {
+                            val tts = org.isro.itantra.tts.NativeTTSBridge()
+                            val audio = tts.synthesize(decodedText, language, org.isro.itantra.tts.ProsodyVector())
+                            if (tts.startPlayer()) {
+                                tts.enqueueAudio(audio)
+                                // Stop player after synthesis completes (we should ideally wait, but this is a demo)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Rx pipeline error", e)
+                    }
+                }
+            }
+            Thread { transport?.start() }.start()
+        } catch (e: Throwable) {
+            Log.e(TAG, "Failed to init transport", e)
+        }
 
         statusText = findViewById(R.id.statusText)
         langSpinner = findViewById(R.id.langSpinner)
@@ -382,6 +411,9 @@ class MainActivity : AppCompatActivity() {
                             correctedText, langCode, "en", "RESCUE_01", 1
                         )
                         displayMsg += "\n⚡ M3 Semantic Packet: ${packet.size}B (<38B ISRO limit)"
+                        
+                        // M4: Transmit the packet over UDP Mesh!
+                        transport?.sendVoiceMessage(packet, langCode, 1.toByte(), "RESCUE_ALL")
                     } catch (e: Throwable) {
                         Log.w(TAG, "Semantic compression notice: ${e.message}")
                     }
@@ -395,6 +427,9 @@ class MainActivity : AppCompatActivity() {
                             nativeMsg, langCode, "en", "RESCUE_01", 1
                         )
                         displayMsg += "\n⚡ M3 Semantic Packet: ${packet.size}B (<38B ISRO limit)"
+                        
+                        // M4: Transmit the packet over UDP Mesh!
+                        transport?.sendVoiceMessage(packet, langCode, 1.toByte(), "RESCUE_ALL")
                     } catch (e: Throwable) {
                         Log.w(TAG, "Semantic compression notice: ${e.message}")
                     }
