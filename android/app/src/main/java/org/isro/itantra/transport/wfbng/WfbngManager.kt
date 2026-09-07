@@ -1,7 +1,7 @@
 package org.isro.itantra.transport.wfbng
 
-import org.isro.itantra.transport.crypto.CryptoEngine
-import org.isro.itantra.transport.fec.FecEngine
+import org.isro.itantra.transport.ChaCha20Poly1305Engine
+import org.isro.itantra.transport.ReedSolomonReedSolomonFECEngine
 import org.isro.itantra.transport.mesh.MeshRouter
 import org.isro.itantra.transport.udp.UdpTransceiver
 import java.nio.ByteBuffer
@@ -12,8 +12,8 @@ class WfbngManager(
     val callsign: String,
     cryptoKey: ByteArray
 ) {
-    val crypto = CryptoEngine(cryptoKey)
-    val fec = FecEngine(8, 4)
+    val crypto = ChaCha20Poly1305Engine(cryptoKey)
+    val fec = ReedSolomonFECEngine(8, 4)
     val mesh = MeshRouter(callsign)
     val udp = UdpTransceiver()
 
@@ -68,3 +68,4 @@ class WfbngManager(
         mesh.sendNewPacket(targetCallsign, sequence, encrypted)
     }
 }
+
