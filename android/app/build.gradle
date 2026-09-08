@@ -61,7 +61,7 @@ android {
         prefab true
     }
 
-    ndkVersion "25.1.8937393"
+    ndkVersion "30.0.16138531"
 
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.8"

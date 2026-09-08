@@ -11,63 +11,279 @@
         android:id="@+id/titleText"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="36dp"
+        android:layout_marginTop="24dp"
         android:text="iTantra Tactical Transceiver"
         android:textColor="#00E5FF"
-        android:textSize="22sp"
+        android:textSize="20sp"
         android:textStyle="bold"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
     <TextView
-        android:id="@+id/langLabel"
-        android:layout_width="wrap_content"
+        android:id="@+id/netStatusText"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="Select STT Language:"
-        android:textColor="#B0BEC5"
-        android:textSize="14sp"
+        android:layout_marginHorizontal="20dp"
+        android:layout_marginTop="8dp"
+        android:background="#1E293B"
+        android:padding="8dp"
+        android:gravity="center"
+        android:text="📡 Node: NODE_XXXX | Peer: 🟡 Searching..."
+        android:textColor="#FFD600"
+        android:textSize="12sp"
+        android:textStyle="bold"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/titleText" />
 
+    <!-- Direct Peer IP Connect Row (Works on Campus Wi-Fi & Offline) -->
+    <LinearLayout
+        android:id="@+id/peerIpRow"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="20dp"
+        android:layout_marginTop="6dp"
+        android:orientation="horizontal"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/netStatusText">
+
+        <EditText
+            android:id="@+id/peerIpInput"
+            android:layout_width="0dp"
+            android:layout_height="38dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="6dp"
+            android:background="#1E293B"
+            android:hint="Peer IP (e.g. 10.11.1.92)"
+            android:textColorHint="#78909C"
+            android:padding="6dp"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:singleLine="true" />
+
+        <Button
+            android:id="@+id/btnConnectPeer"
+            android:layout_width="wrap_content"
+            android:layout_height="38dp"
+            android:backgroundTint="#00E5FF"
+            android:text="CONNECT 🔗"
+            android:textColor="#0B0E14"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/langLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="Select Language:"
+        android:textColor="#B0BEC5"
+        android:textSize="12sp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/peerIpRow" />
+
     <Spinner
         android:id="@+id/langSpinner"
         android:layout_width="0dp"
-        android:layout_height="48dp"
-        android:layout_marginHorizontal="48dp"
-        android:layout_marginTop="8dp"
+        android:layout_height="42dp"
+        android:layout_marginHorizontal="32dp"
+        android:layout_marginTop="4dp"
         android:background="#1E293B"
-        android:padding="8dp"
+        android:padding="6dp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/langLabel" />
+
+    <!-- Operational Mode Selector (Walkie-Talkie PTT vs Normal Phone Mode) -->
+    <LinearLayout
+        android:id="@+id/modeSelectorRow"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="20dp"
+        android:layout_marginTop="6dp"
+        android:orientation="horizontal"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/langSpinner">
+
+        <Button
+            android:id="@+id/btnModeWalkieTalkie"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:backgroundTint="#00E5FF"
+            android:text="📻 Walkie-Talkie (PTT)"
+            android:textColor="#0B0E14"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnModePhone"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:backgroundTint="#374151"
+            android:text="📱 Phone Mode"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+    </LinearLayout>
 
     <TextView
         android:id="@+id/statusText"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginHorizontal="24dp"
-        android:layout_marginTop="20dp"
+        android:layout_marginHorizontal="20dp"
+        android:layout_marginTop="10dp"
         android:gravity="center"
-        android:text="Ready for Multilingual Audio Testing"
+        android:text="Ready for 100% Offline Tactical Testing"
         android:textColor="#FFFFFF"
-        android:textSize="16sp"
+        android:textSize="14sp"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/langSpinner" />
+        app:layout_constraintTop_toBottomOf="@+id/modeSelectorRow" />
+
+    <!-- 1-Tap Tactical SOS Quick Alerts -->
+    <LinearLayout
+        android:id="@+id/tacticalRow1"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="20dp"
+        android:layout_marginTop="10dp"
+        android:orientation="horizontal"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/statusText">
+
+        <Button
+            android:id="@+id/btnSosAmbulance"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:backgroundTint="#D50000"
+            android:text="🚑 5 Ambulances"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnSosFlood"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:backgroundTint="#0091EA"
+            android:text="🌊 Flood Evac"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/tacticalRow2"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="20dp"
+        android:layout_marginTop="6dp"
+        android:orientation="horizontal"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/tacticalRow1">
+
+        <Button
+            android:id="@+id/btnSosFire"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:backgroundTint="#FF6D00"
+            android:text="🔥 Fire Alert"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/btnSosUrgent"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:backgroundTint="#AA00FF"
+            android:text="🆘 Urgent SOS"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- Custom Message Input Row -->
+    <LinearLayout
+        android:id="@+id/customInputRow"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="20dp"
+        android:layout_marginTop="8dp"
+        android:orientation="horizontal"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/tacticalRow2">
+
+        <EditText
+            android:id="@+id/customMsgInput"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:background="#1E293B"
+            android:hint="Type custom alert..."
+            android:textColorHint="#78909C"
+            android:padding="8dp"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:singleLine="true" />
+
+        <Button
+            android:id="@+id/btnSendCustom"
+            android:layout_width="wrap_content"
+            android:layout_height="44dp"
+            android:backgroundTint="#00C853"
+            android:text="SEND 🚀"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <Button
+        android:id="@+id/testButton"
+        android:layout_width="0dp"
+        android:layout_height="48dp"
+        android:layout_marginHorizontal="24dp"
+        android:layout_marginBottom="8dp"
+        android:backgroundTint="#FFD600"
+        android:text="SEND TEST ALERT (PTT) 🚨"
+        android:textColor="#0B0E14"
+        android:textSize="15sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toTopOf="@+id/startButton"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
 
     <Button
         android:id="@+id/startButton"
         android:layout_width="0dp"
-        android:layout_height="64dp"
-        android:layout_marginHorizontal="32dp"
-        android:layout_marginBottom="16dp"
+        android:layout_height="56dp"
+        android:layout_marginHorizontal="24dp"
+        android:layout_marginBottom="10dp"
         android:backgroundTint="#00E5FF"
         android:text="START RECORDING 🎙️"
         android:textColor="#0B0E14"
-        android:textSize="18sp"
+        android:textSize="16sp"
         android:textStyle="bold"
         app:layout_constraintBottom_toTopOf="@+id/stopButton"
         app:layout_constraintEnd_toEndOf="parent"
@@ -76,13 +292,13 @@
     <Button
         android:id="@+id/stopButton"
         android:layout_width="0dp"
-        android:layout_height="64dp"
-        android:layout_marginHorizontal="32dp"
-        android:layout_marginBottom="36dp"
+        android:layout_height="56dp"
+        android:layout_marginHorizontal="24dp"
+        android:layout_marginBottom="20dp"
         android:backgroundTint="#FF3D00"
         android:text="STOP &amp; TRANSCRIBE ⚡"
         android:textColor="#FFFFFF"
-        android:textSize="18sp"
+        android:textSize="16sp"
         android:textStyle="bold"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"

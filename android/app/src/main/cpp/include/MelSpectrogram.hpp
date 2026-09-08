@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <vector>
 #include <cmath>
@@ -27,19 +27,26 @@ public:
             return;
         }
 
-        outFrames = (pcm.size() - kWindowSize) / kHopSize + 1;
+        // Apply pre-emphasis filter (0.97) to enhance speech formants
+        std::vector<float> audio = pcm;
+        for (int i = static_cast<int>(audio.size()) - 1; i > 0; --i) {
+            audio[i] -= 0.97f * audio[i - 1];
+        }
+        audio[0] *= (1.0f - 0.97f);
+
+        outFrames = (audio.size() - kWindowSize) / kHopSize + 1;
         outMel.assign(kNumMels * outFrames, 0.0f);
 
         std::vector<float> real(kFftSize, 0.0f);
         std::vector<float> imag(kFftSize, 0.0f);
-        std::vector<float> power(kFftSize / 2 + 1, 0.0f);
 
         for (int64_t f = 0; f < outFrames; ++f) {
             size_t offset = f * kHopSize;
 
             for (int i = 0; i < kWindowSize; ++i) {
-                float window = 0.5f * (1.0f - std::cos(2.0f * M_PI * i / (kWindowSize - 1)));
-                real[i] = pcm[offset + i] * window;
+                // Periodic Hann window matching NeMo / Torchaudio
+                float window = 0.5f * (1.0f - std::cos(2.0f * M_PI * i / kWindowSize));
+                real[i] = audio[offset + i] * window;
                 imag[i] = 0.0f;
             }
             for (int i = kWindowSize; i < kFftSize; ++i) {
@@ -49,16 +56,33 @@ public:
 
             fftRadix2(real, imag);
 
-            for (int k = 0; k <= kFftSize / 2; ++k) {
-                power[k] = real[k] * real[k] + imag[k] * imag[k];
-            }
-
             for (int m = 0; m < kNumMels; ++m) {
                 float energy = 0.0f;
                 for (const auto& pair : m_filterbanks[m]) {
-                    energy += power[pair.first] * pair.second;
+                    float power = real[pair.first] * real[pair.first] + imag[pair.first] * imag[pair.first];
+                    energy += power * pair.second;
                 }
                 outMel[m * outFrames + f] = std::log(std::max(energy, 1e-5f));
+            }
+        }
+
+        // Apply per-feature normalization (mean=0, std=1 per mel bin) matching NeMo preprocessor
+        if (outFrames > 1) {
+            for (int m = 0; m < kNumMels; ++m) {
+                float sum = 0.0f;
+                for (int64_t f = 0; f < outFrames; ++f) {
+                    sum += outMel[m * outFrames + f];
+                }
+                float mean = sum / static_cast<float>(outFrames);
+                float sqSum = 0.0f;
+                for (int64_t f = 0; f < outFrames; ++f) {
+                    float diff = outMel[m * outFrames + f] - mean;
+                    sqSum += diff * diff;
+                }
+                float stdDev = std::sqrt(sqSum / static_cast<float>(outFrames) + 1e-5f);
+                for (int64_t f = 0; f < outFrames; ++f) {
+                    outMel[m * outFrames + f] = (outMel[m * outFrames + f] - mean) / stdDev;
+                }
             }
         }
     }
@@ -66,41 +90,54 @@ public:
 private:
     std::vector<std::vector<std::pair<int, float>>> m_filterbanks;
 
-    static float hzToMel(float hz) {
-        return 2595.0f * std::log10(1.0f + hz / 700.0f);
+    static float hzToMelSlaney(float hz) {
+        float f_sp = 200.0f / 3.0f;
+        float min_log_hz = 1000.0f;
+        float min_log_mel = min_log_hz / f_sp;
+        float logstep = std::log(6.4f) / 27.0f;
+        if (hz >= min_log_hz) {
+            return min_log_mel + std::log(hz / min_log_hz) / logstep;
+        }
+        return hz / f_sp;
     }
 
-    static float melToHz(float mel) {
-        return 700.0f * (std::pow(10.0f, mel / 2595.0f) - 1.0f);
+    static float melToHzSlaney(float mel) {
+        float f_sp = 200.0f / 3.0f;
+        float min_log_hz = 1000.0f;
+        float min_log_mel = min_log_hz / f_sp;
+        float logstep = std::log(6.4f) / 27.0f;
+        if (mel >= min_log_mel) {
+            return min_log_hz * std::exp(logstep * (mel - min_log_mel));
+        }
+        return f_sp * mel;
     }
 
     void initFilterbanks() {
         m_filterbanks.resize(kNumMels);
-        float melLow = hzToMel(0.0f);
-        float melHigh = hzToMel(kSampleRate / 2.0f);
-        float melStep = (melHigh - melLow) / (kNumMels + 1);
+        int n_freqs = kFftSize / 2 + 1; // 257
 
-        std::vector<int> binPoints(kNumMels + 2);
+        float melLow = hzToMelSlaney(0.0f);
+        float melHigh = hzToMelSlaney(kSampleRate / 2.0f);
+
+        std::vector<float> hzPoints(kNumMels + 2);
         for (int i = 0; i < kNumMels + 2; ++i) {
-            float hz = melToHz(melLow + i * melStep);
-            binPoints[i] = static_cast<int>(std::floor((kFftSize + 1) * hz / kSampleRate));
+            float m = melLow + static_cast<float>(i) * (melHigh - melLow) / static_cast<float>(kNumMels + 1);
+            hzPoints[i] = melToHzSlaney(m);
         }
 
         for (int m = 0; m < kNumMels; ++m) {
-            int left = binPoints[m];
-            int center = binPoints[m + 1];
-            int right = binPoints[m + 2];
+            float left = hzPoints[m];
+            float center = hzPoints[m + 1];
+            float right = hzPoints[m + 2];
+            // Slaney triangular area normalization
+            float norm = 2.0f / (right - left);
 
-            for (int k = left; k < center; ++k) {
-                if (k >= 0 && k <= kFftSize / 2 && center > left) {
-                    float weight = static_cast<float>(k - left) / (center - left);
-                    m_filterbanks[m].emplace_back(k, weight);
-                }
-            }
-            for (int k = center; k < right; ++k) {
-                if (k >= 0 && k <= kFftSize / 2 && right > center) {
-                    float weight = static_cast<float>(right - k) / (right - center);
-                    m_filterbanks[m].emplace_back(k, weight);
+            for (int k = 0; k < n_freqs; ++k) {
+                float f = static_cast<float>(k) * kSampleRate / static_cast<float>(kFftSize);
+                if (f > left && f <= center) {
+                    m_filterbanks[m].emplace_back(k, ((f - left) / (center - left)) * norm);
+                } else if (f > center && f < right) {
+                    m_filterbanks[m].emplace_back(k, ((right - f) / (right - center)) * norm);
                 }
             }
         }

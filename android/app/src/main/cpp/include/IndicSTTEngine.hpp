@@ -34,6 +34,8 @@ private:
 
     // Language vocabulary mappings
     std::unordered_map<std::string, std::vector<std::string>> m_vocabularies;
+    std::vector<std::string> m_unifiedTokens;
+    std::vector<int> m_tokenScripts; // Script classification for each token (cast of UScript enum)
 
     void loadVocabulary(const std::string& vocabJsonPath);
     std::string ctcGreedyDecode(const std::vector<int64_t>& tokenIds, const std::string& langCode);

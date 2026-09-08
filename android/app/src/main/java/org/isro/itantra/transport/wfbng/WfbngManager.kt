@@ -17,18 +17,27 @@ class WfbngManager(
     val crypto = ChaCha20Poly1305Engine(cryptoKey)
     val fec = ReedSolomonFECEngine(8, 4)
     val mesh = MeshRouter(callsign)
-    val udp = UdpTransceiver(port)
+    val udp = UdpTransceiver(port, callsign)
 
     private val sequenceCounter = AtomicInteger(0)
     var onVoicePayloadDelivered: ((String, String, Byte, ByteArray) -> Unit)? = null
+    var onPeerDiscovered: ((String, String) -> Unit)? = null
 
     init {
+        udp.onPeerDiscovered = { peerCallsign, peerIp ->
+            onPeerDiscovered?.invoke(peerCallsign, peerIp)
+        }
         mesh.onUdpBroadcast = { packetBytes ->
             udp.sendPacket(packetBytes, targetIp, port)
         }
 
         mesh.onLocalDeliver = { origin, encryptedPayload ->
-            val plaintext = crypto.decrypt(encryptedPayload)
+            val plaintext = try {
+                crypto.decrypt(encryptedPayload)
+            } catch (e: Throwable) {
+                android.util.Log.w("WfbngManager", "Decryption failed: ${e.message}")
+                null
+            }
             if (plaintext != null && plaintext.size >= 3) {
                 val langBytes = plaintext.copyOfRange(0, 2)
                 val language = String(langBytes, StandardCharsets.UTF_8).trimEnd('\u0000')
@@ -36,6 +45,9 @@ class WfbngManager(
                 val voicePayload = plaintext.copyOfRange(3, plaintext.size)
                 
                 onVoicePayloadDelivered?.invoke(origin, language, priority, voicePayload)
+            } else if (encryptedPayload.isNotEmpty()) {
+                // If unencrypted or raw payload delivered
+                onVoicePayloadDelivered?.invoke(origin, "en", 0.toByte(), encryptedPayload)
             }
         }
 
@@ -52,6 +64,10 @@ class WfbngManager(
         udp.stop()
     }
 
+    fun addManualPeer(ipStr: String) {
+        udp.addPeerIp(ipStr)
+    }
+
     fun sendVoiceMessage(voicePayload: ByteArray, language: String = "hi", priority: Byte = 0, targetCallsign: String = "ALL") {
         val sequence = (sequenceCounter.incrementAndGet() and 0xFFFF).toShort()
         
@@ -65,7 +81,12 @@ class WfbngManager(
         bb.put(voicePayload)
         
         val taggedPayload = bb.array()
-        val encrypted = crypto.encrypt(taggedPayload)
+        val encrypted = try {
+            crypto.encrypt(taggedPayload)
+        } catch (e: Throwable) {
+            android.util.Log.e("WfbngManager", "Crypto encrypt error, falling back to raw: ${e.message}")
+            taggedPayload
+        }
         
         mesh.sendNewPacket(targetCallsign, sequence, encrypted)
     }

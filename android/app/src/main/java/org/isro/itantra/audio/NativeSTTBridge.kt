@@ -11,6 +11,8 @@ object NativeSTTBridge {
 
     init {
         try {
+            try { System.loadLibrary("c++_shared") } catch (e: Throwable) {}
+            try { System.loadLibrary("oboe") } catch (e: Throwable) {}
             // Load dependent ONNX Runtime shared library first
             try {
                 System.loadLibrary("onnxruntime")

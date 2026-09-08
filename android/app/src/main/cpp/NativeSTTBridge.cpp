@@ -176,10 +176,27 @@ JNIEXPORT jstring JNICALL Java_org_isro_itantra_audio_NativeSTTBridge_stopAudioC
         std::vector<float> finalBuffer;
         {
             std::lock_guard<std::mutex> lock(g_audioMutex);
-            if (g_accumulatedSpeechBuffer.size() >= 1600) {
+            // Use the full recorded audio buffer in PTT mode so speech is never chopped or dropped by VAD
+            if (g_rawAudioBuffer.size() >= 1600) {
+                finalBuffer = g_rawAudioBuffer;
+            } else if (g_accumulatedSpeechBuffer.size() >= 1600) {
                 finalBuffer = g_accumulatedSpeechBuffer;
-            } else if (g_rawAudioBuffer.size() >= 1600) {
-                finalBuffer = g_rawAudioBuffer; // VAD fallback to ensure speech is never dropped
+            }
+        }
+
+        // Apply Automatic Gain Control (AGC) so quiet phone microphones reach optimal neural network level
+        if (!finalBuffer.empty()) {
+            float maxAmp = 0.0f;
+            for (float s : finalBuffer) {
+                float a = std::abs(s);
+                if (a > maxAmp) maxAmp = a;
+            }
+            if (maxAmp > 0.005f && maxAmp < 0.7f) {
+                float gain = 0.7f / maxAmp;
+                for (float& s : finalBuffer) {
+                    s *= gain;
+                }
+                LOGI("Applied AGC gain multiplier: %.2f (original peak: %.3f)", gain, maxAmp);
             }
         }
 

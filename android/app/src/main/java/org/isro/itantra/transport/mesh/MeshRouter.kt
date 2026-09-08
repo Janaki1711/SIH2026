@@ -42,8 +42,13 @@ class MeshRouter(private val myCallsign: String) {
         }
         seenPackets[cacheKey] = System.currentTimeMillis()
 
+        // Ignore echo loopback of our own broadcasts
+        if (packet.originCallsign == myCallsign) {
+            return
+        }
+
         // Local delivery?
-        if (packet.targetCallsign == myCallsign || packet.targetCallsign == "ALL") {
+        if (packet.targetCallsign == myCallsign || packet.targetCallsign == "ALL" || packet.targetCallsign.endsWith("_ALL")) {
             onLocalDeliver?.invoke(packet.originCallsign, packet.payload)
         }
 
