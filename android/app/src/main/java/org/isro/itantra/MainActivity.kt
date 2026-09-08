@@ -56,7 +56,7 @@ class MainActivity : AppCompatActivity() {
         "Malayalam (മലയാളം)" to "ml-IN",
         "Gujarati (ગુજરાતી)" to "gu-IN",
         "Punjabi (ਪੰਜਾਬੀ)" to "pa-IN",
-        "English" to "en-US"
+        "English (India)" to "en-US"
     )
 
     // Domain Dictionary & Auto-Correct Map
@@ -247,11 +247,13 @@ class MainActivity : AppCompatActivity() {
 
             statusText.text = "🎙️ RECORDING ACTIVE ($selectedLangName)...\nSpeak into your microphone!"
 
-            // 1. If Native C++ Engine is available (Real device / 4KB emulator), start native session
-            if (NativeSTTBridge.isLibraryLoaded) {
+            val isEnglish = langCode == "en"
+
+            // 1. If Native C++ Engine is available (Real device / 4KB emulator) AND it's an Indic Language, start native session
+            if (NativeSTTBridge.isLibraryLoaded && !isEnglish) {
                 NativeSTTBridge.safeStartAudioCapture()
             } else {
-                // 2. Emulator fallback with Internet: start Android Recognizer so team can test UI/autocorrect
+                // 2. English OR Emulator fallback: start Android Recognizer so team can test UI/autocorrect
                 try {
                     val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                         putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -269,7 +271,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             // Only start raw PCM AudioRecord if Native engine is loaded (prevents mic contention)
-            if (NativeSTTBridge.isLibraryLoaded && ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            if (NativeSTTBridge.isLibraryLoaded && !isEnglish && ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                 try {
                     audioRecord = android.media.AudioRecord(
                         android.media.MediaRecorder.AudioSource.MIC,
@@ -335,19 +337,27 @@ class MainActivity : AppCompatActivity() {
             }
             val langCode = languageMap[selectedLangName]?.substringBefore("-") ?: "hi"
 
-            // Query Native C++ STT Bridge if loaded
+            val isEnglish = langCode == "en"
             var nativeMsg = ""
-            if (NativeSTTBridge.isLibraryLoaded) {
-                nativeMsg = NativeSTTBridge.safeStopAudioCaptureAndTranscribe(langCode)
+            
+            // Query Native C++ STT Bridge only for Indic Languages
+            if (NativeSTTBridge.isLibraryLoaded && !isEnglish) {
+                val rawNative = NativeSTTBridge.safeStopAudioCaptureAndTranscribe(langCode)
+                if (rawNative.isNotBlank() && !rawNative.startsWith("No speech detected") && !rawNative.startsWith("Init Error") && !rawNative.startsWith("Model Session Null")) {
+                    nativeMsg = rawNative
+                }
             }
 
-            if (lastRecognizedText.isNotBlank()) {
+            if (nativeMsg.isNotBlank()) {
+                // If we got a valid native Indic transcription
+                statusText.text = "Result:\nTranscript ($langCode) [AI4Bharat Offline]: $nativeMsg"
+            } else if (lastRecognizedText.isNotBlank()) {
+                // Fallback to Google SpeechRecognizer (or for English)
                 val correctedText = autoCorrectAndFormatText(lastRecognizedText)
-                statusText.text = "Result:\nTranscript ($langCode): $correctedText"
-            } else if (nativeMsg.isNotBlank()) {
-                statusText.text = "Result:\n$nativeMsg"
+                val engineType = if (isEnglish) "[Google SpeechRecognizer]" else "[Google Fallback]"
+                statusText.text = "Result:\nTranscript ($langCode) $engineType: $correctedText"
             } else {
-                statusText.text = "Result:\nNo speech detected (Silero VAD idle: 10s silence timeout)."
+                statusText.text = "Result:\nNo speech detected."
             }
 
         } catch (e: Throwable) {
