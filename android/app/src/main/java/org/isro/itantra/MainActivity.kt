@@ -244,10 +244,10 @@ class MainActivity : AppCompatActivity() {
                 "Hindi (हिंदी)"
             }
             val langTag = languageMap[selectedLangName] ?: "hi-IN"
+            val langCode = langTag.substringBefore("-")
+            val isEnglish = langCode == "en"
 
             statusText.text = "🎙️ RECORDING ACTIVE ($selectedLangName)...\nSpeak into your microphone!"
-
-            val isEnglish = langCode == "en"
 
             // 1. If Native C++ Engine is available (Real device / 4KB emulator) AND it's an Indic Language, start native session
             if (NativeSTTBridge.isLibraryLoaded && !isEnglish) {
