@@ -661,14 +661,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 val cleanMsg = nativeMsg.trim()
-                // When English is selected, the model still outputs Devanagari
-                // (because tokens.txt has zero Latin characters). Transliterate to Roman.
-                val processedMsg = if (langCode.startsWith("en") && cleanMsg.isNotBlank()) {
-                    val roman = transliterateToRoman(cleanMsg)
-                    if (roman.isNotBlank()) roman else cleanMsg
-                } else {
-                    cleanMsg
-                }
+                val processedMsg = formatTranscriptForLanguage(cleanMsg, langCode)
 
                 val candidateText = when {
                     processedMsg.isNotBlank() && processedMsg != "आ" && processedMsg != "अ" && processedMsg != "aa" && processedMsg != "a" && !processedMsg.startsWith("No speech") && !processedMsg.contains("Exception") -> processedMsg
@@ -759,6 +752,58 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Throwable) {
             Log.w(TAG, "Android TTS fallback notice: ${e.message}")
         }
+    }
+
+    private fun formatTranscriptForLanguage(cleanMsg: String, langCode: String): String {
+        if (cleanMsg.isBlank()) return cleanMsg
+        if (langCode.startsWith("en")) {
+            val roman = transliterateToRoman(cleanMsg)
+            return if (roman.isNotBlank()) roman else cleanMsg
+        }
+        return convertIndicScript(cleanMsg, langCode)
+    }
+
+    private fun convertIndicScript(input: String, targetLang: String): String {
+        val targetBase = when (targetLang.lowercase()) {
+            "hi", "mr" -> 0x0900
+            "bn" -> 0x0980
+            "pa" -> 0x0A00
+            "gu" -> 0x0A80
+            "or" -> 0x0B00
+            "ta" -> 0x0B80
+            "te" -> 0x0C00
+            "kn" -> 0x0C80
+            "ml" -> 0x0D00
+            else -> return input
+        }
+
+        val sb = StringBuilder()
+        for (ch in input) {
+            val code = ch.code
+            // Check if it is an Indic Unicode character (U+0900 to U+0D7F)
+            if (code in 0x0900..0x0D7F) {
+                var offset = code % 0x80
+                
+                // Tamil phonetic stop mapping
+                if (targetLang == "ta") {
+                    offset = when (offset) {
+                        0x16, 0x17, 0x18 -> 0x15 // Kha, Ga, Gha -> Ka (க)
+                        0x1B, 0x1C, 0x1D -> 0x1A // Chha, Ja, Jha -> Cha (ச)
+                        0x20, 0x21, 0x22 -> 0x1F // Tha, Da, Dha -> Ta (ட)
+                        0x25, 0x26, 0x27 -> 0x24 // Tha, Da, Dha -> Ta (த)
+                        0x2B, 0x2C, 0x2D -> 0x2A // Pha, Ba, Bha -> Pa (ப)
+                        0x36 -> 0x37             // Sha -> Sha (ஷ)
+                        else -> offset
+                    }
+                }
+                
+                val targetCode = targetBase + offset
+                sb.append(targetCode.toChar())
+            } else {
+                sb.append(ch)
+            }
+        }
+        return sb.toString()
     }
 
     // Auto-Correct and Format Speech Transcript Text

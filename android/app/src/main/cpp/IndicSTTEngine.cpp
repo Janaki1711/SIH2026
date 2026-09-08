@@ -440,10 +440,9 @@ std::string IndicSTTEngine::transcribeBuffer(const std::vector<float>& pcmBuffer
         }
 
         // Language-conditioned CTC greedy argmax:
-        // Only consider tokens matching the selected language's script
+        // Prioritize target language script with a prior boost without causing blank collapse
         UScript targetScript = langToScript(langCode);
         int targetScriptInt = static_cast<int>(targetScript);
-        int specialScriptInt = static_cast<int>(UScript::SPECIAL);
         bool hasScriptMask = !m_tokenScripts.empty() && m_tokenScripts.size() == static_cast<size_t>(vocabSize);
 
         LOGI("Language-conditioned decode: langCode=%s targetScript=%d hasMask=%d", langCode.c_str(), targetScriptInt, hasScriptMask ? 1 : 0);
@@ -455,15 +454,12 @@ std::string IndicSTTEngine::transcribeBuffer(const std::vector<float>& pcmBuffer
             float maxVal = -1e30f;
 
             for (int64_t v = 0; v < vocabSize; ++v) {
-                // Skip tokens from wrong script (allow SPECIAL tokens always)
-                if (hasScriptMask) {
-                    int tokenScript = m_tokenScripts[v];
-                    if (tokenScript != targetScriptInt && tokenScript != specialScriptInt) {
-                        continue; // Mask out this token
-                    }
+                float val = frameLogits[v];
+                if (hasScriptMask && m_tokenScripts[v] == targetScriptInt) {
+                    val += 1.8f; // Boost target script probability
                 }
-                if (frameLogits[v] > maxVal) {
-                    maxVal = frameLogits[v];
+                if (val > maxVal) {
+                    maxVal = val;
                     maxIdx = v;
                 }
             }
