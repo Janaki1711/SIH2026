@@ -209,32 +209,40 @@ class MainActivity : AppCompatActivity() {
                         String(payload, java.nio.charset.StandardCharsets.UTF_8)
                     }
 
-                    runOnUiThread {
-                        statusText.text = "🚨 RX FROM $origin ($language ➔ $targetLang):\n$decodedText"
-                    }
-
-                    // Vibrate to alert user
-                    try {
-                        val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
-                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                            vibrator?.vibrate(android.os.VibrationEffect.createOneShot(200, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
-                        } else {
-                            @Suppress("DEPRECATION")
-                            vibrator?.vibrate(200)
+                    if (decodedText.startsWith("PING") || decodedText.startsWith("CONNECT_PING")) {
+                        runOnUiThread {
+                            netStatusText.text = "🟢 PEER ONLINE: $origin\n📡 Walkie-Talkie Mesh Active!"
+                            netStatusText.setTextColor(Color.parseColor("#00E676"))
+                            statusText.text = "🟢 Connected to peer: $origin"
                         }
-                    } catch (e: Throwable) {}
+                    } else {
+                        runOnUiThread {
+                            statusText.text = "🚨 RX FROM $origin ($language ➔ $targetLang):\n$decodedText"
+                        }
 
-                    val isAlert = priority.toInt() >= 1 || 
-                                  decodedText.contains("SOS", ignoreCase = true) || 
-                                  decodedText.contains("ambulance", ignoreCase = true) || 
-                                  decodedText.contains("flood", ignoreCase = true) || 
-                                  decodedText.contains("fire", ignoreCase = true) || 
-                                  decodedText.contains("urgent", ignoreCase = true) || 
-                                  decodedText.contains("तत्काल") || 
-                                  decodedText.contains("आपात") ||
-                                  decodedText.contains("ତୁରନ୍ତ")
+                        // Vibrate to alert user
+                        try {
+                            val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                vibrator?.vibrate(android.os.VibrationEffect.createOneShot(200, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+                            } else {
+                                @Suppress("DEPRECATION")
+                                vibrator?.vibrate(200)
+                            }
+                        } catch (e: Throwable) {}
 
-                    playTTS(decodedText, targetLang, isAlert)
+                        val isAlert = priority.toInt() >= 1 || 
+                                      decodedText.contains("SOS", ignoreCase = true) || 
+                                      decodedText.contains("ambulance", ignoreCase = true) || 
+                                      decodedText.contains("flood", ignoreCase = true) || 
+                                      decodedText.contains("fire", ignoreCase = true) || 
+                                      decodedText.contains("urgent", ignoreCase = true) || 
+                                      decodedText.contains("तत्काल") || 
+                                      decodedText.contains("आपात") ||
+                                      decodedText.contains("ତୁରନ୍ତ")
+
+                        playTTS(decodedText, targetLang, isAlert)
+                    }
                 } catch (e: Throwable) {
                     Log.e(TAG, "Rx pipeline error", e)
                     runOnUiThread { statusText.text = "⚡ Received from $origin, decode notice: ${e.message}" }
@@ -312,9 +320,24 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Populate Language Selection Dropdown
+        // Populate Language Selection Dropdown with High-Contrast White Text
         val languagesList = languageMap.keys.toList()
-        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, languagesList)
+        val adapter = object : ArrayAdapter<String>(this, android.R.layout.simple_spinner_dropdown_item, languagesList) {
+            override fun getView(position: Int, convertView: android.view.View?, parent: android.view.ViewGroup): android.view.View {
+                val view = super.getView(position, convertView, parent) as TextView
+                view.setTextColor(Color.parseColor("#00E5FF"))
+                view.textSize = 14f
+                view.setTypeface(null, android.graphics.Typeface.BOLD)
+                return view
+            }
+            override fun getDropDownView(position: Int, convertView: android.view.View?, parent: android.view.ViewGroup): android.view.View {
+                val view = super.getDropDownView(position, convertView, parent) as TextView
+                view.setBackgroundColor(Color.parseColor("#1E293B"))
+                view.setTextColor(Color.parseColor("#FFFFFF"))
+                view.setPadding(24, 24, 24, 24)
+                return view
+            }
+        }
         langSpinner.adapter = adapter
         
         spellCorrector = org.isro.itantra.audio.SpellCorrector(this)
