@@ -123,6 +123,15 @@ class MainActivity : AppCompatActivity() {
     private val autoCorrectMap = mapOf(
         "teh" to "the",
         "helo" to "hello",
+        "halo" to "hello",
+        "tees" to "this",
+        "dees" to "this",
+        "dis" to "this",
+        "tis" to "this",
+        "iz" to "is",
+        "janakee" to "Janaki",
+        "janaka" to "Janaki",
+        "janaky" to "Janaki",
         "namastey" to "namaste",
         "plz" to "please",
         "thx" to "thanks",
@@ -852,15 +861,15 @@ class MainActivity : AppCompatActivity() {
 
         // Independent vowels
         val vowels = mapOf(
-            'अ' to "a", 'आ' to "aa", 'इ' to "i", 'ई' to "ee",
-            'उ' to "u", 'ऊ' to "oo", 'ऋ' to "ri", 'ॠ' to "ri",
-            'ए' to "e", 'ऐ' to "ai", 'ओ' to "o", 'औ' to "au"
+            'अ' to "a", 'आ' to "a", 'इ' to "i", 'ई' to "i",
+            'उ' to "u", 'ऊ' to "u", 'ऋ' to "ri", 'ॠ' to "ri",
+            'ए' to "e", 'ऐ' to "e", 'ओ' to "o", 'औ' to "au"
         )
 
         // Dependent vowel signs (matras) — replace the implicit 'a'
         val matras = mapOf(
-            'ा' to "a", 'ि' to "i", 'ी' to "ee", 'ु' to "u", 'ू' to "oo",
-            'े' to "e", 'ै' to "ai", 'ो' to "o", 'ौ' to "au",
+            'ा' to "a", 'ि' to "i", 'ी' to "i", 'ु' to "u", 'ू' to "u",
+            'े' to "e", 'ै' to "e", 'ो' to "o", 'ौ' to "au",
             'ृ' to "ri", 'ॄ' to "ri", 'ॅ' to "e", 'ॉ' to "o"
         )
 
