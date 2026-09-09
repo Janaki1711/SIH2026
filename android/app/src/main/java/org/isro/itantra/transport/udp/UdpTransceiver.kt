@@ -481,11 +481,16 @@ class UdpTransceiver(
             }
         }
 
-        // 4. Default hotspot fallback addresses
-        try {
-            targets.add(InetAddress.getByName("192.168.43.1"))
-            targets.add(InetAddress.getByName("192.168.43.255"))
-        } catch (e: Throwable) {}
+        // 4. Default hotspot fallback addresses (all known Android hotspot subnets)
+        // Standard Android: 192.168.43.x, OnePlus OxygenOS: 10.0.0.x, some ROMs: 10.42.0.x
+        val hotspotFallbacks = listOf(
+            "192.168.43.1", "192.168.43.255",
+            "10.0.0.1", "10.0.0.255",
+            "10.42.0.1", "10.42.0.255"
+        )
+        for (addr in hotspotFallbacks) {
+            try { targets.add(InetAddress.getByName(addr)) } catch (e: Throwable) {}
+        }
 
         for (target in targets) {
             sendRawDirect(target, port, data)
@@ -532,12 +537,16 @@ class UdpTransceiver(
                 }
             }
 
-            // 4. Common Hotspot fallbacks
-            try {
-                targets.add(InetAddress.getByName("255.255.255.255"))
-                targets.add(InetAddress.getByName("192.168.43.1"))
-                targets.add(InetAddress.getByName("192.168.43.255"))
-            } catch (e: Throwable) {}
+            // 4. Common Hotspot fallbacks (all known Android hotspot subnets)
+            val hotspotFallbacks = listOf(
+                "255.255.255.255",
+                "192.168.43.1", "192.168.43.255",
+                "10.0.0.1", "10.0.0.255",
+                "10.42.0.1", "10.42.0.255"
+            )
+            for (addr in hotspotFallbacks) {
+                try { targets.add(InetAddress.getByName(addr)) } catch (e: Throwable) {}
+            }
 
             for (targetAddress in targets) {
                 try {

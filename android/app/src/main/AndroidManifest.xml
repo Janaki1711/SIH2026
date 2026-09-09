@@ -49,10 +49,6 @@
             android:name=".transport.TransportTestActivity"
             android:exported="true"
             android:label="iTantra Transport Test">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
         </activity>
 
         <service android:name=".service.RadioDaemonService" android:foregroundServiceType="specialUse" android:exported="false" />
