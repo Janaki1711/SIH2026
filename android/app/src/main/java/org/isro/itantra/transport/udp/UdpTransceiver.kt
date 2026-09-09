@@ -110,7 +110,7 @@ class UdpTransceiver(
         try {
             val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return
 
-            // 1. Check existing active networks for Wi-Fi / Wi-Fi Aware
+            // 1. Check existing active networks for Wi-Fi / Wi-Fi Aware (including offline networks)
             val wifiNetwork = cm.allNetworks.firstOrNull { network ->
                 val caps = cm.getNetworkCapabilities(network)
                 caps != null && (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || 
@@ -119,14 +119,19 @@ class UdpTransceiver(
 
             if (wifiNetwork != null) {
                 activeWifiNetwork = wifiNetwork
-                cm.bindProcessToNetwork(wifiNetwork)
-                socket?.let { s -> try { wifiNetwork.bindSocket(s) } catch (e: Throwable) {} }
-                Log.i(TAG, "NET_INTERFACE Process and UDP socket bound to active Wi-Fi Network ($wifiNetwork)")
+                try {
+                    cm.bindProcessToNetwork(wifiNetwork)
+                    socket?.let { s -> wifiNetwork.bindSocket(s) }
+                    Log.i(TAG, "NET_INTERFACE Process and UDP socket bound to active Wi-Fi Network ($wifiNetwork)")
+                } catch (e: Throwable) {
+                    Log.w(TAG, "NET_INTERFACE Initial Wi-Fi binding notice: ${e.message}")
+                }
             }
 
-            // 2. Register NetworkCallback to handle Wi-Fi connect/disconnect transitions dynamically
+            // 2. Register NetworkCallback without requiring NET_CAPABILITY_INTERNET so offline Hotspot Wi-Fi triggers onAvailable
             val request = NetworkRequest.Builder()
                 .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
                 .build()
 
             networkCallback = object : ConnectivityManager.NetworkCallback() {
@@ -136,7 +141,7 @@ class UdpTransceiver(
                     try {
                         cm.bindProcessToNetwork(network)
                         socket?.let { s -> network.bindSocket(s) }
-                        Log.i(TAG, "NET_INTERFACE Successfully bound socket to Wi-Fi network $network")
+                        Log.i(TAG, "NET_INTERFACE Successfully bound process & socket to Wi-Fi network $network")
                     } catch (e: Throwable) {
                         Log.w(TAG, "NET_INTERFACE Notice during network binding: ${e.message}")
                     }
@@ -438,10 +443,11 @@ class UdpTransceiver(
         val targets = mutableSetOf<InetAddress>()
         targets.addAll(discoveredPeers.values)
 
-        // 1. General broadcast
+        // 1. Limited broadcast
         try { targets.add(InetAddress.getByName("255.255.255.255")) } catch (e: Throwable) {}
 
         // 2. Subnet broadcast on all active network interfaces
+        val localIps = getLocalIpList()
         try {
             val interfaces = NetworkInterface.getNetworkInterfaces()
             while (interfaces.hasMoreElements()) {
@@ -453,7 +459,29 @@ class UdpTransceiver(
             }
         } catch (e: Throwable) {}
 
-        // 3. Hotspot addresses
+        // 3. Dynamic subnet targeting based on local IP (e.g. 192.168.43.x or 10.x.x.x)
+        for (localIp in localIps) {
+            val lastDot = localIp.lastIndexOf('.')
+            if (lastDot > 0) {
+                val prefix = localIp.substring(0, lastDot + 1)
+                try {
+                    targets.add(InetAddress.getByName("${prefix}1"))   // Hotspot host / gateway
+                    targets.add(InetAddress.getByName("${prefix}255")) // Subnet broadcast
+                } catch (e: Throwable) {}
+
+                // Zero-config sweep: if no peers discovered yet, probe first 15 client addresses
+                if (discoveredPeers.isEmpty()) {
+                    for (hostId in 2..15) {
+                        val candidateIp = "$prefix$hostId"
+                        if (candidateIp != localIp) {
+                            try { targets.add(InetAddress.getByName(candidateIp)) } catch (e: Throwable) {}
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. Default hotspot fallback addresses
         try {
             targets.add(InetAddress.getByName("192.168.43.1"))
             targets.add(InetAddress.getByName("192.168.43.255"))
@@ -480,6 +508,7 @@ class UdpTransceiver(
             }
 
             // 2. Subnet broadcasts on all active network interfaces
+            val localIps = getLocalIpList()
             try {
                 val interfaces = NetworkInterface.getNetworkInterfaces()
                 while (interfaces.hasMoreElements()) {
@@ -491,7 +520,19 @@ class UdpTransceiver(
                 }
             } catch (e: Throwable) {}
 
-            // 3. Common Hotspot fallbacks
+            // 3. Dynamic subnet targeting based on local IP
+            for (localIp in localIps) {
+                val lastDot = localIp.lastIndexOf('.')
+                if (lastDot > 0) {
+                    val prefix = localIp.substring(0, lastDot + 1)
+                    try {
+                        targets.add(InetAddress.getByName("${prefix}1"))
+                        targets.add(InetAddress.getByName("${prefix}255"))
+                    } catch (e: Throwable) {}
+                }
+            }
+
+            // 4. Common Hotspot fallbacks
             try {
                 targets.add(InetAddress.getByName("255.255.255.255"))
                 targets.add(InetAddress.getByName("192.168.43.1"))
@@ -504,9 +545,9 @@ class UdpTransceiver(
                     val s = socket ?: DatagramSocket().apply { broadcast = true }
                     s.send(packet)
                     txCount.incrementAndGet()
-                    Log.d(TAG, "UDP_TX dst=$targetAddress:$targetPort bytes=${data.size}")
+                    Log.i(TAG, "DATA_TX dst=$targetAddress:$targetPort bytes=${data.size}")
                 } catch (e: Throwable) {
-                    Log.w(TAG, "UDP_ERROR send failed to $targetAddress:$targetPort: ${e.message}")
+                    Log.w(TAG, "DATA_ERROR send failed to $targetAddress:$targetPort: ${e.message}")
                 }
             }
         }
