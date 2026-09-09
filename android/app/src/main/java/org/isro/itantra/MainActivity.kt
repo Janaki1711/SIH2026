@@ -324,8 +324,15 @@ class MainActivity : AppCompatActivity() {
 
         val allIps = getAllLocalIpAddresses()
         val ipDisplay = if (allIps.isNotEmpty()) allIps.joinToString(" / ") else "Offline"
-        netStatusText.text = "📱 THIS DEVICE IP: $ipDisplay\n👉 Enter the OTHER phone's IP below:"
-        netStatusText.setTextColor(Color.parseColor("#00E5FF"))
+        val isCampusOrCellular = allIps.any { it.startsWith("10.") || it.startsWith("100.") }
+        
+        if (isCampusOrCellular && !allIps.any { it.startsWith("192.168.43.") }) {
+            netStatusText.text = "📱 THIS DEVICE IP: $ipDisplay\n⚠️ You are on Campus Wi-Fi / 5G (AP Isolation active).\n👉 Turn ON Hotspot on Phone 1 & connect Phone 2 to it!"
+            netStatusText.setTextColor(Color.parseColor("#FFD600"))
+        } else {
+            netStatusText.text = "📱 THIS DEVICE IP: $ipDisplay\n👉 Enter the OTHER phone's IP below:"
+            netStatusText.setTextColor(Color.parseColor("#00E5FF"))
+        }
         peerIpInput.hint = "Enter OTHER Phone's IP"
 
         btnConnectPeer.setOnClickListener {
