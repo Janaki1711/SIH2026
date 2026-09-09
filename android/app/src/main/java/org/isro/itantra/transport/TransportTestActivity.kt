@@ -56,7 +56,7 @@ class TransportTestActivity : Activity() {
             val port = etPort.text.toString().toIntOrNull() ?: 8988
 
             transport?.stop()
-            transport = WfbngManager(localCallsign, fixedKey, targetIp, port).apply {
+            transport = WfbngManager(localCallsign, fixedKey, targetIp, port, applicationContext).apply {
                 onVoicePayloadDelivered = { origin, language, priority, payload ->
                     runOnUiThread {
                         log("--- PACKET RECEIVED ---")

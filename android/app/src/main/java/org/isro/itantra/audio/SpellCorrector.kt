@@ -6,8 +6,10 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 
 class SpellCorrector(private val context: Context) {
-    // Cache for loaded language dictionaries
+    // Cache for loaded language dictionaries: word -> frequency
     private val dictionaries = HashMap<String, HashMap<String, Long>>()
+    // Cache for phonetic index: phoneticKey -> list of (word, freq)
+    private val phoneticDictionaries = HashMap<String, HashMap<String, ArrayList<Pair<String, Long>>>>()
     
     @Volatile
     private var currentLang: String = "en"
@@ -17,13 +19,13 @@ class SpellCorrector(private val context: Context) {
         "en" to "abcdefghijklmnopqrstuvwxyz",
         "hi" to "अआइईउऊऋएऐओऔकखगघङचछजझञटठडढणतथदधनपफबभमयरलवशषसहृािीुूेैोौंः", // Devanagari (Hindi/Marathi)
         "mr" to "अआइईउऊऋएऐओऔकखगघङचछजझञटठडढणतथदधनपफबभमयरलवशषसहृािीुूेैोौंः",
-        "ta" to "அஆஇஈஉஊஎஏஐஒஓஔகஙசஞடணதநனபமயரறலளழவஷஸஹ்ாிீுூெேைொோௌ", // Tamil
+        "ta" to "அஆஇஈஉஊஎஏஐஒஓஔகஙசஞடணதநநபமயரறலளழவஷஸஹ்ாிீுூெேைொோௌ", // Tamil
         "te" to "అఆఇఈఉఊఋఎఏఐఒఓఔకఖగఘఙచఛజఝఞటఠడఢణతథదధనపఫబభమయరలవశషసహాిీుూెేైొోౌ్", // Telugu
         "bn" to "অআইঈউঊঋএঐওঔকখগঘঙচছজঝঞটঠডঢণতথদধনপফবভমযরলশষসহািীুূেৈোৌ্", // Bengali
-        "gu" to "અઆઇઈઉઊઋએઐઓઔકખગઘઙચછજઝઞટઠડઢણતથદધનપફબભમયરલવશષસહાિીુૂેૈોૌ્", // Gujarati
-        "pa" to "ਅਆਇਈਉਊਏਐਓਔਕਖਗਘਙਚਛਜਝਞਟਠਡਢਣਤਥਦਧਨਪਫਬਭਮਯਰਲਵਸ਼ਸਹਾਿੀੁੂੇੈੋੌ੍", // Punjabi
-        "kn" to "ಅಆಇಈಉಊಋಎಏಐಒಓಔಕಖಗಘಙಚಛಜಝಞಟಠಡಢಣತಥದಧನಪಫಬಭಮಯರಲವಶಷಸಹಾಿೀುೂೆೇೈೊೋೌ್", // Kannada
-        "ml" to "അആഇഈഉഊഋഎഏഐഒഓഔകഖഗഘങചഛജഝഞടഠഡഢണതഥദധനപഫബഭമയരലവശഷസഹാിീുൂെേൈൊോൌ്"  // Malayalam
+        "gu" to "અઅઇઈઉઊઋએઐઓઔકખગઘઙચછજઝઞટઠડઢણતથદધનપફબભમયરલવશષસહાિીુૂેૈોૌ્", // Gujarati
+        "pa" to "ਅਆਇਈਉਊਏਐਓਔਕਖਗਘਙਚਛਜਝਞਟਠਡਢਣਤਥదਧਨਪਫਬਭਮਯਰਲਵਸ਼ਸਹਾਿੀੁੂੇੈੋੌ੍", // Punjabi
+        "kn" to "ಅಆಇಈಉಊಋಎಏಐಒಓಔಕಖಗಘಙಚಛಜಝಞಟಠಡಢಣತಥದಧನಪಫಬಭಮಯರಲವಶಷಸಹಾિೀುೂೆೇೈೊೋೌ್", // Kannada
+        "ml" to "അആഇഈഉഊഋഎഏഐഒഓഔകഖഗഘങചഛജഝഞടഠഡഢണതഥദധനപഫബഭമയരലവശഷസഹാഇീുൂെേൈൊോൌ്"  // Malayalam
     )
 
     fun switchLanguageAsync(langCode: String) {
@@ -37,6 +39,7 @@ class SpellCorrector(private val context: Context) {
 
     private fun loadDictionary(langCode: String) {
         val dict = HashMap<String, Long>()
+        val pDict = HashMap<String, ArrayList<Pair<String, Long>>>()
         try {
             val fileName = "${langCode}_dict.txt"
             val inputStream = context.assets.open(fileName)
@@ -44,15 +47,83 @@ class SpellCorrector(private val context: Context) {
             reader.forEachLine { line ->
                 val parts = line.split(" ")
                 if (parts.size >= 2) {
-                    dict[parts[0]] = parts[1].toLongOrNull() ?: 1L
+                    val word = parts[0].lowercase()
+                    val freq = parts[1].toLongOrNull() ?: 1L
+                    dict[word] = freq
+                    
+                    if (langCode == "en") {
+                        val pKey = toPhoneticKey(word)
+                        if (pKey.isNotEmpty()) {
+                            val list = pDict.getOrPut(pKey) { ArrayList() }
+                            list.add(Pair(word, freq))
+                        }
+                    }
                 }
             }
             reader.close()
-            Log.i("SpellCorrector", "Loaded $fileName with ${dict.size} words.")
+            Log.i("SpellCorrector", "Loaded $fileName with ${dict.size} words and ${pDict.size} phonetic keys.")
         } catch (e: Exception) {
             Log.w("SpellCorrector", "Dictionary $langCode not found. Skipping autocorrect for this language.")
         }
         dictionaries[langCode] = dict
+        phoneticDictionaries[langCode] = pDict
+    }
+
+    /**
+     * Compute robust consonant-skeleton phonetic key (Soundex / Double-Metaphone inspired)
+     * Handles English transliterations from Indic speech accurately.
+     */
+    fun toPhoneticKey(input: String): String {
+        if (input.isEmpty()) return ""
+        var s = input.lowercase()
+
+        // 1. Normalize common phonetic transliteration clusters
+        s = s.replace("ph", "f")
+            .replace("gh", "g")
+            .replace("kh", "k")
+            .replace("sh", "s")
+            .replace("ch", "s")
+            .replace("zh", "s")
+            .replace("jh", "j")
+            .replace("z", "j")
+            .replace("w", "v")
+            .replace("c", "k")
+            .replace("q", "k")
+            .replace("x", "ks")
+
+        // 2. Collapse double consonants
+        val sb = StringBuilder()
+        var prevChar: Char? = null
+        for (c in s) {
+            if (c != prevChar) {
+                sb.append(c)
+                prevChar = c
+            }
+        }
+        s = sb.toString()
+
+        // 3. Remove vowels except leading indicator
+        val firstChar = s.first()
+        val remaining = s.substring(1).filter { it !in "aeiouy" }
+        val lead = if (firstChar in "aeiouy") "*" else firstChar.toString()
+        return lead + remaining
+    }
+
+    private fun levenshteinDistance(s1: String, s2: String): Int {
+        val dp = Array(s1.length + 1) { IntArray(s2.length + 1) }
+        for (i in 0..s1.length) dp[i][0] = i
+        for (j in 0..s2.length) dp[0][j] = j
+        for (i in 1..s1.length) {
+            for (j in 1..s2.length) {
+                val cost = if (s1[i - 1] == s2[j - 1]) 0 else 1
+                dp[i][j] = minOf(
+                    dp[i - 1][j] + 1,
+                    dp[i][j - 1] + 1,
+                    dp[i - 1][j - 1] + cost
+                )
+            }
+        }
+        return dp[s1.length][s2.length]
     }
 
     private fun edits1(word: String, alphabet: String): Set<String> {
@@ -80,27 +151,48 @@ class SpellCorrector(private val context: Context) {
         // Skip purely numeric words, punctuation, or empty strings
         if (word.isBlank() || word.matches(Regex("[0-9\\p{Punct}]+"))) return word
         
-        // Skip very short words (1-2 letters) to prevent them from turning into "a" or "i"
-        if (word.length <= 2) return word
-        
         // Skip ALL-CAPS words as they are usually acronyms (like KLE, ISRO, NASA)
         if (word.matches(Regex("^[A-Z]+$"))) return word
         
         val dict = dictionaries[currentLang] ?: return word
-        if (dict.isEmpty()) return word // No file loaded for this lang
-        
-        val lowerWord = word.lowercase()
-        // If it's already a valid word, trust it and return ORIGINAL case
-        if (dict.containsKey(lowerWord)) return word
+        if (dict.isEmpty()) return word
 
-        val alphabet = alphabets[currentLang] ?: alphabets["en"]!!
+        val lowerWord = word.lowercase()
         
+        // 1. If it's already a valid high-frequency dictionary word, trust it
+        if (dict.containsKey(lowerWord) && (dict[lowerWord] ?: 0L) > 10L) {
+            return word
+        }
+
+        // 2. Phonetic Skeleton matching (ultra-accurate for Indic transliterations)
+        val pDict = phoneticDictionaries[currentLang]
+        if (pDict != null && pDict.isNotEmpty()) {
+            val pKey = toPhoneticKey(lowerWord)
+            val candidates = pDict[pKey]
+            if (!candidates.isNullOrEmpty()) {
+                // Rank candidates by lowest Levenshtein distance and highest corpus frequency
+                val best = candidates.minByOrNull { (candWord, freq) ->
+                    val dist = levenshteinDistance(lowerWord, candWord)
+                    // Heavily penalize distance, reward frequency
+                    dist * 1000.0 - Math.log(freq.toDouble().coerceAtLeast(1.0))
+                }
+                if (best != null) {
+                    val candWord = best.first
+                    return if (word.first().isUpperCase()) {
+                        candWord.replaceFirstChar { it.uppercase() }
+                    } else {
+                        candWord
+                    }
+                }
+            }
+        }
+
+        // 3. SymSpell Edit-Distance-1 fallback
+        val alphabet = alphabets[currentLang] ?: alphabets["en"]!!
         val e1 = edits1(lowerWord, alphabet)
         val knownE1 = e1.filter { dict.containsKey(it) }
         if (knownE1.isNotEmpty()) {
             val bestCorrection = knownE1.maxByOrNull { dict[it]!! } ?: return word
-            
-            // Preserve original capitalization if the first letter was capitalized
             return if (word.first().isUpperCase()) {
                 bestCorrection.replaceFirstChar { it.uppercase() }
             } else {

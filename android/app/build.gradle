@@ -61,6 +61,10 @@ android {
         prefab true
     }
 
+    testOptions {
+        unitTests.returnDefaultValues = true
+    }
+
     ndkVersion "30.0.16138531"
 
     composeOptions {

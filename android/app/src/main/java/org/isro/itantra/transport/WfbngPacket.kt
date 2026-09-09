@@ -9,18 +9,24 @@ data class WfbngPacket(
     var sequence: Short = 0,
     var originCallsign: String = "",
     var targetCallsign: String = "",
-    var payload: ByteArray = ByteArray(0) // Crypto payload
+    var shardIndex: Byte = 0,
+    var totalShards: Byte = 1,
+    var originalLength: Short = 0,
+    var payload: ByteArray = ByteArray(0) // Crypto payload or FEC shard
 ) {
     fun toBytes(): ByteArray {
         val originBytes = originCallsign.toByteArray(StandardCharsets.UTF_8).copyOf(16)
         val targetBytes = targetCallsign.toByteArray(StandardCharsets.UTF_8).copyOf(16)
         
-        val bb = ByteBuffer.allocate(1 + 1 + 2 + 16 + 16 + payload.size)
+        val bb = ByteBuffer.allocate(1 + 1 + 2 + 16 + 16 + 1 + 1 + 2 + payload.size)
         bb.put(magic)
         bb.put(ttl)
         bb.putShort(sequence)
         bb.put(originBytes)
         bb.put(targetBytes)
+        bb.put(shardIndex)
+        bb.put(totalShards)
+        bb.putShort(originalLength)
         bb.put(payload)
         return bb.array()
     }
@@ -37,14 +43,30 @@ data class WfbngPacket(
             bb.get(originBytes)
             val targetBytes = ByteArray(16)
             bb.get(targetBytes)
+            
+            var shardIndex: Byte = 0
+            var totalShards: Byte = 1
+            var originalLength: Short = 0
+            
+            if (bytes.size >= 40) {
+                shardIndex = bb.get()
+                totalShards = bb.get()
+                originalLength = bb.short
+            }
+            
             val payload = ByteArray(bb.remaining())
             bb.get(payload)
             
             return WfbngPacket(
-                magic, ttl, sequence,
-                String(originBytes, StandardCharsets.UTF_8).trimEnd('\u0000'),
-                String(targetBytes, StandardCharsets.UTF_8).trimEnd('\u0000'),
-                payload
+                magic = magic,
+                ttl = ttl,
+                sequence = sequence,
+                originCallsign = String(originBytes, StandardCharsets.UTF_8).trimEnd('\u0000'),
+                targetCallsign = String(targetBytes, StandardCharsets.UTF_8).trimEnd('\u0000'),
+                shardIndex = shardIndex,
+                totalShards = totalShards,
+                originalLength = originalLength,
+                payload = payload
             )
         }
     }

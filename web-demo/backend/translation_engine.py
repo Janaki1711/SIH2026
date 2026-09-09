@@ -90,6 +90,8 @@ def realize(msg_or_result: Any, target_language: str) -> str:
     if hasattr(qty, 'value'): qty = qty.value
     qty_str = str(qty) if qty and int(qty) > 0 else ""
 
+    is_negated = getattr(msg_or_result, 'is_negated', False)
+
     # Dispatch to language-specific realizer
     realizers = {
         "en": _realize_en, "hi": _realize_hi, "gu": _realize_gu,
@@ -97,17 +99,28 @@ def realize(msg_or_result: Any, target_language: str) -> str:
         "ta": _realize_ta, "te": _realize_te, "or": _realize_or,
         "bn": _realize_bn
     }
-    return realizers[lang](action, entity, target, loc_text, hazard_str, qty_str)
+    return realizers[lang](action, entity, target, loc_text, hazard_str, qty_str, is_negated)
 
 
 # ==============================================================================
 # 1. ENGLISH (en)
 # ==============================================================================
-def _realize_en(action, entity, target, loc_text, hazard, qty):
+def _realize_en(action, entity, target, loc_text, hazard, qty, is_negated=False):
     LOCS = {"HUBBLI": "Hubbli", "TOLANKERE": "Tolankere", "BASE": "Base HQ", "SECTOR_4": "Sector 4", "HOSPITAL": "the hospital"}
     ENTITIES = {"RESCUE": "rescue team", "RESCUE_REQUEST": "rescue team", "MEDICAL": "medical team", "AMBULANCE": "ambulance", "FIRE": "fire brigade", "FIRE_TEAM": "firefighters"}
     l_str = LOCS.get(target, loc_text or (target.replace("_", " ").title() if target else ""))
     e_str = ENTITIES.get(entity, entity.replace("_", " ").lower() if entity else "team")
+
+    if is_negated:
+        if "EVACUATE" in action:
+            return f"Do NOT evacuate {l_str or 'the area'}."
+        if "MEDICAL" in action or "AMBULANCE" in entity or "MEDICAL" in entity:
+            return f"Medical assistance / ambulance NOT required at {l_str}." if l_str else "Medical assistance / ambulance NOT required."
+        if "SEND" in action or "RESCUE" in action or "HELP" in action or "REQUEST" in action:
+            return f"Rescue assistance NOT required at {l_str}." if l_str else "Rescue assistance NOT required."
+        if "SUPPLIES" in action:
+            return f"Supplies / water NOT required at {l_str}." if l_str else "Supplies / water NOT required."
+        return f"Negative update: no action required for {l_str or 'current location'}."
 
     if "SEND" in action or "RESCUE" in action:
         q = f"{qty} " if qty else ""
@@ -125,11 +138,20 @@ def _realize_en(action, entity, target, loc_text, hazard, qty):
 # ==============================================================================
 # 2. HINDI (hi)
 # ==============================================================================
-def _realize_hi(action, entity, target, loc_text, hazard, qty):
+def _realize_hi(action, entity, target, loc_text, hazard, qty, is_negated=False):
     LOCS = {"HUBBLI": "हब्बली", "TOLANKERE": "तोलनकेरे", "BASE": "बेस", "SECTOR_4": "सेक्टर 4", "HOSPITAL": "अस्पताल"}
     ENTITIES = {"RESCUE": "बचाव दल", "RESCUE_REQUEST": "बचाव दल", "MEDICAL": "चिकित्सा दल", "AMBULANCE": "एम्बुलेंस", "FIRE": "दमकल", "FIRE_TEAM": "अग्निशमन दल"}
     l_str = LOCS.get(target, loc_text or target)
     e_str = ENTITIES.get(entity, "दल")
+
+    if is_negated:
+        if "EVACUATE" in action:
+            return f"{l_str or 'क्षेत्र'} को खाली मत करो।"
+        if "MEDICAL" in action or "AMBULANCE" in entity:
+            return f"{l_str} में चिकित्सा सहायता / एम्बुलेंस की आवश्यकता नहीं है।" if l_str else "चिकित्सा सहायता की आवश्यकता नहीं है।"
+        if "SEND" in action or "RESCUE" in action:
+            return f"{l_str} में बचाव सहायता की आवश्यकता नहीं है।" if l_str else "सहायता की आवश्यकता नहीं है।"
+        return f"{l_str or 'क्षेत्र'} में किसी सहायता की आवश्यकता नहीं है।"
 
     if "SEND" in action or "RESCUE" in action:
         q = f"{qty} " if qty else ""
@@ -147,11 +169,16 @@ def _realize_hi(action, entity, target, loc_text, hazard, qty):
 # ==============================================================================
 # 3. GUJARATI (gu)
 # ==============================================================================
-def _realize_gu(action, entity, target, loc_text, hazard, qty):
+def _realize_gu(action, entity, target, loc_text, hazard, qty, is_negated=False):
     LOCS = {"HUBBLI": "હબ્બલી", "TOLANKERE": "તોલનકેરે", "BASE": "બેઝ", "SECTOR_4": "સેક્ટર 4", "HOSPITAL": "હોસ્પિટલ"}
     ENTITIES = {"RESCUE": "બચાવ ટીમ", "RESCUE_REQUEST": "બચાવ ટીમ", "MEDICAL": "તબીબી ટીમ", "AMBULANCE": "એમ્બ્યુલન્સ", "FIRE": "ફાયર બ્રિગેડ", "FIRE_TEAM": "અગ્નિશામક દળ"}
     l_str = LOCS.get(target, loc_text or target)
     e_str = ENTITIES.get(entity, "ટીમ")
+
+    if is_negated:
+        if "EVACUATE" in action:
+            return f"{l_str or 'વિસ્તાર'} ખાલી કરશો નહીં."
+        return f"{l_str or 'વિસ્તાર'}માં મદદની જરૂર નથી."
 
     if "SEND" in action or "RESCUE" in action:
         q = f"{qty} " if qty else ""
@@ -169,11 +196,16 @@ def _realize_gu(action, entity, target, loc_text, hazard, qty):
 # ==============================================================================
 # 4. MARATHI (mr)
 # ==============================================================================
-def _realize_mr(action, entity, target, loc_text, hazard, qty):
+def _realize_mr(action, entity, target, loc_text, hazard, qty, is_negated=False):
     LOCS = {"HUBBLI": "हब्बली", "TOLANKERE": "तोलनकेरे", "BASE": "तळ", "SECTOR_4": "सेक्टर 4", "HOSPITAL": "रुग्णालय"}
     ENTITIES = {"RESCUE": "बचाव पथक", "RESCUE_REQUEST": "बचाव पथक", "MEDICAL": "वैद्यकीय पथक", "AMBULANCE": "रुग्णवाहिका", "FIRE": "अग्निशामक दल", "FIRE_TEAM": "अग्निशामक पथक"}
     l_str = LOCS.get(target, loc_text or target)
     e_str = ENTITIES.get(entity, "पथक")
+
+    if is_negated:
+        if "EVACUATE" in action:
+            return f"{l_str or 'परिसर'} रिकामा करू नका."
+        return f"{l_str or 'परिसर'}मध्ये मदतीची गरज नाही."
 
     if "SEND" in action or "RESCUE" in action:
         q = f"{qty} " if qty else ""
@@ -191,11 +223,16 @@ def _realize_mr(action, entity, target, loc_text, hazard, qty):
 # ==============================================================================
 # 5. KANNADA (kn)
 # ==============================================================================
-def _realize_kn(action, entity, target, loc_text, hazard, qty):
+def _realize_kn(action, entity, target, loc_text, hazard, qty, is_negated=False):
     LOCS = {"HUBBLI": "ಹುಬ್ಬಳ್ಳಿಗೆ", "TOLANKERE": "ತೊಳನಕೆರೆಗೆ", "BASE": "ನೆಲೆಗೆ", "SECTOR_4": "ಸೆಕ್ಟರ್ 4 ಕ್ಕೆ", "HOSPITAL": "ಆಸ್ಪತ್ರೆಗೆ"}
     ENTITIES = {"RESCUE": "ರಕ್ಷಣಾ ತಂಡ", "RESCUE_REQUEST": "ರಕ್ಷಣಾ ತಂಡ", "MEDICAL": "ವೈದ್ಯಕೀಯ ತಂಡ", "AMBULANCE": "ಆಂಬ್ಯುಲೆನ್ಸ್", "FIRE": "ಅಗ್ನಿಶಾಮಕ ದಳ", "FIRE_TEAM": "ಅಗ್ನಿಶಾಮಕ ಸಿಬ್ಬಂದಿ"}
     l_str = LOCS.get(target, (loc_text + "ಗೆ") if loc_text else (target + "ಗೆ" if target else ""))
     e_str = ENTITIES.get(entity, "ತಂಡ")
+
+    if is_negated:
+        if "EVACUATE" in action:
+            return f"{l_str or 'ಪ್ರದೇಶವನ್ನು'} ಖಾಲಿ ಮಾಡಬೇಡಿ."
+        return f"{l_str or 'ಪ್ರದೇಶಕ್ಕೆ'} ಯಾವುದೇ ಸಹಾಯ ಅಗತ್ಯವಿಲ್ಲ."
 
     if "SEND" in action or "RESCUE" in action:
         q = f"{qty} " if qty else ""
@@ -213,11 +250,16 @@ def _realize_kn(action, entity, target, loc_text, hazard, qty):
 # ==============================================================================
 # 6. MALAYALAM (ml)
 # ==============================================================================
-def _realize_ml(action, entity, target, loc_text, hazard, qty):
+def _realize_ml(action, entity, target, loc_text, hazard, qty, is_negated=False):
     LOCS = {"HUBBLI": "ഹുബ്ലിയിലേക്ക്", "TOLANKERE": "തോളങ്കരെയിലേക്ക്", "BASE": "ബേസിലേക്ക്", "SECTOR_4": "സെക്ടർ 4 ലേക്ക്", "HOSPITAL": "ആശുപത്രിയിലേക്ക്"}
     ENTITIES = {"RESCUE": "രക്ഷാപ്രവർത്തക സംഘത്തെ", "RESCUE_REQUEST": "രക്ഷാപ്രവർത്തക സംഘത്തെ", "MEDICAL": "മെഡിക്കൽ സംഘത്തെ", "AMBULANCE": "ആംബുലൻസ്", "FIRE": "ഫയർ ഫോഴ്സിനെ", "FIRE_TEAM": "അഗ്നിശമന സേനയെ"}
     l_str = LOCS.get(target, (loc_text + "ലേക്ക്") if loc_text else (target + "ലേക്ക്" if target else ""))
     e_str = ENTITIES.get(entity, "സംഘത്തെ")
+
+    if is_negated:
+        if "EVACUATE" in action:
+            return f"{l_str or 'പ്രദേശം'} ഒഴിപ്പിക്കരുത്."
+        return f"{l_str or 'സ്ഥലത്ത്'} സഹായം ആവശ്യമില്ല."
 
     if "SEND" in action or "RESCUE" in action:
         q = f"{qty} " if qty else ""
@@ -235,11 +277,16 @@ def _realize_ml(action, entity, target, loc_text, hazard, qty):
 # ==============================================================================
 # 7. TAMIL (ta)
 # ==============================================================================
-def _realize_ta(action, entity, target, loc_text, hazard, qty):
+def _realize_ta(action, entity, target, loc_text, hazard, qty, is_negated=False):
     LOCS = {"HUBBLI": "ஹூப்ளிக்கு", "TOLANKERE": "தோலன்கெரேவுக்கு", "BASE": "முகாமிற்கு", "SECTOR_4": "பகுதி 4-க்கு", "HOSPITAL": "மருத்துவமனைக்கு"}
     ENTITIES = {"RESCUE": "மீட்புக் குழுவை", "RESCUE_REQUEST": "மீட்புக் குழுவை", "MEDICAL": "மருத்துவக் குழுவை", "AMBULANCE": "ஆம்புலன்ஸை", "FIRE": "தீயணைப்புப் படையை", "FIRE_TEAM": "தீயணைப்புக் குழுவை"}
     l_str = LOCS.get(target, (loc_text + "க்கு") if loc_text else (target + "க்கு" if target else ""))
     e_str = ENTITIES.get(entity, "குழுவை")
+
+    if is_negated:
+        if "EVACUATE" in action:
+            return f"{l_str or 'பகுதியை'} வெளியேற்ற வேண்டாம்."
+        return f"{l_str or 'பகுதிக்கு'} உதவி தேவையில்லை."
 
     if "SEND" in action or "RESCUE" in action:
         q = f"{qty} " if qty else ""
@@ -257,11 +304,16 @@ def _realize_ta(action, entity, target, loc_text, hazard, qty):
 # ==============================================================================
 # 8. TELUGU (te)
 # ==============================================================================
-def _realize_te(action, entity, target, loc_text, hazard, qty):
+def _realize_te(action, entity, target, loc_text, hazard, qty, is_negated=False):
     LOCS = {"HUBBLI": "హుబ్లీకి", "TOLANKERE": "తోలంకెరెకు", "BASE": "బేస్‌కు", "SECTOR_4": "సెక్టార్ 4 కు", "HOSPITAL": "ఆసుపత్రికి"}
     ENTITIES = {"RESCUE": "రక్షణ బృందాన్ని", "RESCUE_REQUEST": "రక్షణ బృందాన్ని", "MEDICAL": "వైద్య బృందాన్ని", "AMBULANCE": "అంబులెన్స్", "FIRE": "అగ్నిమాపక దళాన్ని", "FIRE_TEAM": "అగ్నిమాపక సిబ్బందిని"}
     l_str = LOCS.get(target, (loc_text + "కు") if loc_text else (target + "కు" if target else ""))
     e_str = ENTITIES.get(entity, "బృందాన్ని")
+
+    if is_negated:
+        if "EVACUATE" in action:
+            return f"{l_str or 'ప్రాంతాన్ని'} ఖాళీ చేయవద్దు."
+        return f"{l_str or 'ప్రాంతానికి'} సహాయం అవసరం లేదు."
 
     if "SEND" in action or "RESCUE" in action:
         q = f"{qty} " if qty else ""
@@ -279,11 +331,16 @@ def _realize_te(action, entity, target, loc_text, hazard, qty):
 # ==============================================================================
 # 9. ODIA (or)
 # ==============================================================================
-def _realize_or(action, entity, target, loc_text, hazard, qty):
+def _realize_or(action, entity, target, loc_text, hazard, qty, is_negated=False):
     LOCS = {"HUBBLI": "ହୁବ୍ଲିକୁ", "TOLANKERE": "ତୋଲାଙ୍କେରେକୁ", "BASE": "ବେସକୁ", "SECTOR_4": "ସେକ୍ଟର 4 କୁ", "HOSPITAL": "ଡାକ୍ତରଖାନାକୁ"}
     ENTITIES = {"RESCUE": "ଉଦ୍ଧାରକାରୀ ଦଳ", "RESCUE_REQUEST": "ଉଦ୍ଧାରକାରୀ ଦଳ", "MEDICAL": "ଡାକ୍ତରୀ ଦଳ", "AMBULANCE": "ଆମ୍ବୁଲାନ୍ସ", "FIRE": "ଅଗ୍ନିଶମ ବାହିନୀ", "FIRE_TEAM": "ଅଗ୍ନିଶମ କର୍ମଚାରୀ"}
     l_str = LOCS.get(target, (loc_text + "କୁ") if loc_text else (target + "କୁ" if target else ""))
     e_str = ENTITIES.get(entity, "ଦଳ")
+
+    if is_negated:
+        if "EVACUATE" in action:
+            return f"{l_str or 'ଅଞ୍ଚଳ'} ଖାଲି କରନ୍ତୁ ନାହିଁ।"
+        return f"{l_str or 'ଅଞ୍ଚଳ'} ପାଇଁ ସହାୟତା ଆବଶ୍ୟକ ନାହିଁ।"
 
     if "SEND" in action or "RESCUE" in action:
         q = f"{qty} " if qty else ""
@@ -301,11 +358,16 @@ def _realize_or(action, entity, target, loc_text, hazard, qty):
 # ==============================================================================
 # 10. BENGALI (bn)
 # ==============================================================================
-def _realize_bn(action, entity, target, loc_text, hazard, qty):
+def _realize_bn(action, entity, target, loc_text, hazard, qty, is_negated=False):
     LOCS = {"HUBBLI": "হুবলিতে", "TOLANKERE": "তোলনকেরেতে", "BASE": "ঘাঁটিতে", "SECTOR_4": "সেক্টর ৪-এ", "HOSPITAL": "হাসপাতালে"}
     ENTITIES = {"RESCUE": "উদ্ধারকারী দল", "RESCUE_REQUEST": "উদ্ধারকারী দল", "MEDICAL": "চিকিৎসা দল", "AMBULANCE": "অ্যাম্বুলেন্স", "FIRE": "দমকল বাহিনী", "FIRE_TEAM": "দমকল কর্মী"}
     l_str = LOCS.get(target, (loc_text + "-তে") if loc_text else (target + "-তে" if target else ""))
     e_str = ENTITIES.get(entity, "দল")
+
+    if is_negated:
+        if "EVACUATE" in action:
+            return f"{l_str or 'এলাকা'} খালি করবেন না।"
+        return f"{l_str or 'এলাকা'}তে সাহায্যের প্রয়োজন নেই।"
 
     if "SEND" in action or "RESCUE" in action:
         q = f"{qty} " if qty else ""
@@ -317,4 +379,4 @@ def _realize_bn(action, entity, target, loc_text, hazard, qty):
         return f"{l_str or 'এলাকাটি'} অবিলম্বে খালি করুন।"
     elif "ALERT" in action:
         return f"সতর্কতা: {l_str} {hazard or 'বিপদ'}।"
-    return f"{l_str or 'এলাকার'} পরিস্থিতি رپورٹ।"
+    return f"{l_str or 'এলাকার'} পরিস্থিতি रिपोर्ट।"

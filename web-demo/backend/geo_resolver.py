@@ -104,40 +104,45 @@ class GeoResolver:
         ])
         self.register_landmark("Hubbli", GeoID.HUBBLI, [
             "hubbli", "hubli", "hübli", "hubballi", "hubly",
-            "हब्बली", "हुबली", "ஹூப்ளி", "ஹுப்பள்ளி", "హుబ్లి", "ಹುಬ್ಬಳ್ಳಿ",
+            "हब्बली", "हुबली", "ஹூப்ளி", "ஹுப்பள்ளி", "హుబ్లి", "హుబ్బళ్ళి", "ಹುಬ್ಬಳ್ಳಿ",
             "હબ્બલી", "ഹുബ്ലി", "ହୁବ୍ଲି", "হুবলি"
         ])
         self.register_landmark("Base Camp", GeoID.BASE, [
             "base camp", "base", "hq", "headquarters", "command base",
-            "बेस", "आधार", "मुख्यालय"
+            "बेस", "आधार", "मुख्यालय", "બેઝ", "முகாம்", "బేస్", "ಬೇಸ್", "ബേസ്", "ବେସ୍", "বেস"
         ])
         self.register_landmark("Sector 1", GeoID.SECTOR_1, [
-            "sector 1", "sector one", "सेक्टर 1", "सेक्टर एक", "zone 1"
+            "sector 1", "sector one", "सेक्टर 1", "सेक्टर एक", "સેક્ટર 1", "செக்டர் 1",
+            "సెక్టార్ 1", "సెక్టర్ 1", "ಸೆಕ್ಟರ್ 1", "സെക്ടർ 1", "ସେକ୍ଟର 1", "সেক্টর 1", "zone 1"
         ])
         self.register_landmark("Sector 2", GeoID.SECTOR_2, [
-            "sector 2", "sector two", "सेक्टर 2", "सेक्टर दो", "zone 2"
+            "sector 2", "sector two", "सेक्टर 2", "सेक्टर दो", "સેક્ટર 2", "செக்டர் 2",
+            "సెక్టార్ 2", "సెక్టర్ 2", "ಸೆಕ್ಟರ್ 2", "സെക്ടർ 2", "ସେକ୍ଟର 2", "সেক্টর 2", "zone 2"
         ])
         self.register_landmark("Sector 3", GeoID.SECTOR_3, [
-            "sector 3", "sector three", "सेक्टर 3", "सेक्टर तीन", "zone 3"
+            "sector 3", "sector three", "सेक्टर 3", "सेक्टर तीन", "સેક્ટર 3", "செக்டர் 3",
+            "సెక్టార్ 3", "సెక్టర్ 3", "ಸೆಕ್ಟರ್ 3", "സെക്ടർ 3", "ସେକ୍ଟର 3", "সেক্টর 3", "zone 3"
         ])
         self.register_landmark("Sector 4", GeoID.SECTOR_4, [
-            "sector 4", "sector four", "सेक्टर 4", "सेक्टर चार",
-            "సెక్టర్ 4", "ಸೆಕ್ಟರ್ 4", "zone 4"
+            "sector 4", "sector four", "सेक्टर 4", "सेक्टर चार", "સેક્ટર 4", "செக்டர் 4",
+            "సెక్టార్ 4", "సెక్టర్ 4", "ಸೆಕ್ಟರ್ 4", "സെക്ടർ 4", "ସେକ୍ଟର 4", "সেক্টর 4", "zone 4"
         ])
         self.register_landmark("Sector 5", GeoID.SECTOR_5, [
-            "sector 5", "sector five", "सेक्टर 5", "सेक्टर पांच", "zone 5"
+            "sector 5", "sector five", "सेक्टर 5", "सेक्टर पांच", "સેક્ટર 5", "செக்டர் 5",
+            "సెక్టార్ 5", "సెక్టర్ 5", "ಸೆಕ್ಟರ್ 5", "സെക്ടർ 5", "ସେକ୍ଟର 5", "সেক্টর 5", "zone 5"
         ])
         self.register_landmark("Bridge", GeoID.BRIDGE, [
             "old bridge", "bridge", "railway bridge", "river bridge",
-            "पुल", "सेतु", "பாலம்", "వంతెన", "ಸೇತುವೆ"
+            "पुल", "सेतु", "पूल", "પુલ", "பாலம்", "వంతెన", "ಸೇತುವೆ", "പാലം", "ପୋଲ", "পোল", "সেতু"
         ])
         self.register_landmark("Hospital", GeoID.HOSPITAL, [
             "hospital", "clinic", "district hospital", "general hospital",
-            "अस्पताल", "हॉस्पिटल", "மருத்துவமனை", "ఆసుపత్రి", "ಆಸ್ಪತ್ರೆ"
+            "अस्पताल", "हॉस्पिटल", "रुग्णालय", "હોસ્પિટલ", "દવાખાનું", "மருத்துவமனை",
+            "ஆஸ்பத்திரி", "ఆసుపత్రి", "ದವಾಖಾನೆ", "ಆಸ್ಪತ್ರೆ", "ആശുപത്രി", "ଡାକ୍ତରଖାନା", "হাসপাতাল"
         ])
         self.register_landmark("School", GeoID.SCHOOL, [
             "school", "college", "campus",
-            "स्कूल", "विद्यालय", "பள்ளி", "పాఠశాల", "ಶಾಲೆ"
+            "स्कूल", "विद्यालय", "शाळा", "શાળા", "பள்ளி", "பாடசாலை", "పాఠశాల", "ಶಾಲೆ", "സ്കൂൾ", "ବିଦ୍ୟାଳୟ", "স্কুল"
         ])
 
     def register_landmark(self, canonical_name: str, geo_id: int, aliases: List[str]):

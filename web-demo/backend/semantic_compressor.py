@@ -14,7 +14,7 @@ from tinyml_agent import SemanticResult, LocationEntity
 
 def compress_tier1(res: SemanticResult) -> bytes:
     """Tier 1: 6 bytes payload."""
-    b0 = int(CompressionTier.TIER_1_MACRO.value)
+    b0 = int(CompressionTier.TIER_1_MACRO.value) | (0x80 if res.is_negated else 0x00)
     b1 = ((int(res.intent.value) & 0x0F) << 4) | (int(res.urgency.value) & 0x0F)
     b2 = ((int(res.action.value) & 0x0F) << 4) | (int(res.hazard.value) & 0x0F)
     b3 = min(res.person_count, 255) & 0xFF
@@ -27,6 +27,7 @@ def decompress_tier1(data: bytes) -> SemanticResult:
     if len(data) < 6:
         raise ValueError("Tier 1 payload must be at least 6 bytes")
     b0, b1, b2, b3, b4, b5 = struct.unpack("!BBBBBB", data[:6])
+    is_negated = (b0 & 0x80) != 0
     intent = ActionCode((b1 >> 4) & 0x0F)
     urgency = UrgencyCode(b1 & 0x0F)
     action = ActionCode((b2 >> 4) & 0x0F)
@@ -46,12 +47,13 @@ def decompress_tier1(data: bytes) -> SemanticResult:
         urgency=urgency,
         location=LocationEntity(canonical, gid, 0.95),
         compression_tier=CompressionTier.TIER_1_MACRO,
-        confidence=0.95
+        confidence=0.95,
+        is_negated=is_negated
     )
 
 def compress_tier2(res: SemanticResult) -> bytes:
     """Tier 2: 18 bytes payload."""
-    b0 = int(CompressionTier.TIER_2_STRUCTURED.value)
+    b0 = int(CompressionTier.TIER_2_STRUCTURED.value) | (0x80 if res.is_negated else 0x00)
     b1 = int(res.intent.value) & 0xFF
     b2 = int(res.action.value) & 0xFF
     b3 = int(res.hazard.value) & 0xFF
@@ -64,7 +66,7 @@ def compress_tier2(res: SemanticResult) -> bytes:
     l0 = ord(lang[0]) if len(lang) > 0 else ord('e')
     l1 = ord(lang[1]) if len(lang) > 1 else ord('n')
 
-    sub_flags = len(res.extracted_entities) & 0xFFFF
+    sub_flags = (1 if res.is_negated else 0) | ((len(res.extracted_entities) & 0x7FFF) << 1)
     ctx_flags = 0
 
     return struct.pack("!BBBBBHHBBBHI", b0, b1, b2, b3, b4, count16, gid, conf_byte, l0, l1, sub_flags, ctx_flags)
@@ -73,6 +75,7 @@ def decompress_tier2(data: bytes) -> SemanticResult:
     if len(data) < 18:
         raise ValueError("Tier 2 payload must be at least 18 bytes")
     b0, b1, b2, b3, b4, count16, gid, conf_byte, l0, l1, sub_flags, ctx_flags = struct.unpack("!BBBBBHHBBBHI", data[:18])
+    is_negated = ((b0 & 0x80) != 0) or ((sub_flags & 0x01) != 0)
 
     intent = ActionCode(b1) if b1 in ActionCode._value2member_map_ else ActionCode.UNKNOWN
     action = ActionCode(b2) if b2 in ActionCode._value2member_map_ else ActionCode.UNKNOWN
@@ -93,22 +96,23 @@ def decompress_tier2(data: bytes) -> SemanticResult:
         urgency=urgency,
         location=LocationEntity(canonical, gid, 0.95),
         compression_tier=CompressionTier.TIER_2_STRUCTURED,
-        confidence=conf_byte / 100.0
+        confidence=conf_byte / 100.0,
+        is_negated=is_negated
     )
 
 def compress_tier3(res: SemanticResult) -> bytes:
-    """Tier 3: 36 bytes payload."""
+    """Tier 3: Dynamic bounded payload (3 + len <= 27 bytes)."""
     b0 = int(CompressionTier.TIER_3_FALLBACK.value)
     text_bytes = res.original_text.encode('utf-8')
-    raw_len = min(len(text_bytes), 255)
+    payload_cap = 24
+    payload = text_bytes[:payload_cap]
+    raw_len = len(payload)
     mode = 0x01
-    payload_cap = 33
-    payload = text_bytes[:payload_cap].ljust(payload_cap, b'\x00')
     return struct.pack("!BBB", b0, raw_len, mode) + payload
 
 def decompress_tier3(data: bytes) -> SemanticResult:
-    if len(data) < 35:
-        raise ValueError("Tier 3 payload must be at least 35 bytes")
+    if len(data) < 3:
+        raise ValueError("Tier 3 payload must be at least 3 bytes")
     b0, raw_len, mode = struct.unpack("!BBB", data[:3])
     actual_len = min(raw_len, len(data) - 3)
     text = data[3:3 + actual_len].decode('utf-8', errors='replace')
@@ -117,7 +121,7 @@ def decompress_tier3(data: bytes) -> SemanticResult:
         is_fallback=True,
         fallback_reason="Decoded from Tier 3 fallback payload",
         compression_tier=CompressionTier.TIER_3_FALLBACK,
-        confidence=0.35
+        confidence=0.50
     )
 
 def compress(res: SemanticResult) -> bytes:

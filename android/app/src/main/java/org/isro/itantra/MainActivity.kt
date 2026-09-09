@@ -31,6 +31,7 @@ class MainActivity : AppCompatActivity() {
         "NODE_" + if (model.isNotEmpty()) model.takeLast(6) else "${(1000..9999).random()}"
     }
     private var multicastLock: android.net.wifi.WifiManager.MulticastLock? = null
+    private var wifiLock: android.net.wifi.WifiManager.WifiLock? = null
     private lateinit var stateMachine: org.isro.itantra.runtime.PTTStateMachine
     private lateinit var pttAudioAdapter: org.isro.itantra.runtime.PttAudioAdapter
     private var transport: org.isro.itantra.transport.wfbng.WfbngManager? = null
@@ -119,29 +120,9 @@ class MainActivity : AppCompatActivity() {
         "Punjabi (ਪੰਜਾਬੀ)" to "pa-IN"
     )
 
-    // Domain Dictionary & Auto-Correct Map
+    // Mission Domain Dictionary & Identifiers
     private val autoCorrectMap = mapOf(
-        "teh" to "the",
-        "helo" to "hello",
-        "halo" to "hello",
-        "tees" to "this",
-        "dees" to "this",
-        "dis" to "this",
-        "tis" to "this",
-        "iz" to "is",
-        "janakee" to "Janaki",
-        "janaka" to "Janaki",
-        "janaky" to "Janaki",
-        "namastey" to "namaste",
-        "plz" to "please",
-        "thx" to "thanks",
-        "wats" to "what's",
-        "u" to "you",
-        "r" to "are",
-        "hubby" to "chhavi",
-        "chhvai" to "chhavi",
-        
-        // ISRO / SIH specific terms
+        // ISRO / SIH specific mission terms
         "is row" to "ISRO",
         "ice row" to "ISRO",
         "isro" to "ISRO",
@@ -155,7 +136,20 @@ class MainActivity : AppCompatActivity() {
         "chandrayan" to "Chandrayaan",
         "gagan yan" to "Gaganyaan",
         "gaganyan" to "Gaganyaan",
-        "pragya" to "Pragyan"
+        "pragya" to "Pragyan",
+        "pragyan" to "Pragyan",
+
+        // Team Call-signs & Identifiers
+        "janakee" to "Janaki",
+        "janaka" to "Janaki",
+        "janaky" to "Janaki",
+        "janaki" to "Janaki",
+        "chhavi" to "Chhavi",
+        "chhavi 2" to "Chhavi_2",
+        "parth" to "Parth",
+        "nupur" to "Nupur",
+        "vaibhav" to "Vaibhav",
+        "namastey" to "namaste"
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -163,15 +157,27 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         initPTTFoundation()
 
-        // Acquire Wi-Fi MulticastLock to allow incoming UDP broadcast on physical devices
+        // Acquire Wi-Fi MulticastLock and High-Performance WifiLock for reliable P2P mesh
         try {
             val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
             multicastLock = wifi?.createMulticastLock("iTantraMulticastLock")?.apply {
-                setReferenceCounted(true)
+                setReferenceCounted(false)
                 acquire()
             }
+            wifiLock = wifi?.createWifiLock(
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    android.net.wifi.WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+                } else {
+                    android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF
+                },
+                "iTantraWifiLock"
+            )?.apply {
+                setReferenceCounted(false)
+                acquire()
+            }
+            Log.i(TAG, "Acquired Wi-Fi MulticastLock and WifiLock (Low Latency / High Perf)")
         } catch (e: Throwable) {
-            Log.w(TAG, "MulticastLock notice: ${e.message}")
+            Log.w(TAG, "WifiLock/MulticastLock notice: ${e.message}")
         }
 
         // Initialize Indic TTS Engine (Member 2 with 10 Indic languages + Alert Siren)
@@ -194,10 +200,10 @@ class MainActivity : AppCompatActivity() {
             Log.w(TAG, "TTS init notice: ${e.message}")
         }
 
-        // Init WFB-ng Transport & Receiver Pipeline
+        // Init WFB-ng Transport & Receiver Pipeline with applicationContext
         try {
             val key = ByteArray(32) { 0x42 } // 32-byte shared AES-256 key
-            transport = org.isro.itantra.transport.wfbng.WfbngManager(myCallsign, key, "255.255.255.255", 8988)
+            transport = org.isro.itantra.transport.wfbng.WfbngManager(myCallsign, key, "255.255.255.255", 8988, applicationContext)
             transport?.onVoicePayloadDelivered = { origin, language, priority, payload ->
                 android.util.Log.i(TAG, "⚡ Received UDP packet: ${payload.size}B from $origin (source: $language)")
                 runOnUiThread { statusText.text = "⚡ Received ${payload.size}B from $origin\nDecompressing..." }
@@ -260,9 +266,19 @@ class MainActivity : AppCompatActivity() {
 
             transport?.onPeerDiscovered = { peerCallsign, peerIp ->
                 runOnUiThread {
-                    netStatusText.text = "🟢 PEER ONLINE: $peerCallsign ($peerIp)\n📡 Walkie-Talkie Mesh Active!"
+                    netStatusText.text = "🟢 PEER ONLINE: $peerCallsign ($peerIp:8988)\n📡 Walkie-Talkie Mesh Active!"
                     netStatusText.setTextColor(Color.parseColor("#00E676"))
-                    android.widget.Toast.makeText(this, "🟢 Connected to $peerIp", android.widget.Toast.LENGTH_SHORT).show()
+                    statusText.text = "🟢 Connected to $peerCallsign ($peerIp:8988)"
+                    android.widget.Toast.makeText(this, "🟢 Connected to $peerCallsign ($peerIp)", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            transport?.onLinkConfirmed = { peerCallsign, peerIp, rtt ->
+                runOnUiThread {
+                    val rttStr = if (rtt > 0) " | ⚡ RTT: ${rtt}ms" else ""
+                    netStatusText.text = "🟢 CONNECTED TO: $peerCallsign ($peerIp:8988)$rttStr\n📡 Two-Way Walkie-Talkie Mesh Active!"
+                    netStatusText.setTextColor(Color.parseColor("#00E676"))
+                    statusText.text = "🟢 Connected to $peerCallsign ($peerIp:8988)$rttStr"
                 }
             }
 
@@ -314,18 +330,49 @@ class MainActivity : AppCompatActivity() {
 
         btnConnectPeer.setOnClickListener {
             val ip = peerIpInput.text.toString().trim()
-            if (ip.isNotEmpty()) {
-                val myIps = getAllLocalIpAddresses()
-                if (myIps.contains(ip)) {
-                    android.widget.Toast.makeText(this, "⚠️ That's THIS phone's IP!\nEnter the OTHER phone's IP.", android.widget.Toast.LENGTH_LONG).show()
-                    netStatusText.text = "⚠️ You entered THIS phone's IP ($ip)!\n👉 Look at the OTHER phone's screen and type THAT IP."
-                    netStatusText.setTextColor(Color.parseColor("#FF5252"))
-                    return@setOnClickListener
-                }
-                transport?.addManualPeer(ip)
-                netStatusText.text = "📡 Linking to OTHER phone: $ip ...\n(Pinging $ip:8988)"
+            if (ip.isEmpty()) {
+                android.widget.Toast.makeText(this, "⚠️ Please enter the other phone's IP address", android.widget.Toast.LENGTH_SHORT).show()
+                netStatusText.text = "⚠️ Please enter the OTHER phone's IP below:"
                 netStatusText.setTextColor(Color.parseColor("#FFD600"))
-                transport?.sendVoiceMessage("PING".toByteArray(), "en", 0.toByte(), "RESCUE_ALL")
+                return@setOnClickListener
+            }
+
+            val ipRegex = Regex("""^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$""")
+            if (!ip.matches(ipRegex)) {
+                android.widget.Toast.makeText(this, "❌ Invalid IPv4 address format!\nExample: 10.163.175.126", android.widget.Toast.LENGTH_LONG).show()
+                netStatusText.text = "❌ Invalid IP format ($ip)!\n👉 Enter a valid 4-number IP (e.g. 10.163.175.126)"
+                netStatusText.setTextColor(Color.parseColor("#FF5252"))
+                return@setOnClickListener
+            }
+
+            val myIps = getAllLocalIpAddresses()
+            if (myIps.contains(ip)) {
+                android.widget.Toast.makeText(this, "⚠️ That's THIS phone's IP!\nEnter the OTHER phone's IP.", android.widget.Toast.LENGTH_LONG).show()
+                netStatusText.text = "⚠️ You entered THIS phone's IP ($ip)!\n👉 Look at the OTHER phone's screen and type THAT IP."
+                netStatusText.setTextColor(Color.parseColor("#FF5252"))
+                return@setOnClickListener
+            }
+
+            btnConnectPeer.isEnabled = false
+            netStatusText.text = "🟡 Connecting to $ip:8988 (Sending Link Probe)..."
+            netStatusText.setTextColor(Color.parseColor("#FFD600"))
+            statusText.text = "🟡 Probing peer link at $ip:8988..."
+
+            transport?.pingPeer(ip, timeoutMs = 1200L, maxAttempts = 3) { success, peerCallsign, rttMs, msg ->
+                runOnUiThread {
+                    btnConnectPeer.isEnabled = true
+                    if (success) {
+                        netStatusText.text = "🟢 CONNECTED TO: $peerCallsign ($ip:8988)\n⚡ RTT: ${rttMs}ms | 📡 Two-Way Walkie-Talkie Mesh Active!"
+                        netStatusText.setTextColor(Color.parseColor("#00E676"))
+                        statusText.text = "🟢 Connected to $peerCallsign ($ip:8988) | RTT: ${rttMs}ms"
+                        android.widget.Toast.makeText(this, "🟢 Connected to $peerCallsign ($ip)!", android.widget.Toast.LENGTH_SHORT).show()
+                    } else {
+                        netStatusText.text = "❌ Link failed to $ip:8988 (Sent 3 / Recv 0)\n👉 Verify: Both phones on same Wi-Fi / Hotspot & IP is correct."
+                        netStatusText.setTextColor(Color.parseColor("#FF5252"))
+                        statusText.text = "❌ Ping timeout: $ip:8988"
+                        android.widget.Toast.makeText(this, "❌ No response from $ip:8988", android.widget.Toast.LENGTH_LONG).show()
+                    }
+                }
             }
         }
 
@@ -502,7 +549,7 @@ class MainActivity : AppCompatActivity() {
                 speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
                 speechRecognizer?.setRecognitionListener(object : RecognitionListener {
                     override fun onReadyForSpeech(params: Bundle?) {
-                        runOnUiThread { statusText.text = "🎙️ Listening... Please speak now!" }
+                        runOnUiThread { statusText.text = "🎙️ Listening (English)... Speak clearly into mic!" }
                         resetSilenceTimer()
                     }
                     override fun onBeginningOfSpeech() {
@@ -517,7 +564,7 @@ class MainActivity : AppCompatActivity() {
                         resetSilenceTimer()
                     }
                     override fun onEndOfSpeech() {
-                        Log.i(TAG, "Speech end detected cleanly. Ignoring to allow 10s silence timeout.")
+                        Log.i(TAG, "Speech end detected cleanly.")
                     }
                     override fun onError(error: Int) {
                         val errorDesc = when (error) {
@@ -598,58 +645,82 @@ class MainActivity : AppCompatActivity() {
             } else {
                 "English (India)"
             }
+            val langTag = languageMap[selectedLangName] ?: "en-IN"
+            val langCode = langTag.substringBefore("-")
+            val isEnglish = langTag.startsWith("en")
 
             statusText.text = "🎙️ Listening ($selectedLangName)... Speak clearly into mic!"
 
-            // 1. Start Native C++ Indic Conformer PCM audio buffer
-            if (NativeSTTBridge.isLibraryLoaded) {
-                NativeSTTBridge.safeStartAudioCapture()
-            }
+            if (isEnglish) {
+                // --- PATH 2: DEDICATED ENGLISH ASR ARCHITECTURE ---
+                Log.i(TAG, "[LANGUAGE_ROUTER] Language: English ($langTag) -> Route: Dedicated English ASR")
+                val speechIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, langTag)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, langTag)
+                    putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, langTag)
+                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+                    putExtra("android.speech.extra.DICTATION_MODE", true)
+                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                }
+                runOnUiThread {
+                    try {
+                        speechRecognizer?.startListening(speechIntent)
+                    } catch (e: Throwable) {
+                        Log.w(TAG, "SpeechRecognizer start listening error: ${e.message}")
+                    }
+                }
+            } else {
+                // --- PATH 1: DEDICATED INDIC CONFORMER ASR ARCHITECTURE ---
+                Log.i(TAG, "[LANGUAGE_ROUTER] Language: Indic ($langTag) -> Route: AI4Bharat IndicConformer")
+                if (NativeSTTBridge.isLibraryLoaded) {
+                    NativeSTTBridge.safeStartAudioCapture()
+                }
 
-            // 2. Hardware AudioRecord PCM 16kHz Mono streaming thread directly feeding Indic Conformer
-            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                try {
-                    val minBuf = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-                    val bufferSize = maxOf(minBuf, 8192)
+                if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                    try {
+                        val minBuf = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+                        val bufferSize = maxOf(minBuf, 8192)
 
-                    // Try VOICE_RECOGNITION source first for hardware noise cancellation and AGC
-                    var record: AudioRecord? = AudioRecord(
-                        MediaRecorder.AudioSource.VOICE_RECOGNITION,
-                        16000,
-                        AudioFormat.CHANNEL_IN_MONO,
-                        AudioFormat.ENCODING_PCM_16BIT,
-                        bufferSize
-                    )
-                    if (record?.state != AudioRecord.STATE_INITIALIZED) {
-                        record?.release()
-                        record = AudioRecord(
-                            MediaRecorder.AudioSource.MIC,
+                        var record: AudioRecord? = AudioRecord(
+                            MediaRecorder.AudioSource.VOICE_RECOGNITION,
                             16000,
                             AudioFormat.CHANNEL_IN_MONO,
                             AudioFormat.ENCODING_PCM_16BIT,
                             bufferSize
                         )
-                    }
+                        if (record?.state != AudioRecord.STATE_INITIALIZED) {
+                            record?.release()
+                            record = AudioRecord(
+                                MediaRecorder.AudioSource.MIC,
+                                16000,
+                                AudioFormat.CHANNEL_IN_MONO,
+                                AudioFormat.ENCODING_PCM_16BIT,
+                                bufferSize
+                            )
+                        }
 
-                    if (record?.state == AudioRecord.STATE_INITIALIZED) {
-                        audioRecord = record
-                        audioRecord?.startRecording()
-                        recordingThread = Thread {
-                            val pcm = ShortArray(512)
-                            while (isRecording && audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
-                                val read = audioRecord?.read(pcm, 0, pcm.size) ?: 0
-                                if (read > 0 && NativeSTTBridge.isLibraryLoaded) {
-                                    NativeSTTBridge.safePushAudioPCM(pcm, read)
-                                    totalSamplesPushed += read
+                        if (record?.state == AudioRecord.STATE_INITIALIZED) {
+                            audioRecord = record
+                            audioRecord?.startRecording()
+                            recordingThread = Thread {
+                                val pcm = ShortArray(512)
+                                while (isRecording && audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                                    val read = audioRecord?.read(pcm, 0, pcm.size) ?: 0
+                                    if (read > 0 && NativeSTTBridge.isLibraryLoaded) {
+                                        NativeSTTBridge.safePushAudioPCM(pcm, read)
+                                        totalSamplesPushed += read
+                                    }
                                 }
-                            }
-                        }.apply { start() }
-                        Log.i(TAG, "Hardware microphone capture active at 16kHz mono.")
-                    } else {
-                        Log.e(TAG, "AudioRecord failed to initialize.")
+                            }.apply { start() }
+                            Log.i(TAG, "Hardware microphone capture active for Indic STT at 16kHz mono.")
+                        } else {
+                            Log.e(TAG, "AudioRecord failed to initialize.")
+                        }
+                    } catch (e: Throwable) {
+                        Log.w(TAG, "AudioRecord hardware mic stream notice: ${e.message}")
                     }
-                } catch (e: Throwable) {
-                    Log.w(TAG, "AudioRecord hardware mic stream notice: ${e.message}")
                 }
             }
 
@@ -663,65 +734,75 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun stopRecordingAndTranscribe() {
-        Thread {
-            try {
-                isRecording = false
-                silenceHandler.removeCallbacks(silenceRunnable)
+        val selectedLangName = if (::langSpinner.isInitialized && langSpinner.selectedItem != null) {
+            langSpinner.selectedItem.toString()
+        } else {
+            "English (India)"
+        }
+        val langTag = languageMap[selectedLangName] ?: "en-IN"
+        val langCode = langTag.substringBefore("-")
+        val isEnglish = langTag.startsWith("en")
 
-                // Wait for recording thread to flush last buffer
+        if (isEnglish) {
+            runOnUiThread {
                 try {
-                    recordingThread?.join(400)
-                } catch (e: Throwable) {}
-
-                try {
-                    audioRecord?.stop()
-                    audioRecord?.release()
-                    audioRecord = null
-                } catch (e: Throwable) {}
-
-                val selectedLangName = if (::langSpinner.isInitialized && langSpinner.selectedItem != null) {
-                    langSpinner.selectedItem.toString()
-                } else {
-                    "English (India)"
+                    speechRecognizer?.stopListening()
+                } catch (e: Throwable) {
+                    Log.w(TAG, "SpeechRecognizer stop listening notice: ${e.message}")
                 }
-                val langCode = languageMap[selectedLangName]?.substringBefore("-") ?: "en"
-
-                // Query Native C++ STT Bridge (AI4Bharat Indic Conformer + Silero VAD)
-                var nativeMsg = ""
-                if (NativeSTTBridge.isLibraryLoaded) {
-                    nativeMsg = NativeSTTBridge.safeStopAudioCaptureAndTranscribe(langCode)
-                }
-
-                val cleanMsg = nativeMsg.trim()
-                val processedMsg = formatTranscriptForLanguage(cleanMsg, langCode)
-
-                val candidateText = when {
-                    processedMsg.isNotBlank() && processedMsg != "आ" && processedMsg != "अ" && processedMsg != "aa" && processedMsg != "a" && !processedMsg.startsWith("No speech") && !processedMsg.contains("Exception") -> processedMsg
-                    totalSamplesPushed >= 3200 -> {
-                        // Spoke for >200ms: provide clear emergency voice alert
-                        val durMs = totalSamplesPushed / 16
-                        "Voice Alert (${durMs}ms captured: emergency message)"
-                    }
-                    else -> ""
-                }
-
-                runOnUiThread {
-                    if (candidateText.isNotBlank()) {
-                        transmitMessage(candidateText, langCode)
-                    } else {
-                        statusText.text = "Result:\nNo speech detected. Hold mic close and speak clearly."
-                    }
-                }
-
-            } catch (e: Throwable) {
-                Log.e(TAG, "Error stopping recording: ${e.message}", e)
-                runOnUiThread { statusText.text = "Recording stopped." }
             }
-        }.start()
+        } else {
+            Thread {
+                try {
+                    isRecording = false
+                    silenceHandler.removeCallbacks(silenceRunnable)
+
+                    try {
+                        recordingThread?.join(500)
+                    } catch (e: Throwable) {}
+
+                    try {
+                        audioRecord?.stop()
+                        audioRecord?.release()
+                        audioRecord = null
+                    } catch (e: Throwable) {}
+
+                    // Query Native C++ STT Bridge (AI4Bharat Indic Conformer + Silero VAD)
+                    var nativeMsg = ""
+                    if (NativeSTTBridge.isLibraryLoaded) {
+                        nativeMsg = NativeSTTBridge.safeStopAudioCaptureAndTranscribe(langCode)
+                    }
+
+                    val cleanMsg = nativeMsg.trim()
+                    val processedMsg = convertIndicScript(cleanMsg, langCode)
+
+                    val candidateText = when {
+                        processedMsg.isNotBlank() && processedMsg != "आ" && processedMsg != "अ" && processedMsg != "aa" && processedMsg != "a" && !processedMsg.startsWith("No speech") && !processedMsg.contains("Exception") -> processedMsg
+                        totalSamplesPushed >= 3200 -> {
+                            val durMs = totalSamplesPushed / 16
+                            "Voice Alert (${durMs}ms captured: emergency message)"
+                        }
+                        else -> ""
+                    }
+
+                    runOnUiThread {
+                        if (candidateText.isNotBlank()) {
+                            transmitMessage(candidateText, langCode)
+                        } else {
+                            statusText.text = "Result:\nNo speech detected. Hold mic close and speak clearly."
+                        }
+                    }
+
+                } catch (e: Throwable) {
+                    Log.e(TAG, "Error stopping recording: ${e.message}", e)
+                    runOnUiThread { statusText.text = "Recording stopped." }
+                }
+            }.start()
+        }
     }
 
     private fun transmitMessage(rawText: String, langCode: String) {
-        val correctedText = autoCorrectAndFormatText(rawText)
+        val correctedText = autoCorrectAndFormatText(rawText, langCode)
         var displayMsg = "Result:\nTranscript ($langCode): $correctedText"
 
         val packet: ByteArray = try {
@@ -729,7 +810,12 @@ class MainActivity : AppCompatActivity() {
                 val compressed = org.isro.itantra.semantic.SemanticBridge.compressTranscript(
                     correctedText, langCode, "en", myCallsign, 1
                 )
-                displayMsg += "\n⚡ M3 Semantic: ${compressed.size}B (<38B limit)"
+                if (compressed.size <= 38) {
+                    displayMsg += "\n⚡ M3 Semantic: ${compressed.size}B (≤38B limit)"
+                } else {
+                    val numFrags = (compressed.size + 26) / 27
+                    displayMsg += "\n⚡ M3: $numFrags fragments × ≤38B each (Total: ${compressed.size}B)"
+                }
                 compressed
             } else {
                 correctedText.toByteArray(java.nio.charset.StandardCharsets.UTF_8)
@@ -891,7 +977,7 @@ class MainActivity : AppCompatActivity() {
             when {
                 // Space character (SentencePiece or regular)
                 ch == '▁' || ch == ' ' -> {
-                    if (lastWasConsonant) { sb.append("a"); lastWasConsonant = false }
+                    lastWasConsonant = false // Schwa deletion at word boundaries
                     sb.append(" ")
                     i++
                 }
@@ -907,20 +993,20 @@ class MainActivity : AppCompatActivity() {
                 }
                 // Anusvara
                 ch == 'ं' -> {
-                    if (lastWasConsonant) { sb.append("a"); lastWasConsonant = false }
                     sb.append("n")
+                    lastWasConsonant = false
                     i++
                 }
                 // Chandrabindu
                 ch == 'ँ' -> {
-                    if (lastWasConsonant) { sb.append("a"); lastWasConsonant = false }
                     sb.append("n")
+                    lastWasConsonant = false
                     i++
                 }
                 // Visarga
                 ch == 'ः' -> {
-                    if (lastWasConsonant) { sb.append("a"); lastWasConsonant = false }
                     sb.append("h")
+                    lastWasConsonant = false
                     i++
                 }
                 // Matras — replace the implicit 'a' with the vowel sound
@@ -929,9 +1015,16 @@ class MainActivity : AppCompatActivity() {
                     sb.append(matras[ch])
                     i++
                 }
+                // English wh digraph (व् + ह)
+                ch == 'व' && next == '्' && i + 2 < chars.size && chars[i + 2] == 'ह' -> {
+                    if (lastWasConsonant) { sb.append("a") }
+                    sb.append("wh")
+                    lastWasConsonant = true
+                    i += 3
+                }
                 // Consonants
                 consonants.containsKey(ch) -> {
-                    if (lastWasConsonant) { sb.append("a") }
+                    if (lastWasConsonant) { sb.append("a") } // Inter-consonant schwa
                     // Check for nukta (consonant + ़)
                     if (next == '़' && nuktaConsonants.containsKey(ch)) {
                         sb.append(nuktaConsonants[ch])
@@ -943,52 +1036,60 @@ class MainActivity : AppCompatActivity() {
                     lastWasConsonant = true
                 }
                 // Independent vowels
-                vowels.containsKey(ch) -> {
-                    if (lastWasConsonant) { sb.append("a"); lastWasConsonant = false }
-                    sb.append(vowels[ch])
+                vowels.containsKey(ch) || ch == 'ऑ' || ch == 'ॅ' -> {
+                    if (lastWasConsonant) { sb.append("a") }
+                    lastWasConsonant = false
+                    if (ch == 'ऑ') sb.append("o")
+                    else if (ch == 'ॅ') sb.append("a")
+                    else sb.append(vowels[ch])
                     i++
                 }
                 // Devanagari digits
                 ch in '०'..'९' -> {
-                    if (lastWasConsonant) { sb.append("a"); lastWasConsonant = false }
+                    lastWasConsonant = false
                     sb.append((ch.code - '०'.code + '0'.code).toChar())
                     i++
                 }
                 // OM symbol
                 ch == 'ॐ' -> {
-                    if (lastWasConsonant) { sb.append("a"); lastWasConsonant = false }
+                    lastWasConsonant = false
                     sb.append("om")
                     i++
                 }
                 // ASCII characters — pass through
                 ch.code < 128 -> {
-                    if (lastWasConsonant) { sb.append("a"); lastWasConsonant = false }
+                    lastWasConsonant = false
                     sb.append(ch)
                     i++
                 }
                 // Any other Indic/unknown character — skip
                 else -> {
-                    if (lastWasConsonant) { sb.append("a"); lastWasConsonant = false }
+                    lastWasConsonant = false
                     i++
                 }
             }
         }
 
-        // Add trailing implicit 'a' for last consonant
-        if (lastWasConsonant) sb.append("a")
+        // Modern Indic and English: word-final schwa deletion (no trailing 'a')
 
         return sb.toString()
             .replace("\\s+".toRegex(), " ")
             .trim()
     }
 
-    private fun autoCorrectAndFormatText(input: String): String {
+    private fun autoCorrectAndFormatText(input: String, langCode: String = "en"): String {
         if (input.isBlank()) return input
 
         var text = input.trim().replace("\\s+".toRegex(), " ")
 
-        // 1. General Offline Spelling Correction (SymSpell/Norvig)
-        if (spellCorrector != null) {
+        // 1. First apply phonetic & domain dictionary replacements
+        for ((wrong, correct) in autoCorrectMap) {
+            val regex = "(?i)\\b$wrong\\b".toRegex()
+            text = text.replace(regex, correct)
+        }
+
+        // 2. Offline Spelling Correction (only for Indic languages — do NOT distort English words)
+        if (spellCorrector != null && !langCode.startsWith("en")) {
             val words = text.split(" ")
             val correctedWords = words.map { word ->
                 spellCorrector!!.correct(word)
@@ -996,7 +1097,7 @@ class MainActivity : AppCompatActivity() {
             text = correctedWords.joinToString(" ")
         }
 
-        // 2. Apply domain dictionary (handles multi-word replacements case-insensitively)
+        // 3. Re-apply domain dictionary to ensure key terms/names remain accurate
         for ((wrong, correct) in autoCorrectMap) {
             val regex = "(?i)\\b$wrong\\b".toRegex()
             text = text.replace(regex, correct)
@@ -1073,23 +1174,33 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun getAllLocalIpAddresses(): List<String> {
-        val ips = mutableListOf<String>()
+        val wifiIps = mutableListOf<String>()
+        val otherIps = mutableListOf<String>()
         try {
             val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
             while (interfaces.hasMoreElements()) {
                 val iface = interfaces.nextElement()
                 if (iface.isLoopback || !iface.isUp) continue
+                val isWifi = iface.name.startsWith("wlan", ignoreCase = true) ||
+                             iface.name.startsWith("ap", ignoreCase = true) ||
+                             iface.name.startsWith("softap", ignoreCase = true) ||
+                             iface.name.startsWith("p2p", ignoreCase = true) ||
+                             iface.name.startsWith("eth", ignoreCase = true)
                 for (addr in iface.inetAddresses) {
                     if (!addr.isLoopbackAddress && addr is java.net.Inet4Address) {
                         val host = addr.hostAddress ?: continue
-                        if (!host.startsWith("127.") && !ips.contains(host)) {
-                            ips.add(host)
+                        if (!host.startsWith("127.")) {
+                            if (isWifi) {
+                                if (!wifiIps.contains(host)) wifiIps.add(host)
+                            } else {
+                                if (!otherIps.contains(host)) otherIps.add(host)
+                            }
                         }
                     }
                 }
             }
         } catch (e: Throwable) {}
-        return ips
+        return wifiIps + otherIps
     }
 
     private fun getLocalIpAddress(): String {
@@ -1104,8 +1215,12 @@ class MainActivity : AppCompatActivity() {
             indicTTSManager?.shutdown()
             androidTts?.stop()
             androidTts?.shutdown()
+            transport?.stop()
             if (multicastLock?.isHeld == true) {
                 multicastLock?.release()
+            }
+            if (wifiLock?.isHeld == true) {
+                wifiLock?.release()
             }
         } catch (e: Exception) {}
     }

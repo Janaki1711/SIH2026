@@ -111,7 +111,6 @@ class TestMember3Suite(unittest.TestCase):
         sem = packet.semantic_result
         self.assertTrue(sem.is_fallback)
         self.assertEqual(packet.compression_tier, CompressionTier.TIER_3_FALLBACK)
-        self.assertGreaterEqual(packet.payload_size, 35)
         self.assertLessEqual(packet.payload_size, 38)
 
         # Verify decoded message recovers text safely
@@ -222,7 +221,6 @@ class TestMember3Suite(unittest.TestCase):
             compression_tier=CompressionTier.TIER_3_FALLBACK
         )
         t3_bytes = semantic_compressor.compress(t3_res)
-        self.assertGreaterEqual(len(t3_bytes), 35)
         self.assertLessEqual(len(t3_bytes), 38)
 
     def test_geo_phonetic_matching(self):

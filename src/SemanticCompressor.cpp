@@ -7,13 +7,13 @@ namespace itantra::semantic {
 
 std::vector<uint8_t> SemanticCompressor::encodeTier1(const SemanticResult& res) {
     // Tier 1 Layout: 6 bytes
-    // Byte 0: Tier Header (0x01)
+    // Byte 0: Tier Header (0x01, or 0x81 if isNegated)
     // Byte 1: (Intent & 0x0F) << 4 | (Urgency & 0x0F)
     // Byte 2: (Action & 0x0F) << 4 | (Hazard & 0x0F)
     // Byte 3: Person Count (0..255)
     // Bytes 4-5: GeoID (uint16_t big-endian)
     std::vector<uint8_t> buf(6);
-    buf[0] = static_cast<uint8_t>(CompressionTier::TIER_1_MACRO);
+    buf[0] = static_cast<uint8_t>(res.isNegated ? 0x81 : 0x01);
     buf[1] = ((static_cast<uint8_t>(res.intent) & 0x0F) << 4) | (static_cast<uint8_t>(res.urgency) & 0x0F);
     buf[2] = ((static_cast<uint8_t>(res.action) & 0x0F) << 4) | (static_cast<uint8_t>(res.hazard) & 0x0F);
     buf[3] = static_cast<uint8_t>(std::min<uint32_t>(res.personCount, 255));
@@ -31,6 +31,7 @@ SemanticResult SemanticCompressor::decodeTier1(const std::vector<uint8_t>& data)
     SemanticResult res;
     res.compressionTier = CompressionTier::TIER_1_MACRO;
     res.isFallback = false;
+    res.isNegated = (data[0] & 0x80) != 0;
     res.confidence = 0.95f;
 
     res.intent  = static_cast<ActionCode>((data[1] >> 4) & 0x0F);
@@ -49,7 +50,7 @@ SemanticResult SemanticCompressor::decodeTier1(const std::vector<uint8_t>& data)
 
 std::vector<uint8_t> SemanticCompressor::encodeTier2(const SemanticResult& res) {
     // Tier 2 Layout: 18 bytes
-    // Byte 0: Tier Header (0x02)
+    // Byte 0: Tier Header (0x02, or 0x82 if isNegated)
     // Byte 1: Intent (uint8_t)
     // Byte 2: Action (uint8_t)
     // Byte 3: Hazard (uint8_t)
@@ -58,10 +59,10 @@ std::vector<uint8_t> SemanticCompressor::encodeTier2(const SemanticResult& res) 
     // Bytes 7-8: GeoID (uint16_t big-endian)
     // Byte 9: Confidence (0..100)
     // Bytes 10-11: Language tag (2 bytes, e.g. "hi", "en", "kn")
-    // Bytes 12-13: Sub-entity/status flags (uint16_t big-endian)
+    // Bytes 12-13: Sub-entity/status flags (Byte 12 Bit 0: isNegated)
     // Bytes 14-17: Context flags / Timestamp delta (uint32_t big-endian)
     std::vector<uint8_t> buf(18, 0);
-    buf[0] = static_cast<uint8_t>(CompressionTier::TIER_2_STRUCTURED);
+    buf[0] = static_cast<uint8_t>(res.isNegated ? 0x82 : 0x02);
     buf[1] = static_cast<uint8_t>(res.intent);
     buf[2] = static_cast<uint8_t>(res.action);
     buf[3] = static_cast<uint8_t>(res.hazard);
@@ -82,7 +83,7 @@ std::vector<uint8_t> SemanticCompressor::encodeTier2(const SemanticResult& res) 
     buf[11] = static_cast<uint8_t>(lang.size() > 1 ? lang[1] : 'n');
 
     // Sub-entity/status flags (bytes 12-13)
-    buf[12] = 0x00;
+    buf[12] = res.isNegated ? 0x01 : 0x00;
     buf[13] = static_cast<uint8_t>(res.extractedEntities.size() & 0xFF);
 
     // Context flags (bytes 14-17)
@@ -101,6 +102,7 @@ SemanticResult SemanticCompressor::decodeTier2(const std::vector<uint8_t>& data)
     SemanticResult res;
     res.compressionTier = CompressionTier::TIER_2_STRUCTURED;
     res.isFallback = false;
+    res.isNegated = ((data[0] & 0x80) != 0) || ((data[12] & 0x01) != 0);
 
     res.intent  = static_cast<ActionCode>(data[1]);
     res.action  = static_cast<ActionCode>(data[2]);
@@ -125,22 +127,16 @@ SemanticResult SemanticCompressor::decodeTier2(const std::vector<uint8_t>& data)
 }
 
 std::vector<uint8_t> SemanticCompressor::encodeTier3(const SemanticResult& res) {
-    // Tier 3 Layout: Exactly 36 bytes (Target: 35-38 bytes)
-    // Byte 0: Tier Header (0x03)
-    // Byte 1: Raw text length (uint8_t)
-    // Byte 2: Encoding mode (0x01 = Direct UTF-8 / Token stream)
-    // Bytes 3-35: 33 bytes payload data (padded with 0 if shorter)
-    constexpr size_t TIER3_SIZE = 36;
+    // Dynamic bounded Tier 3 layout: Header (3B) + text bytes (up to 33B) <= 36B
     constexpr size_t PAYLOAD_CAP = 33;
-
-    std::vector<uint8_t> buf(TIER3_SIZE, 0);
-    buf[0] = static_cast<uint8_t>(CompressionTier::TIER_3_FALLBACK);
-    
     const std::string& text = res.originalText;
-    buf[1] = static_cast<uint8_t>(std::min<size_t>(text.size(), 255));
-    buf[2] = 0x01; // UTF-8 fallback mode
-
     size_t copyBytes = std::min<size_t>(text.size(), PAYLOAD_CAP);
+
+    std::vector<uint8_t> buf(3 + copyBytes, 0);
+    buf[0] = static_cast<uint8_t>(CompressionTier::TIER_3_FALLBACK);
+    buf[1] = static_cast<uint8_t>(copyBytes);
+    buf[2] = 0x01; // Direct UTF-8 mode
+
     for (size_t i = 0; i < copyBytes; ++i) {
         buf[3 + i] = static_cast<uint8_t>(text[i]);
     }
@@ -148,14 +144,14 @@ std::vector<uint8_t> SemanticCompressor::encodeTier3(const SemanticResult& res) 
 }
 
 SemanticResult SemanticCompressor::decodeTier3(const std::vector<uint8_t>& data) {
-    if (data.size() < 35) {
-        throw std::runtime_error("Tier 3 payload too short (minimum 35 bytes required)");
+    if (data.size() < 3) {
+        throw std::runtime_error("Tier 3 payload too short (minimum 3 bytes required)");
     }
     SemanticResult res;
     res.compressionTier = CompressionTier::TIER_3_FALLBACK;
     res.isFallback = true;
     res.fallbackReason = "Decoded from Tier 3 fallback payload";
-    res.confidence = 0.35f;
+    res.confidence = 0.50f;
 
     uint8_t textLen = data[1];
     size_t availableBytes = data.size() - 3;
