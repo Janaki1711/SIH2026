@@ -424,6 +424,59 @@ ActionCode TinyMLAgent::extractActionAndIntent(const std::string& text, ActionCo
         return ActionCode::REPORT;
     }
 
+    // FIX 3: 10. LOCATION_REPORT — "I am at X", "meet me at X", "near X", "at X"
+    // These phrases report the speaker's location without an explicit movement command
+    if (lower.find("i am at") != std::string::npos || lower.find("i am near") != std::string::npos ||
+        lower.find("meet me at") != std::string::npos || lower.find("meet me near") != std::string::npos ||
+        lower.find("we are at") != std::string::npos || lower.find("located at") != std::string::npos ||
+        lower.find("standing at") != std::string::npos || lower.find("waiting at") != std::string::npos ||
+        // Hindi / Marathi
+        lower.find("मैं हूं") != std::string::npos || lower.find("मैं यहाँ हूं") != std::string::npos ||
+        lower.find("मी आहे") != std::string::npos || lower.find("इथे आहे") != std::string::npos ||
+        // Tamil
+        lower.find("நான் இருக்கிறேன்") != std::string::npos ||
+        // Telugu
+        lower.find("నేను ఉన్నాను") != std::string::npos ||
+        // Kannada
+        lower.find("ನಾನು ಇದ್ದೇನೆ") != std::string::npos ||
+        // Malayalam
+        lower.find("ഞാൻ ഇവിടെ ഉണ്ട്") != std::string::npos) {
+        outAction = ActionCode::LOCATION_REPORT;
+        return ActionCode::LOCATION_REPORT;
+    }
+
+    // FIX 3: 11. GO_TO / Navigate / Movement to a location
+    // Recognizes "go to", "proceed to", "move to", "head to", "reach", "towards"
+    // in English and all 10 Indic languages
+    if (lower.find("go to") != std::string::npos || lower.find("proceed to") != std::string::npos ||
+        lower.find("move to") != std::string::npos || lower.find("head to") != std::string::npos ||
+        lower.find("navigate to") != std::string::npos || lower.find("reach the") != std::string::npos ||
+        lower.find("go towards") != std::string::npos || lower.find("heading to") != std::string::npos ||
+        lower.find("take me to") != std::string::npos || lower.find("direct to") != std::string::npos ||
+        // Hindi / Marathi
+        lower.find("जाओ") != std::string::npos || lower.find("जाएं") != std::string::npos ||
+        lower.find("चलो") != std::string::npos || lower.find("पहुंचो") != std::string::npos ||
+        lower.find("की तरफ जाओ") != std::string::npos || lower.find("को जाना") != std::string::npos ||
+        lower.find("पहुंचें") != std::string::npos ||
+        // Gujarati
+        lower.find("જાઓ") != std::string::npos || lower.find("પહોંચો") != std::string::npos ||
+        // Bengali
+        lower.find("যাও") != std::string::npos || lower.find("পৌঁছাও") != std::string::npos ||
+        // Tamil
+        lower.find("போ") != std::string::npos || lower.find("செல்") != std::string::npos ||
+        lower.find("சென்றடை") != std::string::npos ||
+        // Telugu
+        lower.find("వెళ్ళండి") != std::string::npos || lower.find("చేరండి") != std::string::npos ||
+        // Kannada
+        lower.find("ಹೋಗಿ") != std::string::npos || lower.find("ತಲುಪಿ") != std::string::npos ||
+        // Malayalam
+        lower.find("പോകൂ") != std::string::npos || lower.find("എത്തൂ") != std::string::npos ||
+        // Odia
+        lower.find("ଯାଅ") != std::string::npos || lower.find("ପହଞ୍ଚ") != std::string::npos) {
+        outAction = ActionCode::GO_TO;
+        return ActionCode::GO_TO;
+    }
+
     return ActionCode::UNKNOWN;
 }
 

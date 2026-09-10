@@ -283,15 +283,20 @@ class UdpTransceiver(
 
                             // 6. Production Voice / Tactical / M3 Payload
                             else -> {
-                                if (!isLocalAddress(packet.address) && senderHost.isNotEmpty()) {
-                                    discoveredPeers["NODE_${senderHost.replace('.', '_')}"] = packet.address
-                                    onPeerDiscovered?.invoke("PEER", senderHost)
-                                }
-                                Log.i(TAG, "DATA_PAYLOAD_RX src=$senderHost:${packet.port} bytes=${packet.length}")
-                                try {
-                                    onPacketReceived?.invoke(data)
-                                } catch (t: Throwable) {
-                                    Log.e(TAG, "UDP_ERROR handling incoming packet: ${t.message}", t)
+                                // FIX 1: BIDIRECTIONAL - skip packets we sent ourselves (self-echo from broadcast)
+                                if (isLocalAddress(packet.address)) {
+                                    Log.d(TAG, "DATA_PAYLOAD_RX ignoring self-echo from $senderHost")
+                                } else {
+                                    if (senderHost.isNotEmpty()) {
+                                        discoveredPeers["NODE_${senderHost.replace('.', '_')}"] = packet.address
+                                        onPeerDiscovered?.invoke("PEER", senderHost)
+                                    }
+                                    Log.i(TAG, "DATA_PAYLOAD_RX src=$senderHost:${packet.port} bytes=${packet.length}")
+                                    try {
+                                        onPacketReceived?.invoke(data)
+                                    } catch (t: Throwable) {
+                                        Log.e(TAG, "UDP_ERROR handling incoming packet: ${t.message}", t)
+                                    }
                                 }
                             }
                         }
@@ -533,11 +538,19 @@ class UdpTransceiver(
                 try { targets.add(InetAddress.getByName(addr)) } catch (e: Throwable) {}
             }
 
+            // FIX 3: BIDIRECTIONAL — always use the main bound socket, never create a new one.
+            // Creating a new DatagramSocket() here uses a random ephemeral port and may use
+            // the wrong network interface (e.g., cellular instead of Wi-Fi hotspot), causing
+            // ENETUNREACH. The main socket is already correctly bound to 0.0.0.0:8988.
+            val mainSocket = socket
+            if (mainSocket == null || mainSocket.isClosed) {
+                Log.w(TAG, "DATA_ERROR sendPacket — main socket not ready, dropping packet")
+                return@launch
+            }
             for (targetAddress in targets) {
                 try {
                     val packet = DatagramPacket(data, data.size, targetAddress, targetPort)
-                    val s = socket ?: DatagramSocket().apply { broadcast = true }
-                    s.send(packet)
+                    mainSocket.send(packet)
                     txCount.incrementAndGet()
                     Log.i(TAG, "DATA_TX dst=$targetAddress:$targetPort bytes=${data.size}")
                 } catch (e: Throwable) {

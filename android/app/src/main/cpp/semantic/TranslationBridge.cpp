@@ -27,6 +27,18 @@ std::string TranslationBridge::getTargetLocationName(uint16_t geoId, const std::
             case semantic::GeoID::BRIDGE:    return "पुल";
             case semantic::GeoID::HOSPITAL:  return "अस्पताल";
             case semantic::GeoID::SCHOOL:    return "स्कूल";
+            // FIX 3: New location types in Hindi
+            case semantic::GeoID::RAILWAY_STATION: return "रेलवे स्टेशन";
+            case semantic::GeoID::BUS_STAND:       return "बस स्टैंड";
+            case semantic::GeoID::AIRPORT:         return "हवाई अड्डा";
+            case semantic::GeoID::POLICE_STATION:  return "पुलिस स्टेशन";
+            case semantic::GeoID::FIRE_STATION:    return "दमकल केंद्र";
+            case semantic::GeoID::MARKET:          return "बाजार";
+            case semantic::GeoID::TEMPLE:          return "मंदिर";
+            case semantic::GeoID::MOSQUE:          return "मस्जिद";
+            case semantic::GeoID::CHURCH:          return "चर्च";
+            case semantic::GeoID::HOME:            return "घर";
+            case semantic::GeoID::VILLAGE:         return "गांव";
             default: return "स्थान";
         }
     } else if (lang == "gu") {
@@ -38,6 +50,16 @@ std::string TranslationBridge::getTargetLocationName(uint16_t geoId, const std::
             case semantic::GeoID::BRIDGE:    return "પુલ";
             case semantic::GeoID::HOSPITAL:  return "હોસ્પિટલ";
             case semantic::GeoID::SCHOOL:    return "શાળા";
+            // FIX 3: New location types in Gujarati
+            case semantic::GeoID::RAILWAY_STATION: return "રેલ્વે સ્ટેશન";
+            case semantic::GeoID::BUS_STAND:       return "બસ સ્ટૅન્ડ";
+            case semantic::GeoID::AIRPORT:         return "એરપોર્ટ";
+            case semantic::GeoID::POLICE_STATION:  return "પોલીસ સ્ટેશન";
+            case semantic::GeoID::FIRE_STATION:    return "ફાયર સ્ટેશન";
+            case semantic::GeoID::MARKET:          return "બજાર";
+            case semantic::GeoID::TEMPLE:          return "મંદિર";
+            case semantic::GeoID::HOME:            return "ઘર";
+            case semantic::GeoID::VILLAGE:         return "ગામ";
             default: return "સ્થળ";
         }
     } else if (lang == "ta") {
@@ -49,6 +71,17 @@ std::string TranslationBridge::getTargetLocationName(uint16_t geoId, const std::
             case semantic::GeoID::BRIDGE:    return "பாலம்";
             case semantic::GeoID::HOSPITAL:  return "மருத்துவமனை";
             case semantic::GeoID::SCHOOL:    return "பள்ளி";
+            // FIX 3: New location types in Tamil
+            case semantic::GeoID::RAILWAY_STATION: return "இரயில் நிலையம்";
+            case semantic::GeoID::BUS_STAND:       return "பஸ் நிலையம்";
+            case semantic::GeoID::AIRPORT:         return "விமான நிலையம்";
+            case semantic::GeoID::POLICE_STATION:  return "காவல் நிலையம்";
+            case semantic::GeoID::FIRE_STATION:    return "தீயணைப்பு நிலையம்";
+            case semantic::GeoID::MARKET:          return "சந்தை";
+            case semantic::GeoID::TEMPLE:          return "கோயில்";
+            case semantic::GeoID::MOSQUE:          return "மசூதி";
+            case semantic::GeoID::HOME:            return "வீடு";
+            case semantic::GeoID::VILLAGE:         return "கிராமம்";
             default: return "இடம்";
         }
     } else if (lang == "kn") {
@@ -60,6 +93,16 @@ std::string TranslationBridge::getTargetLocationName(uint16_t geoId, const std::
             case semantic::GeoID::BRIDGE:    return "ಸೇತುವೆ";
             case semantic::GeoID::HOSPITAL:  return "ಆಸ್ಪತ್ರೆ";
             case semantic::GeoID::SCHOOL:    return "ಶಾಲೆ";
+            // FIX 3: New location types in Kannada
+            case semantic::GeoID::RAILWAY_STATION: return "ರೈಲ್ವೆ ನಿಲ್ದಾಣ";
+            case semantic::GeoID::BUS_STAND:       return "ಬಸ್ ನಿಲ್ದಾಣ";
+            case semantic::GeoID::AIRPORT:         return "ವಿಮಾನ ನಿಲ್ದಾಣ";
+            case semantic::GeoID::POLICE_STATION:  return "ಪೊಲೀಸ್ ಠಾಣೆ";
+            case semantic::GeoID::FIRE_STATION:    return "ಅಗ್ನಿಶಾಮಕ ಠಾಣೆ";
+            case semantic::GeoID::MARKET:          return "ಮಾರ್ಕೆಟ್";
+            case semantic::GeoID::TEMPLE:          return "ದೇವಾಲಯ";
+            case semantic::GeoID::HOME:            return "ಮನೆ";
+            case semantic::GeoID::VILLAGE:         return "ಗ್ರಾಮ";
             default: return "ಸ್ಥಳ";
         }
     } else if (lang == "te") {
@@ -71,6 +114,16 @@ std::string TranslationBridge::getTargetLocationName(uint16_t geoId, const std::
             case semantic::GeoID::BRIDGE:    return "వంతెన";
             case semantic::GeoID::HOSPITAL:  return "ఆసుపత్రి";
             case semantic::GeoID::SCHOOL:    return "పాఠశాల";
+            // FIX 3: New location types in Telugu
+            case semantic::GeoID::RAILWAY_STATION: return "రైల్వే స్టేషన్";
+            case semantic::GeoID::BUS_STAND:       return "బస్ స్టాండ్";
+            case semantic::GeoID::AIRPORT:         return "విమానాశ్రయం";
+            case semantic::GeoID::POLICE_STATION:  return "పోలీస్ స్టేషన్";
+            case semantic::GeoID::FIRE_STATION:    return "అగ్నిమాపక కేంద్రం";
+            case semantic::GeoID::MARKET:          return "మార్కెట్";
+            case semantic::GeoID::TEMPLE:          return "మందిరం";
+            case semantic::GeoID::HOME:            return "ఇల్లు";
+            case semantic::GeoID::VILLAGE:         return "గ్రామం";
             default: return "ప్రాంతం";
         }
     } else if (lang == "ml") {
@@ -82,6 +135,17 @@ std::string TranslationBridge::getTargetLocationName(uint16_t geoId, const std::
             case semantic::GeoID::BRIDGE:    return "പാലം";
             case semantic::GeoID::HOSPITAL:  return "ആശുപത്രി";
             case semantic::GeoID::SCHOOL:    return "സ്കൂൾ";
+            // FIX 3: New location types in Malayalam
+            case semantic::GeoID::RAILWAY_STATION: return "റെയിൽവേ സ്റ്റേഷൻ";
+            case semantic::GeoID::BUS_STAND:       return "ബസ് സ്റ്റോപ്പ്";
+            case semantic::GeoID::AIRPORT:         return "വിമാനത്താവളം";
+            case semantic::GeoID::POLICE_STATION:  return "പോലീസ് സ്റ്റേഷൻ";
+            case semantic::GeoID::FIRE_STATION:    return "അഗ്നിശമന സേന";
+            case semantic::GeoID::MARKET:          return "ചന്ത";
+            case semantic::GeoID::TEMPLE:          return "ക്ഷേത്രം";
+            case semantic::GeoID::MOSQUE:          return "മസ്ജിദ്";
+            case semantic::GeoID::HOME:            return "വീട്";
+            case semantic::GeoID::VILLAGE:         return "ഗ്രാമം";
             default: return "സ്ഥലം";
         }
     } else if (lang == "or") {
@@ -93,6 +157,15 @@ std::string TranslationBridge::getTargetLocationName(uint16_t geoId, const std::
             case semantic::GeoID::BRIDGE:    return "ପୋଲ";
             case semantic::GeoID::HOSPITAL:  return "ଡାକ୍ତରଖାନା";
             case semantic::GeoID::SCHOOL:    return "ବିଦ୍ୟାଳୟ";
+            // FIX 3: New location types in Odia
+            case semantic::GeoID::RAILWAY_STATION: return "ରେଳ ଷ୍ଟେସନ";
+            case semantic::GeoID::BUS_STAND:       return "ବସ ଷ୍ଟାଣ୍ଡ";
+            case semantic::GeoID::AIRPORT:         return "ବିମାନ ବନ୍ଦର";
+            case semantic::GeoID::POLICE_STATION:  return "ପୋଲିସ ଷ୍ଟେସନ";
+            case semantic::GeoID::MARKET:          return "ବଜାର";
+            case semantic::GeoID::TEMPLE:          return "ମନ୍ଦିର";
+            case semantic::GeoID::HOME:            return "ଘର";
+            case semantic::GeoID::VILLAGE:         return "ଗ୍ରାମ";
             default: return "ସ୍ଥାନ";
         }
     } else if (lang == "bn") {
@@ -104,6 +177,17 @@ std::string TranslationBridge::getTargetLocationName(uint16_t geoId, const std::
             case semantic::GeoID::BRIDGE:    return "ব্রিজ";
             case semantic::GeoID::HOSPITAL:  return "হাসপাতাল";
             case semantic::GeoID::SCHOOL:    return "বিদ্যালয়";
+            // FIX 3: New location types in Bengali
+            case semantic::GeoID::RAILWAY_STATION: return "রেলস্টেশন";
+            case semantic::GeoID::BUS_STAND:       return "বাস স্ট্যান্ড";
+            case semantic::GeoID::AIRPORT:         return "বিমানবন্দর";
+            case semantic::GeoID::POLICE_STATION:  return "পুলিশ স্টেশন";
+            case semantic::GeoID::FIRE_STATION:    return "ফায়ার স্টেশন";
+            case semantic::GeoID::MARKET:          return "বাজার";
+            case semantic::GeoID::TEMPLE:          return "মন্দির";
+            case semantic::GeoID::MOSQUE:          return "মসজিদ";
+            case semantic::GeoID::HOME:            return "বাড়ি";
+            case semantic::GeoID::VILLAGE:         return "গ্রাম";
             default: return "স্থান";
         }
     }
@@ -238,8 +322,29 @@ std::string TranslationBridge::realizeEnglish(const semantic::SemanticResult& re
         return oss.str();
     }
 
+    // FIX 3: Handle LOCATION_REPORT intent ("I am at X", "meet me at X")
+    if (res.intent == semantic::ActionCode::LOCATION_REPORT) {
+        if (!loc.empty()) {
+            oss << "Location report: at " << loc << ".";
+        } else {
+            oss << "Location update received.";
+        }
+        return oss.str();
+    }
+
+    // FIX 3: Handle GO_TO navigation intent properly
+    if (res.intent == semantic::ActionCode::GO_TO) {
+        if (!loc.empty()) {
+            oss << "Proceed to " << loc << ".";
+        } else {
+            oss << "Navigate to destination.";
+        }
+        return oss.str();
+    }
+
     if (!loc.empty()) {
-        oss << semantic::actionToString(res.action) << " at " << loc << ".";
+        // FIX 3: For UNKNOWN intent with a known location, produce a meaningful message
+        oss << "Location: " << loc << ".";
         return oss.str();
     }
 
@@ -341,7 +446,27 @@ std::string TranslationBridge::realizeHindi(const semantic::SemanticResult& res)
         return oss.str();
     }
 
-    return realizeEnglish(res);
+    // FIX 3: Handle LOCATION_REPORT intent in Hindi
+    if (res.intent == semantic::ActionCode::LOCATION_REPORT) {
+        if (!loc.empty()) oss << "स्थान की सूचना: " << loc << " में हूं।";
+        else oss << "स्थान की जानकारी मिली।";
+        return oss.str();
+    }
+
+    // FIX 3: Handle GO_TO navigation intent in Hindi
+    if (res.intent == semantic::ActionCode::GO_TO) {
+        if (!loc.empty()) oss << loc << " पर जाएं।";
+        else oss << "गंतव्य पर जाएं।";
+        return oss.str();
+    }
+
+    // FIX 3: For UNKNOWN intent with a known location, produce a meaningful Hindi message
+    if (!loc.empty()) {
+        oss << "स्थान: " << loc << "।";
+        return oss.str();
+    }
+
+    return res.originalText.empty() ? "[आपातकालीन संदेश]" : res.originalText;
 }
 
 std::string TranslationBridge::realizeGujarati(const semantic::SemanticResult& res) {

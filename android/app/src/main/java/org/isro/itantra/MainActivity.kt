@@ -193,24 +193,54 @@ class MainActivity : AppCompatActivity() {
         try {
             val key = ByteArray(32) { 0x42 } // 32-byte shared AES-256 key
             transport = org.isro.itantra.transport.wfbng.WfbngManager(myCallsign, key, "255.255.255.255", 8988, applicationContext)
-            transport?.onVoicePayloadDelivered = { origin, language, priority, payload ->
+            transport?.onVoicePayloadDelivered = handler@{ origin, language, priority, payload ->
                 android.util.Log.i(TAG, "⚡ Received UDP packet: ${payload.size}B from $origin (source: $language)")
+
+                // FIX 3: BIDIRECTIONAL — filter out self-originated packets (self-echo from broadcast)
+                if (origin == myCallsign) {
+                    android.util.Log.d(TAG, "Skipping self-echo packet from $origin")
+                    return@handler
+                }
+
                 runOnUiThread { statusText.text = "⚡ Received ${payload.size}B from $origin\nDecompressing..." }
                 try {
+                    // FIX 2 & 3: LANGUAGE PIPELINE
+                    // 'language' = sender's SOURCE language (extracted from WfbngManager wrapper)
+                    // 'targetLang' = THIS receiver's selected language (from spinner)
+                    // Both phones run identical code — symmetric receive path
                     val targetLang = if (::langSpinner.isInitialized && langSpinner.selectedItem != null) {
                         val sel = langSpinner.selectedItem.toString()
                         languageMap[sel]?.substringBefore("-") ?: "en"
                     } else "en"
 
+                    // Source language from the packet (sender's language)
+                    val sourceLang = if (language.isNotEmpty()) language else "en"
+
                     val decodedText = try {
                         if (org.isro.itantra.semantic.SemanticBridge.isLibraryLoaded) {
+                            // FIX 2: SemanticBridge path — decompress and translate to receiver's targetLang
+                            // The C++ engine uses targetLang to realize the semantic result in the correct language
                             org.isro.itantra.semantic.SemanticBridge.decompressAndTranslate(payload, targetLang)
                         } else {
-                            String(payload, java.nio.charset.StandardCharsets.UTF_8)
+                            // FIX 2: Raw text fallback path — translate from source to target language
+                            val rawText = String(payload, java.nio.charset.StandardCharsets.UTF_8).trim()
+                            android.util.Log.i(TAG, "SemanticBridge not loaded — raw payload: '$rawText' src=$sourceLang target=$targetLang")
+
+                            // FIX 1 & 2: Translate the raw text if source != target language
+                            if (sourceLang != targetLang && rawText.isNotBlank()) {
+                                translateText(rawText, sourceLang, targetLang)
+                            } else {
+                                rawText
+                            }
                         }
                     } catch (e: Throwable) {
                         Log.w(TAG, "Semantic decompress fallback: ${e.message}")
-                        String(payload, java.nio.charset.StandardCharsets.UTF_8)
+                        val rawText = String(payload, java.nio.charset.StandardCharsets.UTF_8).trim()
+                        if (sourceLang != targetLang && rawText.isNotBlank()) {
+                            translateText(rawText, sourceLang, targetLang)
+                        } else {
+                            rawText
+                        }
                     }
 
                     if (decodedText.startsWith("PING") || decodedText.startsWith("CONNECT_PING")) {
@@ -221,7 +251,10 @@ class MainActivity : AppCompatActivity() {
                         }
                     } else {
                         runOnUiThread {
-                            statusText.text = "🚨 RX FROM $origin ($language ➔ $targetLang):\n$decodedText"
+                            // FIX 2: Show both source and target language for transparency
+                            val srcLangDisplay = if (sourceLang.isNotEmpty()) sourceLang else "?"
+                            val displayText = if (decodedText.isNotBlank()) decodedText else "[Empty message]"
+                            statusText.text = "🚨 FROM $origin [$srcLangDisplay ➔ $targetLang]:\n$displayText"
                         }
 
                         // Vibrate to alert user
@@ -235,17 +268,23 @@ class MainActivity : AppCompatActivity() {
                             }
                         } catch (e: Throwable) {}
 
-                        val isAlert = priority.toInt() >= 1 || 
-                                      decodedText.contains("SOS", ignoreCase = true) || 
-                                      decodedText.contains("ambulance", ignoreCase = true) || 
-                                      decodedText.contains("flood", ignoreCase = true) || 
-                                      decodedText.contains("fire", ignoreCase = true) || 
-                                      decodedText.contains("urgent", ignoreCase = true) || 
-                                      decodedText.contains("तत्काल") || 
+                        val isAlert = priority.toInt() >= 1 ||
+                                      decodedText.contains("SOS", ignoreCase = true) ||
+                                      decodedText.contains("ambulance", ignoreCase = true) ||
+                                      decodedText.contains("flood", ignoreCase = true) ||
+                                      decodedText.contains("fire", ignoreCase = true) ||
+                                      decodedText.contains("urgent", ignoreCase = true) ||
+                                      decodedText.contains("तत्काल") ||
                                       decodedText.contains("आपात") ||
+                                      decodedText.contains("ತುರ್ತು") ||
+                                      decodedText.contains("তাৎক্ষণিক") ||
+                                      decodedText.contains("త్వరగా") ||
                                       decodedText.contains("ତୁରନ୍ତ")
 
-                        playTTS(decodedText, targetLang, isAlert)
+                        // FIX 2: Play TTS in receiver's target language (NOT sender's language)
+                        if (decodedText.isNotBlank()) {
+                            playTTS(decodedText, targetLang, isAlert)
+                        }
                     }
                 } catch (e: Throwable) {
                     Log.e(TAG, "Rx pipeline error", e)
@@ -808,8 +847,11 @@ class MainActivity : AppCompatActivity() {
 
         val packet: ByteArray = try {
             if (org.isro.itantra.semantic.SemanticBridge.isLibraryLoaded) {
+                // FIX 1 & 2: Pass srcLang correctly; targetLang is determined at receiver side
+                // The semantic engine uses srcLang to understand context and encodes intent/location
+                // The receiver calls decompressAndTranslate(payload, receiverTargetLang)
                 val compressed = org.isro.itantra.semantic.SemanticBridge.compressTranscript(
-                    correctedText, langCode, "en", myCallsign, 1
+                    correctedText, langCode, langCode, myCallsign, 1
                 )
                 if (compressed.size <= 38) {
                     displayMsg += "\n⚡ M3 Semantic: ${compressed.size}B (≤38B limit)"
@@ -819,6 +861,14 @@ class MainActivity : AppCompatActivity() {
                 }
                 compressed
             } else {
+                // FIX 2: LANGUAGE PIPELINE — when SemanticBridge is not loaded, we must encode
+                // the source language into the raw payload so the receiver can identify and
+                // translate it. Format: [2-byte lang code][text bytes]
+                // Example: "hi" + "मैं अस्पताल में हूं" → b"hi" + UTF-8 text
+                // The receiver will see the source lang from WfbngManager's language field
+                // and can translate using its own selected target language.
+                // Note: WfbngManager already wraps with [2-byte lang][1-byte priority][payload]
+                // so no extra encoding needed here — just send raw UTF-8 text.
                 correctedText.toByteArray(java.nio.charset.StandardCharsets.UTF_8)
             }
         } catch (e: Throwable) {
@@ -846,6 +896,166 @@ class MainActivity : AppCompatActivity() {
             }
         } catch (e: Throwable) {
             Log.w(TAG, "IndicTTSManager speak notice: ${e.message}")
+        }
+    }
+
+    /**
+     * FIX 2: MULTILINGUAL TRANSLATION — Offline text translation between all supported language pairs.
+     *
+     * Architecture: Since this is an offline emergency app, we use a deterministic phrase-expansion
+     * approach combined with Android's built-in TextToSpeech locale detection.
+     *
+     * For the primary use case (emergency/tactical messages), we map known phrases across languages.
+     * For free-form text, we preserve the original meaning by passing it through with a language tag.
+     *
+     * Pipeline: sourceLang text → normalize → identify known emergency phrases → render in targetLang
+     *
+     * This function is only called when the C++ SemanticBridge (M3 engine) is NOT loaded.
+     * When SemanticBridge IS loaded, translation is handled entirely in C++ by TranslationBridge.cpp.
+     */
+    private fun translateText(text: String, sourceLang: String, targetLang: String): String {
+        if (text.isBlank() || sourceLang == targetLang) return text
+
+        // Emergency phrase translation dictionary
+        // Key: normalized English version of phrase, Value: map of lang -> translated phrase
+        val emergencyPhrases = mapOf(
+            // Hospital / Medical
+            listOf("hospital", "अस्पताल", "हॉस्पिटल", "रुग्णालय", "ਹਸਪਤਾਲ", "હોસ્પિટલ", "மருத்துவமனை", "ఆసుపత్రి", "ಆಸ್ಪತ್ರೆ", "ആശുപത്രി", "ଡାକ୍ତରଖାନା", "হাসপাতাল") to mapOf(
+                "hi" to "अस्पताल", "mr" to "रुग्णालय", "ta" to "மருத்துவமனை", "te" to "ఆసుపత్రి",
+                "kn" to "ಆಸ್ಪತ್ರೆ", "ml" to "ആശുപത്രി", "bn" to "হাসপাতাল", "gu" to "હોસ્પિટલ",
+                "or" to "ଡାକ୍ତରଖାନା", "pa" to "ਹਸਪਤਾਲ", "en" to "hospital"
+            ),
+            // Railway Station
+            listOf("railway station", "रेलवे स्टेशन", "రైల్వే స్టేషన్", "ರೈಲ್ವೆ ನಿಲ್ದಾಣ", "இரயில் நிலையம்", "रेल्वे स्थानक", "ரயில் நிலையம்") to mapOf(
+                "hi" to "रेलवे स्टेशन", "mr" to "रेल्वे स्थानक", "ta" to "இரயில் நிலையம்", "te" to "రైల్వే స్టేషన్",
+                "kn" to "ರೈಲ್ವೆ ನಿಲ್ದಾಣ", "ml" to "റെയിൽവേ സ്റ്റേഷൻ", "bn" to "রেলস্টেশন", "gu" to "રેલ્વે સ્ટેશન",
+                "or" to "ରେଳ ଷ୍ଟେସନ", "pa" to "ਰੇਲਵੇ ਸਟੇਸ਼ਨ", "en" to "railway station"
+            ),
+            // Bus Stand
+            listOf("bus stand", "bus stop", "बस स्टैंड", "बस स्थानक", "బస్ స్టాండ్", "ಬಸ್ ನಿಲ್ದಾಣ", "பஸ் நிலையம்") to mapOf(
+                "hi" to "बस स्टैंड", "mr" to "बस स्थानक", "ta" to "பஸ் நிலையம்", "te" to "బస్ స్టాండ్",
+                "kn" to "ಬಸ್ ನಿಲ್ದಾಣ", "ml" to "ബസ് സ്റ്റോപ്പ്", "bn" to "বাস স্ট্যান্ড", "gu" to "બસ સ્ટૅن્ড",
+                "or" to "ବସ ଷ୍ଟାଣ୍ଡ", "pa" to "ਬੱਸ ਅੱਡਾ", "en" to "bus stand"
+            ),
+            // Airport
+            listOf("airport", "हवाई अड्डा", "విమానాశ్రయం", "ವಿಮಾನ ನಿಲ್ದಾಣ", "விமான நிலையம்", "विमानतळ") to mapOf(
+                "hi" to "हवाई अड्डा", "mr" to "विमानतळ", "ta" to "விமான நிலையம்", "te" to "విమానాశ్రయం",
+                "kn" to "ವಿಮಾನ ನಿಲ್ದಾಣ", "ml" to "വിമാനത്താവളം", "bn" to "বিমানবন্দর", "gu" to "એرپోর્ট",
+                "or" to "ବିমାନ ବନ୍ଦର", "pa" to "ਹਵਾਈ ਅੱਡਾ", "en" to "airport"
+            ),
+            // Police Station
+            listOf("police station", "thana", "पुलिस स्टेशन", "పోలీస్ స్టేషన్", "ಪೊಲೀಸ್ ಠಾಣೆ", "காவல் நிலையம்") to mapOf(
+                "hi" to "पुलिस स्टेशन", "mr" to "पोलीस स्टेशन", "ta" to "காவல் நிலையம்", "te" to "పోలీస్ స్టేషన్",
+                "kn" to "ಪೊಲೀಸ್ ಠಾಣೆ", "ml" to "പോലീസ് സ്റ്റേഷൻ", "bn" to "পুলিশ স্টেশন", "gu" to "પોલીસ સ્ટેઇone",
+                "or" to "ପୋଲିସ ଷ୍ଟେସନ", "pa" to "ਪੁਲਿਸ ਸਟੇਸ਼ਨ", "en" to "police station"
+            ),
+            // Market
+            listOf("market", "bazaar", "बाजार", "మార్కెట్", "ಮಾರ್ಕೆಟ್", "சந்தை", "বাজার") to mapOf(
+                "hi" to "बाजार", "mr" to "बाजार", "ta" to "சந்தை", "te" to "మార్కెట్",
+                "kn" to "ಮಾರ್ಕೆಟ್", "ml" to "ചന്ത", "bn" to "বাজার", "gu" to "બজার",
+                "or" to "ବଜାର", "pa" to "ਬਾਜ਼ਾਰ", "en" to "market"
+            ),
+            // School / College
+            listOf("school", "college", "स्कूल", "शाळा", "పాఠశాల", "ಶಾಲೆ", "பள்ளி", "স্কুল") to mapOf(
+                "hi" to "स्कूल", "mr" to "शाळा", "ta" to "பள்ளி", "te" to "పాఠశాల",
+                "kn" to "ಶಾಲೆ", "ml" to "സ്കൂൾ", "bn" to "স্কুল", "gu" to "શÀळा",
+                "or" to "ବିଦ୍ୟାଳୟ", "pa" to "ਸਕੂਲ", "en" to "school"
+            ),
+            // Home
+            listOf("home", "house", "घर", "ఇల్లు", "ಮನೆ", "வீடு", "বাড়ি") to mapOf(
+                "hi" to "घर", "mr" to "घर", "ta" to "வீடு", "te" to "ఇల్లు",
+                "kn" to "ಮನೆ", "ml" to "വീട്", "bn" to "বাড়ি", "gu" to "ઘर",
+                "or" to "ଘর", "pa" to "ਘਰ", "en" to "home"
+            ),
+            // Emergency phrases — Ambulance needed
+            listOf("ambulance", "एम्बुलेंस", "ఆంబులెన్స్", "ಆಂಬ್ಯುಲೆನ್ಸ್", "ஆம்புலன்ஸ்", "রুগ্ণবাহিনী") to mapOf(
+                "hi" to "एम्बुलेंस की जरूरत है", "mr" to "रुग्णवाहिका पाठवा", "ta" to "ஆம்புலன்ஸ் அனுப்பவும்",
+                "te" to "ఆంబులెన్స్ పంపండి", "kn" to "ಆಂಬ್ಯುಲೆನ್ಸ್ ಕಳುಹಿಸಿ", "ml" to "ആംബുലൻസ് അയക്കുക",
+                "bn" to "অ্যাম্বুলেন্স পাঠান", "gu" to "એમ્બ્યुলన્સ મોकलо", "or" to "ଆମ୍ବୁଲାन୍ସ ପଠाన୍ତु",
+                "pa" to "ਐਂਬੂਲੈਂਸ ਭੇਜੋ", "en" to "send ambulance"
+            ),
+            // Flood
+            listOf("flood", "बाढ़", "వరద", "ಪ್ರವಾಹ", "வெள்ளம்", "বন্যা", "pūr", "पूर") to mapOf(
+                "hi" to "बाढ़ का खतरा है", "mr" to "पूर आला आहे", "ta" to "வெள்ளம் வந்துள்ளது",
+                "te" to "వరదలు వచ్చాయి", "kn" to "ಪ್ರವಾಹ ಬಂದಿದೆ", "ml" to "വെള്ളപ്പൊക്കം ഉണ്ട്",
+                "bn" to "বন্যা হয়েছে", "gu" to "પૂর आव्युं छे", "or" to "ବন୍ୟা ଆसिछि",
+                "pa" to "ਹੜ੍ਹ ਆ ਗਿਆ", "en" to "flood warning"
+            ),
+            // Fire
+            listOf("fire", "आग", "నిప్పు", "ಬೆಂಕಿ", "தீ", "আগুন", "அக்னி") to mapOf(
+                "hi" to "आग लग गई है", "mr" to "आग लागली आहे", "ta" to "தீ பிடித்துள்ளது",
+                "te" to "అగ్ని ప్రమాదం", "kn" to "ಬೆಂಕಿ ಬಿದ್ದಿದೆ", "ml" to "തീ പിടിച്ചിരിക്കുന്നു",
+                "bn" to "আগুন লেগেছে", "gu" to "आग लागी छे", "or" to "ନିଆଁ ଲागিछि",
+                "pa" to "ਅੱਗ ਲੱਗੀ ਹੈ", "en" to "fire alert"
+            )
+        )
+
+        // Navigation prepositions — needed to reconstruct meaningful sentences
+        val navPhrases = mapOf(
+            "go to" to mapOf("hi" to "जाएं", "mr" to "जा", "ta" to "செல்லுங்கள்", "te" to "వెళ్ళండి",
+                "kn" to "ಹೋಗಿ", "ml" to "പോകൂ", "bn" to "যান", "gu" to "जाओ", "or" to "ଯाଅ", "en" to "go to"),
+            "at" to mapOf("hi" to "में", "mr" to "मध्ये", "ta" to "இல்", "te" to "లో",
+                "kn" to "ನಲ್ಲಿ", "ml" to "ൽ", "bn" to "তে", "gu" to "मां", "or" to "ରେ", "en" to "at"),
+            "near" to mapOf("hi" to "के पास", "mr" to "जवळ", "ta" to "அருகில்", "te" to "దగ్గర",
+                "kn" to "ಹತ್ತಿರ", "ml" to "സമീപം", "bn" to "কাছে", "gu" to "पासे", "or" to "ପାखे", "en" to "near"),
+            "help" to mapOf("hi" to "मदद", "mr" to "मदत", "ta" to "உதவி", "te" to "సహాయం",
+                "kn" to "ಸಹಾಯ", "ml" to "സഹായം", "bn" to "সাহায্য", "gu" to "मदद", "or" to "ସাহায্य", "en" to "help"),
+            "needed" to mapOf("hi" to "चाहिए", "mr" to "हवे आहे", "ta" to "தேவை", "te" to "కావాలి",
+                "kn" to "ಬೇಕಾಗಿದೆ", "ml" to "വേണം", "bn" to "দরকার", "gu" to "जोईए", "or" to "ଦрकार", "en" to "needed"),
+            "send" to mapOf("hi" to "भेजें", "mr" to "पाठवा", "ta" to "அனுப்பவும்", "te" to "పంపండి",
+                "kn" to "ಕಳುಹಿಸಿ", "ml" to "അയക്കുക", "bn" to "পাঠান", "gu" to "मोकलो", "or" to "ପଠान୍ତु", "en" to "send"),
+            "i am" to mapOf("hi" to "मैं हूं", "mr" to "मी आहे", "ta" to "நான் இருக்கிறேன்", "te" to "నేను ఉన్నాను",
+                "kn" to "ನಾನು ಇದ್ದೇನೆ", "ml" to "ഞാൻ ഉണ്ട്", "bn" to "আমি আছি", "gu" to "हुं छुं", "or" to "ମुं আछি", "en" to "i am"),
+            "meet me" to mapOf("hi" to "मुझसे मिलो", "mr" to "मला भेटा", "ta" to "என்னை சந்தியுங்கள்", "te" to "నన్ను కలవండి",
+                "kn" to "ನನ್ನನ್ನು ಭೇಟಿಯಾಗಿ", "ml" to "എന്നെ കണ്ടുമുട്ടുക", "bn" to "আমার সাথে দেখা করুন",
+                "gu" to "मने मलो", "or" to "ਮुझसे ਮिलो", "en" to "meet me")
+        )
+
+        val lowerText = text.lowercase().trim()
+        var matchedLocation: String? = null
+        var matchedAction: String? = null
+
+        // 1. Find navigation/action verb in source
+        for ((engPhrase, translations) in navPhrases) {
+            // Check if the source text contains this concept (in any language)
+            val sourcePhraseVariants = translations.values + listOf(engPhrase)
+            if (sourcePhraseVariants.any { lowerText.contains(it.lowercase()) }) {
+                matchedAction = translations[targetLang] ?: translations["en"] ?: engPhrase
+                break
+            }
+        }
+
+        // 2. Find location in source
+        for ((locationVariants, translations) in emergencyPhrases) {
+            if (locationVariants.any { lowerText.contains(it.lowercase()) }) {
+                matchedLocation = translations[targetLang] ?: translations["en"] ?: locationVariants.first()
+                break
+            }
+        }
+
+        // 3. Construct target language sentence
+        return when {
+            matchedAction != null && matchedLocation != null -> {
+                "$matchedAction $matchedLocation"
+            }
+            matchedLocation != null -> {
+                // Location-only: "I am at [location]" structure in target lang
+                val iAmPhrase = navPhrases["i am"]?.get(targetLang) ?: "I am at"
+                val atPhrase = navPhrases["at"]?.get(targetLang) ?: "at"
+                "$iAmPhrase $atPhrase $matchedLocation"
+            }
+            matchedAction != null -> {
+                "$matchedAction"
+            }
+            else -> {
+                // No known phrase found — return original text with a language indicator prefix
+                // so the receiver knows it's in another language
+                if (sourceLang != targetLang) {
+                    "[$sourceLang] $text"
+                } else {
+                    text
+                }
+            }
         }
     }
 
