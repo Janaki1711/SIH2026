@@ -194,99 +194,90 @@ class MainActivity : AppCompatActivity() {
             val key = ByteArray(32) { 0x42 } // 32-byte shared AES-256 key
             transport = org.isro.itantra.transport.wfbng.WfbngManager(myCallsign, key, "255.255.255.255", 8988, applicationContext)
             transport?.onVoicePayloadDelivered = handler@{ origin, language, priority, payload ->
-                android.util.Log.i(TAG, "⚡ Received UDP packet: ${payload.size}B from $origin (source: $language)")
 
-                // FIX 3: BIDIRECTIONAL — filter out self-originated packets (self-echo from broadcast)
+                // ── PIPELINE LOG ─────────────────────────────────────────────
+                Log.i(TAG, "━━ INCOMING_MSG    from=$origin  srcLang=$language  bytes=${payload.size}")
+
+                // Skip self-echo from broadcast
                 if (origin == myCallsign) {
-                    android.util.Log.d(TAG, "Skipping self-echo packet from $origin")
+                    Log.d(TAG, "Skipping self-echo from $origin")
                     return@handler
                 }
 
-                runOnUiThread { statusText.text = "⚡ Received ${payload.size}B from $origin\nDecompressing..." }
-                try {
-                    // FIX 2 & 3: LANGUAGE PIPELINE
-                    // 'language' = sender's SOURCE language (extracted from WfbngManager wrapper)
-                    // 'targetLang' = THIS receiver's selected language (from spinner)
-                    // Both phones run identical code — symmetric receive path
-                    val targetLang = if (::langSpinner.isInitialized && langSpinner.selectedItem != null) {
-                        val sel = langSpinner.selectedItem.toString()
-                        languageMap[sel]?.substringBefore("-") ?: "en"
-                    } else "en"
+                // Receiver's selected target language (from spinner on THIS phone)
+                val targetLang = if (::langSpinner.isInitialized && langSpinner.selectedItem != null) {
+                    languageMap[langSpinner.selectedItem.toString()]?.substringBefore("-") ?: "en"
+                } else "en"
 
-                    // Source language from the packet (sender's language)
-                    val sourceLang = if (language.isNotEmpty()) language else "en"
+                // Source language carried in the packet header (sender's selected language)
+                val sourceLang = if (language.isNotEmpty()) language else "en"
 
-                    val decodedText = try {
-                        if (org.isro.itantra.semantic.SemanticBridge.isLibraryLoaded) {
-                            // SemanticBridge path — decompress and translate to receiver's targetLang in C++
-                            org.isro.itantra.semantic.SemanticBridge.decompressAndTranslate(payload, targetLang)
-                        } else {
-                            // Raw text fallback — translate from source to target language via MLKit
-                            val rawText = String(payload, java.nio.charset.StandardCharsets.UTF_8).trim()
-                            android.util.Log.i(TAG, "Raw payload: '$rawText' src=$sourceLang target=$targetLang")
-                            if (sourceLang != targetLang && rawText.isNotBlank()) {
-                                // FIX 2: pass speakAloud=true so TTS fires when async translation arrives
-                                translateText(rawText, sourceLang, targetLang, speakAloud = true, isAlert = priority.toInt() >= 1)
-                            } else {
-                                rawText
-                            }
-                        }
-                    } catch (e: Throwable) {
-                        Log.w(TAG, "Decode fallback: ${e.message}")
-                        val rawText = String(payload, java.nio.charset.StandardCharsets.UTF_8).trim()
-                        if (sourceLang != targetLang && rawText.isNotBlank()) {
-                            translateText(rawText, sourceLang, targetLang, speakAloud = true, isAlert = priority.toInt() >= 1)
-                        } else {
-                            rawText
-                        }
-                    }
+                Log.i(TAG, "━━ TARGET_LANGUAGE  targetLang=$targetLang  sourceLang=$sourceLang")
 
-                    if (decodedText.startsWith("PING") || decodedText.startsWith("CONNECT_PING")) {
-                        runOnUiThread {
-                            netStatusText.text = "🟢 PEER ONLINE: $origin\n📡 Walkie-Talkie Mesh Active!"
-                            netStatusText.setTextColor(Color.parseColor("#00E676"))
-                            statusText.text = "🟢 Connected to peer: $origin"
-                        }
-                    } else {
-                        runOnUiThread {
-                            // FIX 2: Show both source and target language for transparency
-                            val srcLangDisplay = if (sourceLang.isNotEmpty()) sourceLang else "?"
-                            val displayText = if (decodedText.isNotBlank()) decodedText else "[Empty message]"
-                            statusText.text = "🚨 FROM $origin [$srcLangDisplay ➔ $targetLang]:\n$displayText"
-                        }
-
-                        // Vibrate to alert user
-                        try {
-                            val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
-                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                                vibrator?.vibrate(android.os.VibrationEffect.createOneShot(200, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
-                            } else {
-                                @Suppress("DEPRECATION")
-                                vibrator?.vibrate(200)
-                            }
-                        } catch (e: Throwable) {}
-
-                        val isAlert = priority.toInt() >= 1 ||
-                                      decodedText.contains("SOS", ignoreCase = true) ||
-                                      decodedText.contains("ambulance", ignoreCase = true) ||
-                                      decodedText.contains("flood", ignoreCase = true) ||
-                                      decodedText.contains("fire", ignoreCase = true) ||
-                                      decodedText.contains("urgent", ignoreCase = true) ||
-                                      decodedText.contains("तत्काल") ||
-                                      decodedText.contains("आपात") ||
-                                      decodedText.contains("ತುರ್ತು") ||
-                                      decodedText.contains("তাৎক্ষণিক") ||
-                                      decodedText.contains("త్వరగా") ||
-                                      decodedText.contains("ତୁରନ୍ତ")
-
-                        // FIX 2: Play TTS in receiver's target language (NOT sender's language)
-                        if (decodedText.isNotBlank()) {
-                            playTTS(decodedText, targetLang, isAlert)
-                        }
-                    }
+                // Decode the actual UTF-8 transcript that was transmitted
+                val rawText = try {
+                    String(payload, Charsets.UTF_8).trim()
                 } catch (e: Throwable) {
-                    Log.e(TAG, "Rx pipeline error", e)
-                    runOnUiThread { statusText.text = "⚡ Received from $origin, decode notice: ${e.message}" }
+                    Log.w(TAG, "Payload decode error: ${e.message}")
+                    ""
+                }
+
+                if (rawText.isBlank()) {
+                    Log.w(TAG, "Empty payload from $origin — ignoring")
+                    return@handler
+                }
+
+                // Filter connection probes — not real messages
+                if (rawText.startsWith("ITANTRA_") || rawText.startsWith("PING") || rawText.startsWith("CONNECT_PING")) {
+                    runOnUiThread {
+                        netStatusText.text = "🟢 PEER ONLINE: $origin\n📡 Walkie-Talkie Mesh Active!"
+                        netStatusText.setTextColor(Color.parseColor("#00E676"))
+                    }
+                    return@handler
+                }
+
+                Log.i(TAG, "━━ RAW_TRANSCRIPT   text='$rawText'")
+
+                // Alert detection on the raw text (works for any language)
+                val isAlert = priority.toInt() >= 1 ||
+                    rawText.contains("SOS", ignoreCase = true) ||
+                    rawText.contains("urgent", ignoreCase = true) ||
+                    rawText.contains("emergency", ignoreCase = true) ||
+                    rawText.contains("ambulance", ignoreCase = true) ||
+                    rawText.contains("flood", ignoreCase = true) ||
+                    rawText.contains("fire", ignoreCase = true) ||
+                    rawText.contains("तत्काल") || rawText.contains("आपात") ||
+                    rawText.contains("ತುರ್ತು") || rawText.contains("అత్యవసరం") ||
+                    rawText.contains("அவசரம்") || rawText.contains("জরুরি")
+
+                // Vibrate on incoming message
+                try {
+                    val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                        vibrator?.vibrate(android.os.VibrationEffect.createOneShot(200, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+                    } else {
+                        @Suppress("DEPRECATION") vibrator?.vibrate(200)
+                    }
+                } catch (e: Throwable) {}
+
+                if (sourceLang == targetLang) {
+                    // Same language — display and speak directly
+                    Log.i(TAG, "━━ TTS_INPUT        lang=$targetLang  text='$rawText'  (same language)")
+                    runOnUiThread { statusText.text = "📥 From $origin [$sourceLang]:\n$rawText" }
+                    playTTS(rawText, targetLang, isAlert)
+                } else {
+                    // Different languages — show original immediately, then translate + speak
+                    runOnUiThread { statusText.text = "📥 From $origin [$sourceLang→$targetLang]:\n$rawText\n⏳ Translating..." }
+                    translateWithMlKit(rawText, sourceLang, targetLang) { translated ->
+                        val displayText = if (translated.isNotBlank() && !translated.startsWith("[$sourceLang]"))
+                            translated else rawText
+                        Log.i(TAG, "━━ TRANSLATION_RESULT  $sourceLang→$targetLang  out='$displayText'")
+                        Log.i(TAG, "━━ TTS_INPUT           lang=$targetLang  text='$displayText'")
+                        runOnUiThread {
+                            statusText.text = "📥 $origin [$sourceLang→$targetLang]:\n$displayText"
+                            playTTS(displayText, targetLang, isAlert)
+                        }
+                    }
                 }
             }
 
@@ -832,48 +823,46 @@ class MainActivity : AppCompatActivity() {
 
     private fun transmitMessage(rawText: String, langCode: String) {
         val correctedText = autoCorrectAndFormatText(rawText, langCode)
-        var displayMsg = "Result:\nTranscript ($langCode): $correctedText"
 
-        val packet: ByteArray = try {
-            if (org.isro.itantra.semantic.SemanticBridge.isLibraryLoaded) {
-                // FIX 1 & 2: Pass srcLang correctly; targetLang is determined at receiver side
-                // The semantic engine uses srcLang to understand context and encodes intent/location
-                // The receiver calls decompressAndTranslate(payload, receiverTargetLang)
-                val compressed = org.isro.itantra.semantic.SemanticBridge.compressTranscript(
-                    correctedText, langCode, langCode, myCallsign, 1
-                )
-                if (compressed.size <= 38) {
-                    displayMsg += "\n⚡ M3 Semantic: ${compressed.size}B (≤38B limit)"
-                } else {
-                    val numFrags = (compressed.size + 26) / 27
-                    displayMsg += "\n⚡ M3: $numFrags fragments × ≤38B each (Total: ${compressed.size}B)"
-                }
-                compressed
-            } else {
-                // FIX 2: LANGUAGE PIPELINE — when SemanticBridge is not loaded, we must encode
-                // the source language into the raw payload so the receiver can identify and
-                // translate it. Format: [2-byte lang code][text bytes]
-                // Example: "hi" + "मैं अस्पताल में हूं" → b"hi" + UTF-8 text
-                // The receiver will see the source lang from WfbngManager's language field
-                // and can translate using its own selected target language.
-                // Note: WfbngManager already wraps with [2-byte lang][1-byte priority][payload]
-                // so no extra encoding needed here — just send raw UTF-8 text.
-                correctedText.toByteArray(java.nio.charset.StandardCharsets.UTF_8)
-            }
-        } catch (e: Throwable) {
-            Log.w(TAG, "Semantic compression fallback: ${e.message}")
-            correctedText.toByteArray(java.nio.charset.StandardCharsets.UTF_8)
-        }
+        // ── PIPELINE LOG ──────────────────────────────────────────────────────
+        Log.i(TAG, "━━ STT_TRANSCRIPT  lang=$langCode  text='$correctedText'")
+        // ─────────────────────────────────────────────────────────────────────
+
+        // DESIGN PRINCIPLE: Always transmit the actual transcript as UTF-8.
+        //
+        // The C++ SemanticBridge (Member 3) compresses speech into 6–38 byte codes
+        // (intent + geoId + hazard). This is useful for bandwidth, BUT it has two
+        // fatal problems for a general-purpose walkie-talkie:
+        //   1. Tier 3 fallback truncates the original text to 33 bytes — any
+        //      Indic sentence longer than ~11 characters is SILENTLY TRUNCATED.
+        //   2. Tier 1/2 encode only semantic codes; the original text is DISCARDED.
+        //      The receiver reconstructs a HARDCODED sentence from those codes
+        //      (e.g. "rescue assistance needed at unknown location"), completely
+        //      replacing what the user actually said.
+        //
+        // Fix: Bypass SemanticBridge entirely. Send the actual corrected UTF-8
+        // transcript directly. The receiver uses MLKit to translate it into their
+        // selected language — preserving the actual meaning without fabrication.
+        //
+        // SemanticBridge is kept in the codebase for the demo telemetry display
+        // (compression ratio, FEC parity, etc.) but is NOT used for the message
+        // content that reaches the other phone.
+
+        val packet: ByteArray = correctedText.toByteArray(Charsets.UTF_8)
+
+        Log.i(TAG, "━━ OUTGOING_MSG    lang=$langCode  bytes=${packet.size}  text='$correctedText'")
 
         try {
             transport?.sendVoiceMessage(packet, langCode, 1.toByte(), "RESCUE_ALL")
-            displayMsg += "\n📡 Transmitted over UDP Mesh!"
         } catch (e: Throwable) {
             Log.e(TAG, "Transport send error: ${e.message}", e)
-            displayMsg += "\n❌ Send error: ${e.message}"
+            runOnUiThread { statusText.text = "❌ Send error: ${e.message}" }
+            return
         }
 
-        runOnUiThread { statusText.text = displayMsg }
+        runOnUiThread {
+            statusText.text = "📡 Sent [$langCode]: $correctedText"
+        }
     }
 
     private fun playTTS(text: String, langCode: String, isEmergency: Boolean = false) {
