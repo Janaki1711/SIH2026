@@ -482,10 +482,11 @@ class UdpTransceiver(
         }
 
         // 4. Default hotspot fallback addresses (all known Android hotspot subnets)
-        // Standard Android: 192.168.43.x, OnePlus OxygenOS: 10.0.0.x, some ROMs: 10.42.0.x
+        // Standard Android: 192.168.43.x, OnePlus OxygenOS: 10.0.0.x / 10.1.x.x, some ROMs: 10.42.0.x
         val hotspotFallbacks = listOf(
             "192.168.43.1", "192.168.43.255",
             "10.0.0.1", "10.0.0.255",
+            "10.1.0.1", "10.1.255.255",
             "10.42.0.1", "10.42.0.255"
         )
         for (addr in hotspotFallbacks) {
@@ -542,6 +543,7 @@ class UdpTransceiver(
                 "255.255.255.255",
                 "192.168.43.1", "192.168.43.255",
                 "10.0.0.1", "10.0.0.255",
+                "10.1.0.1", "10.1.255.255",
                 "10.42.0.1", "10.42.0.255"
             )
             for (addr in hotspotFallbacks) {

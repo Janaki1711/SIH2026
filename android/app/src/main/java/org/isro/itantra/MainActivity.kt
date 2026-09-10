@@ -325,11 +325,13 @@ class MainActivity : AppCompatActivity() {
         val allIps = getAllLocalIpAddresses()
         val ipDisplay = if (allIps.isNotEmpty()) allIps.joinToString(" / ") else "Offline"
 
-        // Hotspot subnets: standard Android 192.168.43.x, OnePlus OxygenOS 10.0.0.x,
+        // Hotspot subnets: standard Android 192.168.43.x, OnePlus OxygenOS 10.0.0.x / 10.1.x.x,
         // some devices use 10.42.0.x or 172.20.10.x (iPhone hotspot)
         val isOnHotspot = allIps.any {
             it.startsWith("192.168.43.") ||
+            it.startsWith("192.168.49.") || // Wi-Fi Direct GO
             it.startsWith("10.0.0.") ||
+            it.startsWith("10.1.") ||       // OnePlus OxygenOS 14+ hotspot range
             it.startsWith("10.42.0.") ||
             it.startsWith("172.20.10.")
         }
