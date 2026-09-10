@@ -71,13 +71,13 @@ class MainActivity : AppCompatActivity() {
         private const val VAD_SILENCE_TIMEOUT_MS = 10000L // 10-second VAD silence threshold
     }
 
-    private lateinit var netStatusText: TextView
+    private lateinit var netStatusText: android.widget.LinearLayout
     private lateinit var peerIpInput: EditText
     private lateinit var btnConnectPeer: Button
     private lateinit var statusText: TextView
     private lateinit var langSpinner: Spinner
     private lateinit var testButton: Button
-    private lateinit var startButton: Button
+    private lateinit var startButton: android.widget.LinearLayout
     private lateinit var stopButton: Button
     private lateinit var btnModeWalkieTalkie: Button
     private lateinit var btnModePhone: Button
@@ -235,8 +235,8 @@ class MainActivity : AppCompatActivity() {
                 // Filter connection probes — not real messages
                 if (rawText.startsWith("ITANTRA_") || rawText.startsWith("PING") || rawText.startsWith("CONNECT_PING")) {
                     runOnUiThread {
-                        netStatusText.text = "🟢 PEER ONLINE: $origin\n📡 Walkie-Talkie Mesh Active!"
-                        netStatusText.setTextColor(Color.parseColor("#00E676"))
+                        // netStatusText.text (handled by statusDotText)
+                        // netStatusText color update
                     }
                     return@handler
                 }
@@ -288,8 +288,8 @@ class MainActivity : AppCompatActivity() {
 
             transport?.onPeerDiscovered = { peerCallsign, peerIp ->
                 runOnUiThread {
-                    netStatusText.text = "🟢 PEER ONLINE: $peerCallsign ($peerIp:8988)\n📡 Walkie-Talkie Mesh Active!"
-                    netStatusText.setTextColor(Color.parseColor("#00E676"))
+                    // netStatusText.text (handled by statusDotText)
+                    // netStatusText color update
                     statusText.text = "🟢 Connected to $peerCallsign ($peerIp:8988)"
                     android.widget.Toast.makeText(this, "🟢 Connected to $peerCallsign ($peerIp)", android.widget.Toast.LENGTH_SHORT).show()
                 }
@@ -305,7 +305,7 @@ class MainActivity : AppCompatActivity() {
                     }
                     findViewById<android.widget.TextView?>(R.id.peerNodeLabel)?.text = peerCallsign
                     // Legacy status bar (now hidden but keep for logcat)
-                    netStatusText.setTextColor(Color.parseColor("#00E676"))
+                    // netStatusText color update
                     statusText.text = "Connected to $peerCallsign ($peerIp:8988)$rttStr"
                 }
             }
@@ -338,10 +338,8 @@ class MainActivity : AppCompatActivity() {
 
         // ── NEW UI: additional view references ────────────────────────
         val pttLabel      = findViewById<android.widget.TextView?>(R.id.pttLabel)
-        val pttIcon       = findViewById<android.widget.TextView?>(R.id.pttIcon)
         val pttStateDot   = findViewById<android.view.View?>(R.id.pttStateDot)
         val pttStateText  = findViewById<android.widget.TextView?>(R.id.pttStateText)
-        val pttRingOuter  = findViewById<android.view.View?>(R.id.startButton)  // reuse parent
         val txMsgText     = findViewById<android.widget.TextView?>(R.id.txMessageText)
         val rxLangLbl     = findViewById<android.widget.TextView?>(R.id.rxLangLabel)
         val rxTimeLbl     = findViewById<android.widget.TextView?>(R.id.rxTimeLabel)
@@ -503,43 +501,43 @@ class MainActivity : AppCompatActivity() {
             val ip = peerIpInput.text.toString().trim()
             if (ip.isEmpty()) {
                 android.widget.Toast.makeText(this, "⚠️ Please enter the other phone's IP address", android.widget.Toast.LENGTH_SHORT).show()
-                netStatusText.text = "⚠️ Please enter the OTHER phone's IP below:"
-                netStatusText.setTextColor(Color.parseColor("#FFD600"))
+                // netStatusText.text (handled by statusDotText)
+                // netStatusText color update
                 return@setOnClickListener
             }
 
             val ipRegex = Regex("""^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$""")
             if (!ip.matches(ipRegex)) {
                 android.widget.Toast.makeText(this, "❌ Invalid IPv4 address format!\nExample: 10.163.175.126", android.widget.Toast.LENGTH_LONG).show()
-                netStatusText.text = "❌ Invalid IP format ($ip)!\n👉 Enter a valid 4-number IP (e.g. 10.163.175.126)"
-                netStatusText.setTextColor(Color.parseColor("#FF5252"))
+                // netStatusText.text (handled by statusDotText)
+                // netStatusText color update
                 return@setOnClickListener
             }
 
             val myIps = getAllLocalIpAddresses()
             if (myIps.contains(ip)) {
                 android.widget.Toast.makeText(this, "⚠️ That's THIS phone's IP!\nEnter the OTHER phone's IP.", android.widget.Toast.LENGTH_LONG).show()
-                netStatusText.text = "⚠️ You entered THIS phone's IP ($ip)!\n👉 Look at the OTHER phone's screen and type THAT IP."
-                netStatusText.setTextColor(Color.parseColor("#FF5252"))
+                // netStatusText.text (handled by statusDotText)
+                // netStatusText color update
                 return@setOnClickListener
             }
 
             btnConnectPeer.isEnabled = false
-            netStatusText.text = "🟡 Connecting to $ip:8988 (Sending Link Probe)..."
-            netStatusText.setTextColor(Color.parseColor("#FFD600"))
+            // netStatusText.text (handled by statusDotText)
+            // netStatusText color update
             statusText.text = "🟡 Probing peer link at $ip:8988..."
 
             transport?.pingPeer(ip, timeoutMs = 1200L, maxAttempts = 3) { success, peerCallsign, rttMs, msg ->
                 runOnUiThread {
                     btnConnectPeer.isEnabled = true
                     if (success) {
-                        netStatusText.text = "🟢 CONNECTED TO: $peerCallsign ($ip:8988)\n⚡ RTT: ${rttMs}ms | 📡 Two-Way Walkie-Talkie Mesh Active!"
-                        netStatusText.setTextColor(Color.parseColor("#00E676"))
+                        // netStatusText.text (handled by statusDotText)
+                        // netStatusText color update
                         statusText.text = "🟢 Connected to $peerCallsign ($ip:8988) | RTT: ${rttMs}ms"
                         android.widget.Toast.makeText(this, "🟢 Connected to $peerCallsign ($ip)!", android.widget.Toast.LENGTH_SHORT).show()
                     } else {
-                        netStatusText.text = "❌ Link failed to $ip:8988 (Sent 3 / Recv 0)\n👉 Verify: Both phones on same Wi-Fi / Hotspot & IP is correct."
-                        netStatusText.setTextColor(Color.parseColor("#FF5252"))
+                        // netStatusText.text (handled by statusDotText)
+                        // netStatusText color update
                         statusText.text = "❌ Ping timeout: $ip:8988"
                         android.widget.Toast.makeText(this, "❌ No response from $ip:8988", android.widget.Toast.LENGTH_LONG).show()
                     }
