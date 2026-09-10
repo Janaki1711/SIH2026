@@ -92,6 +92,7 @@ class MainActivity : AppCompatActivity() {
     private var indicTTSManager: org.isro.itantra.tts.IndicTTSManager? = null
     private var lastRecognizedText: String = ""
     @Volatile private var isRecording = false
+    @Volatile private var isTransmitted = false
     @Volatile private var isWalkieTalkieMode = true
     private var spellCorrector: org.isro.itantra.audio.SpellCorrector? = null
 
@@ -582,7 +583,10 @@ class MainActivity : AppCompatActivity() {
                                 "English (India)"
                             }
                             val langCode = languageMap[selectedLangName]?.substringBefore("-") ?: "en"
-                            transmitMessage(lastRecognizedText, langCode)
+                            if (!isTransmitted && lastRecognizedText.isNotBlank()) {
+                                isTransmitted = true
+                                transmitMessage(lastRecognizedText, langCode)
+                            }
                         }
                     }
 
@@ -628,6 +632,7 @@ class MainActivity : AppCompatActivity() {
     private fun startRecording() {
         try {
             isRecording = true
+            isTransmitted = false
             totalSamplesPushed = 0L
             lastRecognizedText = ""
             val selectedLangName = if (::langSpinner.isInitialized && langSpinner.selectedItem != null) {
@@ -652,10 +657,10 @@ class MainActivity : AppCompatActivity() {
                     putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                     putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
                     putExtra("android.speech.extra.DICTATION_MODE", true)
-                    putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
                 }
                 runOnUiThread {
                     try {
+                        speechRecognizer?.cancel()
                         speechRecognizer?.startListening(speechIntent)
                     } catch (e: Throwable) {
                         Log.w(TAG, "SpeechRecognizer start listening error: ${e.message}")
@@ -740,6 +745,12 @@ class MainActivity : AppCompatActivity() {
                 } catch (e: Throwable) {
                     Log.w(TAG, "SpeechRecognizer stop listening notice: ${e.message}")
                 }
+                silenceHandler.postDelayed({
+                    if (!isTransmitted && lastRecognizedText.isNotBlank()) {
+                        isTransmitted = true
+                        transmitMessage(lastRecognizedText, langCode)
+                    }
+                }, 600)
             }
         } else {
             Thread {

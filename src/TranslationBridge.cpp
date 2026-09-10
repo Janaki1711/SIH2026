@@ -361,7 +361,7 @@ std::string TranslationBridge::realizeGujarati(const semantic::SemanticResult& r
             else oss << "તબીબી સહાયની જરૂર નથી.";
             return oss.str();
         }
-        if (res.intent == semantic::ActionCode::RESCUE_REQUEST) {
+        if (res.intent == semantic::ActionCode::RESCUE_REQUEST || res.intent == semantic::ActionCode::REQUEST_HELP) {
             if (!loc.empty()) oss << loc << " માં બચાવ સહાયની જરૂર નથી.";
             else oss << "બચાવ સહાયની જરૂર નથી.";
             return oss.str();
@@ -371,13 +371,20 @@ std::string TranslationBridge::realizeGujarati(const semantic::SemanticResult& r
         return oss.str();
     }
 
-    if (res.intent == semantic::ActionCode::RESCUE_REQUEST) {
+    if (res.intent == semantic::ActionCode::RESCUE_REQUEST || res.intent == semantic::ActionCode::REQUEST_HELP) {
         if (res.personCount > 0 && !loc.empty()) {
             oss << loc << " નજીક " << res.personCount << " લોકો ફસાયા છે. તાત્કાલિક બચાવ ટીમ મોકલો.";
         } else if (res.hazard == semantic::HazardCode::FLOOD) {
-            oss << "મદદ, પૂર આવ્યું છે. તાત્કાલિક બચાવ ટીમ મોકલો.";
+            oss << "મદદ, પૂર આવ્યું છે";
+            if (!loc.empty()) oss << " " << loc << " માં";
+            oss << ". તાત્કાલિક બચાવ ટીમ મોકલો.";
+        } else if (res.hazard == semantic::HazardCode::FIRE) {
+            oss << "આગ લાગી છે";
+            if (!loc.empty()) oss << " " << loc << " માં";
+            oss << ". તાત્કાલિક ફાયર બ્રિગેડ મોકલો.";
         } else {
-            oss << "તાત્કાલિક બચાવ સહાય મોકલો.";
+            if (!loc.empty()) oss << loc << " માં તાત્કાલિક બચાવ સહાય મોકલો.";
+            else oss << "તાત્કાલિક બચાવ સહાય મોકલો.";
         }
         return oss.str();
     }
@@ -397,6 +404,20 @@ std::string TranslationBridge::realizeGujarati(const semantic::SemanticResult& r
     if (res.intent == semantic::ActionCode::SUPPLIES) {
         if (!loc.empty()) oss << loc << " માં પાણી અને ખોરાકની મદદ મોકલો.";
         else oss << "પાણી અને ખોરાકની મદદ મોકલો.";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::SEND_TEAM) {
+        if (!loc.empty()) oss << "અમારી ટીમ તૈયાર છે અને " << loc << " તરફ આગળ વધી રહી છે.";
+        else oss << "અમારી ટીમ તૈયાર છે.";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::ALERT) {
+        if (res.hazard == semantic::HazardCode::FIRE) oss << "આગની ચેતવણી!";
+        else if (res.hazard == semantic::HazardCode::FLOOD) oss << "પૂરની ચેતવણી!";
+        else oss << "ચેતવણી જારી!";
+        if (!loc.empty()) oss << " (" << loc << ")";
         return oss.str();
     }
 
@@ -420,7 +441,7 @@ std::string TranslationBridge::realizeMarathi(const semantic::SemanticResult& re
             else oss << "वैद्यकीय मदतीची गरज नाही.";
             return oss.str();
         }
-        if (res.intent == semantic::ActionCode::RESCUE_REQUEST) {
+        if (res.intent == semantic::ActionCode::RESCUE_REQUEST || res.intent == semantic::ActionCode::REQUEST_HELP) {
             if (!loc.empty()) oss << loc << " मध्ये बचाव पथकाची गरज नाही.";
             else oss << "मदतीची गरज नाही.";
             return oss.str();
@@ -430,13 +451,20 @@ std::string TranslationBridge::realizeMarathi(const semantic::SemanticResult& re
         return oss.str();
     }
 
-    if (res.intent == semantic::ActionCode::RESCUE_REQUEST) {
+    if (res.intent == semantic::ActionCode::RESCUE_REQUEST || res.intent == semantic::ActionCode::REQUEST_HELP) {
         if (res.personCount > 0 && !loc.empty()) {
             oss << loc << " जवळ " << res.personCount << " लोक अडकले आहेत. तातडीने बचाव पथक पाठवा.";
         } else if (res.hazard == semantic::HazardCode::FLOOD) {
-            oss << "मदत करा, पूर आला आहे. तातडीने मदत पाठवा.";
+            oss << "मदत करा, पूर आला आहे";
+            if (!loc.empty()) oss << " " << loc << " मध्ये";
+            oss << ". तातडीने मदत पाठवा.";
+        } else if (res.hazard == semantic::HazardCode::FIRE) {
+            oss << "આગ લાગી છે";
+            if (!loc.empty()) oss << " " << loc << " मध्ये";
+            oss << ". तातडीने मदत पाठवा.";
         } else {
-            oss << "तातडीने मदत पाठवा.";
+            if (!loc.empty()) oss << loc << " मध्ये तातडीने मदत पाठवा.";
+            else oss << "तातडीने मदत पाठवा.";
         }
         return oss.str();
     }
@@ -449,13 +477,27 @@ std::string TranslationBridge::realizeMarathi(const semantic::SemanticResult& re
 
     if (res.intent == semantic::ActionCode::SUPPLIES) {
         if (!loc.empty()) oss << loc << " मध्ये पाणी आणि अन्न पुरवा.";
-        else oss << "પાણી आणि अन्न पुरवा.";
+        else oss << "पाणी आणि अन्न पुरवा.";
         return oss.str();
     }
 
     if (res.intent == semantic::ActionCode::MEDICAL) {
         if (!loc.empty()) oss << loc << " मध्ये वैद्यकीय मदत / रुग्णवाहिका पाठवा.";
         else oss << "वैद्यकीय मदत पाठवा.";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::SEND_TEAM) {
+        if (!loc.empty()) oss << "आमचे पथक तयार आहे आणि " << loc << " कडे रवाना होत आहे.";
+        else oss << "आमचे पथक तयार आहे.";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::ALERT) {
+        if (res.hazard == semantic::HazardCode::FIRE) oss << "आगीचा इशारा!";
+        else if (res.hazard == semantic::HazardCode::FLOOD) oss << "पुराचा इशारा!";
+        else oss << "इशारा जारी!";
+        if (!loc.empty()) oss << " (" << loc << ")";
         return oss.str();
     }
 
@@ -479,7 +521,7 @@ std::string TranslationBridge::realizeKannada(const semantic::SemanticResult& re
             else oss << "ವೈದ್ಯಕೀಯ ನೆರವು ಅಗತ್ಯವಿಲ್ಲ.";
             return oss.str();
         }
-        if (res.intent == semantic::ActionCode::RESCUE_REQUEST) {
+        if (res.intent == semantic::ActionCode::RESCUE_REQUEST || res.intent == semantic::ActionCode::REQUEST_HELP) {
             if (!loc.empty()) oss << loc << " ಗೆ ರಕ್ಷಣಾ ಸಹಾಯ ಅಗತ್ಯವಿಲ್ಲ.";
             else oss << "ರಕ್ಷಣಾ ಸಹಾಯ ಅಗತ್ಯವಿಲ್ಲ.";
             return oss.str();
@@ -489,13 +531,20 @@ std::string TranslationBridge::realizeKannada(const semantic::SemanticResult& re
         return oss.str();
     }
 
-    if (res.intent == semantic::ActionCode::RESCUE_REQUEST) {
+    if (res.intent == semantic::ActionCode::RESCUE_REQUEST || res.intent == semantic::ActionCode::REQUEST_HELP) {
         if (res.personCount > 0 && !loc.empty()) {
             oss << loc << " ಹತ್ತಿರ " << res.personCount << " ಜನರು ಸಿಲುಕಿಕೊಂಡಿದ್ದಾರೆ. ತಕ್ಷಣ ರಕ್ಷಣಾ ತಂಡವನ್ನು ಕಳುಹಿಸಿ.";
         } else if (res.hazard == semantic::HazardCode::FLOOD) {
-            oss << "ಸಹಾಯ ಮಾಡಿ, ಪ್ರವಾಹ ಬಂದಿದೆ. ತಕ್ಷಣ ರಕ್ಷಣಾ ತಂಡವನ್ನು ಕಳುಹಿಸಿ.";
+            oss << "ಸಹಾಯ ಮಾಡಿ, ಪ್ರವಾಹ ಬಂದಿದೆ";
+            if (!loc.empty()) oss << " " << loc << " ನಲ್ಲಿ";
+            oss << ". ತಕ್ಷಣ ರಕ್ಷಣಾ ತಂಡವನ್ನು ಕಳುಹಿಸಿ.";
+        } else if (res.hazard == semantic::HazardCode::FIRE) {
+            oss << "ಬೆಂಕಿ ಅವಘಡ ಸಂಭವಿಸಿದೆ";
+            if (!loc.empty()) oss << " " << loc << " ನಲ್ಲಿ";
+            oss << ". ತಕ್ಷಣ ರಕ್ಷಣಾ ತಂಡವನ್ನು ಕಳುಹಿಸಿ.";
         } else {
-            oss << "ತಕ್ಷಣ ರಕ್ಷಣಾ ಸಹಾಯ ಕಳುಹಿಸಿ.";
+            if (!loc.empty()) oss << loc << " ನಲ್ಲಿ ತಕ್ಷಣ ರಕ್ಷಣಾ ಸಹಾಯ ಕಳುಹಿಸಿ.";
+            else oss << "ತಕ್ಷಣ ರಕ್ಷಣಾ ಸಹಾಯ ಕಳುಹಿಸಿ.";
         }
         return oss.str();
     }
@@ -515,6 +564,20 @@ std::string TranslationBridge::realizeKannada(const semantic::SemanticResult& re
     if (res.intent == semantic::ActionCode::MEDICAL) {
         if (!loc.empty()) oss << loc << " ಗೆ ವೈದ್ಯಕೀಯ ನೆರವು / ಆಂಬ್ಯುಲೆನ್ಸ್ ಕಳುಹಿಸಿ.";
         else oss << "ವೈದ್ಯಕೀಯ ನೆರವು ಕಳುಹಿಸಿ.";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::SEND_TEAM) {
+        if (!loc.empty()) oss << "ನಮ್ಮ ತಂಡ ಸಿದ್ಧವಾಗಿದೆ ಮತ್ತು " << loc << " ಕಡೆಗೆ ಸಾಗುತ್ತಿದೆ.";
+        else oss << "ನಮ್ಮ ತಂಡ ಸಿದ್ಧವಾಗಿದೆ.";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::ALERT) {
+        if (res.hazard == semantic::HazardCode::FIRE) oss << "ಬೆಂಕಿ ಎಚ್ಚರಿಕೆ!";
+        else if (res.hazard == semantic::HazardCode::FLOOD) oss << "ಪ್ರವಾಹ ಎಚ್ಚರಿಕೆ!";
+        else oss << "ಎಚ್ಚರಿಕೆ ಸಂದೇಶ!";
+        if (!loc.empty()) oss << " (" << loc << ")";
         return oss.str();
     }
 
@@ -538,7 +601,7 @@ std::string TranslationBridge::realizeMalayalam(const semantic::SemanticResult& 
             else oss << "മെഡിക്കൽ സഹായം ആവശ്യമില്ല.";
             return oss.str();
         }
-        if (res.intent == semantic::ActionCode::RESCUE_REQUEST) {
+        if (res.intent == semantic::ActionCode::RESCUE_REQUEST || res.intent == semantic::ActionCode::REQUEST_HELP) {
             if (!loc.empty()) oss << loc << " ലേക്ക് രക്ഷാപ്രവർത്തനം ആവശ്യമില്ല.";
             else oss << "സഹായം ആവശ്യമില്ല.";
             return oss.str();
@@ -548,13 +611,20 @@ std::string TranslationBridge::realizeMalayalam(const semantic::SemanticResult& 
         return oss.str();
     }
 
-    if (res.intent == semantic::ActionCode::RESCUE_REQUEST) {
+    if (res.intent == semantic::ActionCode::RESCUE_REQUEST || res.intent == semantic::ActionCode::REQUEST_HELP) {
         if (res.personCount > 0 && !loc.empty()) {
             oss << loc << " സമീപം " << res.personCount << " ആളുകൾ കുടുങ്ങിയിരിക്കുന്നു. ഉടൻ രക്ഷാപ്രവർത്തകരെ അയക്കുക.";
         } else if (res.hazard == semantic::HazardCode::FLOOD) {
-            oss << "സഹായം, വെള്ളപ്പൊക്കമുണ്ടായി. ഉടൻ രക്ഷാപ്രവർത്തകരെ അയക്കുക.";
+            oss << "സഹായം, വെള്ളപ്പൊക്കമുണ്ടായി";
+            if (!loc.empty()) oss << " " << loc << " ൽ";
+            oss << ". ഉടൻ രക്ഷാപ്രവർത്തകരെ അയക്കുക.";
+        } else if (res.hazard == semantic::HazardCode::FIRE) {
+            oss << "തീപിടുത്തമുണ്ടായി";
+            if (!loc.empty()) oss << " " << loc << " ൽ";
+            oss << ". ഉടൻ രക്ഷാപ്രവർത്തകരെ അയക്കുക.";
         } else {
-            oss << "ഉടൻ രക്ഷാസഹായം അയക്കുക.";
+            if (!loc.empty()) oss << loc << " ൽ ഉടൻ രക്ഷാസഹായം അയക്കുക.";
+            else oss << "ഉടൻ രക്ഷാസഹായം അയക്കുക.";
         }
         return oss.str();
     }
@@ -574,6 +644,20 @@ std::string TranslationBridge::realizeMalayalam(const semantic::SemanticResult& 
     if (res.intent == semantic::ActionCode::MEDICAL) {
         if (!loc.empty()) oss << loc << " ലേക്ക് അടിയന്തര മെഡിക്കൽ സഹായം / ആംബുലൻസ് അയക്കുക.";
         else oss << "മെഡിക്കൽ സഹായം അയക്കുക.";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::SEND_TEAM) {
+        if (!loc.empty()) oss << "ഞങ്ങളുടെ സംഘം സജ്ജമാണ്, " << loc << " ലേക്ക് നീങ്ങുന്നു.";
+        else oss << "ഞങ്ങളുടെ സംഘം സജ്ജമാണ്.";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::ALERT) {
+        if (res.hazard == semantic::HazardCode::FIRE) oss << "തീപിടുത്ത മുന്നറിയിപ്പ്!";
+        else if (res.hazard == semantic::HazardCode::FLOOD) oss << "വെള്ളപ്പൊക്ക മുന്നറിയിപ്പ്!";
+        else oss << "ജാഗ്രതാ മുന്നറിയിപ്പ്!";
+        if (!loc.empty()) oss << " (" << loc << ")";
         return oss.str();
     }
 
@@ -597,7 +681,7 @@ std::string TranslationBridge::realizeTamil(const semantic::SemanticResult& res)
             else oss << "மருத்துவ உதவி தேவையில்லை.";
             return oss.str();
         }
-        if (res.intent == semantic::ActionCode::RESCUE_REQUEST) {
+        if (res.intent == semantic::ActionCode::RESCUE_REQUEST || res.intent == semantic::ActionCode::REQUEST_HELP) {
             if (!loc.empty()) oss << loc << " பகுதிக்கு மீட்பு உதவி தேவையில்லை.";
             else oss << "உதவி தேவையில்லை.";
             return oss.str();
@@ -607,13 +691,20 @@ std::string TranslationBridge::realizeTamil(const semantic::SemanticResult& res)
         return oss.str();
     }
 
-    if (res.intent == semantic::ActionCode::RESCUE_REQUEST) {
+    if (res.intent == semantic::ActionCode::RESCUE_REQUEST || res.intent == semantic::ActionCode::REQUEST_HELP) {
         if (res.personCount > 0 && !loc.empty()) {
             oss << loc << " அருகில் " << res.personCount << " பேர் சிக்கியுள்ளனர். உடனடியாக மீட்புக் குழுவை அனுப்பவும்.";
         } else if (res.hazard == semantic::HazardCode::FLOOD) {
-            oss << "உதவி, வெள்ளம் வந்துள்ளது. உடனடியாக மீட்புக் குழுவை அனுப்பவும்.";
+            oss << "உதவி, வெள்ளம் வந்துள்ளது";
+            if (!loc.empty()) oss << " " << loc << " பகுதியில்";
+            oss << ". உடனடியாக மீட்புக் குழுவை அனுப்பவும்.";
+        } else if (res.hazard == semantic::HazardCode::FIRE) {
+            oss << "தீ விபத்து ஏற்பட்டுள்ளது";
+            if (!loc.empty()) oss << " " << loc << " பகுதியில்";
+            oss << ". உடனடியாக மீட்புக் குழுவை அனுப்பவும்.";
         } else {
-            oss << "உடனடியாக உதவி தேவை.";
+            if (!loc.empty()) oss << loc << " பகுதியில் உடனடியாக உதவி தேவை.";
+            else oss << "உடனடியாக உதவி தேவை.";
         }
         return oss.str();
     }
@@ -636,11 +727,25 @@ std::string TranslationBridge::realizeTamil(const semantic::SemanticResult& res)
         return oss.str();
     }
 
+    if (res.intent == semantic::ActionCode::SEND_TEAM) {
+        if (!loc.empty()) oss << "எங்கள் குழு தயாராக உள்ளது, " << loc << " நோக்கி செல்கிறது.";
+        else oss << "எங்கள் குழு தயாராக உள்ளது.";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::ALERT) {
+        if (res.hazard == semantic::HazardCode::FIRE) oss << "தீ விபத்து எச்சரிக்கை!";
+        else if (res.hazard == semantic::HazardCode::FLOOD) oss << "வெள்ள எச்சரிக்கை!";
+        else oss << "எச்சரிக்கை!";
+        if (!loc.empty()) oss << " (" << loc << ")";
+        return oss.str();
+    }
+
     return realizeEnglish(res);
 }
 
 std::string TranslationBridge::realizeTelugu(const semantic::SemanticResult& res) {
-    if (res.isFallback) return res.originalText.empty() ? "[అత్యవసర సందేశం]" : res.originalText;
+    if (res.isFallback) return res.originalText.empty() ? "[అత్యవసర సందేశം]" : res.originalText;
 
     std::string loc = getTargetLocationName(res.location.geoId, "te");
     std::ostringstream oss;
@@ -656,23 +761,30 @@ std::string TranslationBridge::realizeTelugu(const semantic::SemanticResult& res
             else oss << "వైద్య సహాయం అవసరం లేదు.";
             return oss.str();
         }
-        if (res.intent == semantic::ActionCode::RESCUE_REQUEST) {
+        if (res.intent == semantic::ActionCode::RESCUE_REQUEST || res.intent == semantic::ActionCode::REQUEST_HELP) {
             if (!loc.empty()) oss << loc << " వద్ద రక్షణ సహాయం అవసరం లేదు.";
             else oss << "సహాయం అవసరం లేదు.";
             return oss.str();
         }
         if (!loc.empty()) oss << loc << " వద్ద సహాయం అవసరం లేదు.";
-        else oss << "సహಾಯం అవసరం లేదు.";
+        else oss << "సహాయం అవసరం లేదు.";
         return oss.str();
     }
 
-    if (res.intent == semantic::ActionCode::RESCUE_REQUEST) {
+    if (res.intent == semantic::ActionCode::RESCUE_REQUEST || res.intent == semantic::ActionCode::REQUEST_HELP) {
         if (res.personCount > 0 && !loc.empty()) {
             oss << loc << " వద్ద " << res.personCount << " మంది చిక్కుకున్నారు. వెంటనే రక్షణ బృందాన్ని పంపండి.";
         } else if (res.hazard == semantic::HazardCode::FLOOD) {
-            oss << "సహాయం, వరదలు వచ్చాయి. వెంటనే రక్షణ బృందాన్ని పంపండి.";
+            oss << "సహాయం, వరదలు వచ్చాయి";
+            if (!loc.empty()) oss << " " << loc << " వద్ద";
+            oss << ". వెంటనే రక్షణ బృందాన్ని పంపండి.";
+        } else if (res.hazard == semantic::HazardCode::FIRE) {
+            oss << "అగ్ని ప్రమాదం జరిగింది";
+            if (!loc.empty()) oss << " " << loc << " వద్ద";
+            oss << ". వెంటనే ఫైర్ బ్రిగేడ్ పంపండి.";
         } else {
-            oss << "వెంటనే సహాయం పంపండి.";
+            if (!loc.empty()) oss << loc << " వద్ద వెంటనే సహాయం పంపండి.";
+            else oss << "వెంటనే సహాయం పంపండి.";
         }
         return oss.str();
     }
@@ -692,6 +804,20 @@ std::string TranslationBridge::realizeTelugu(const semantic::SemanticResult& res
     if (res.intent == semantic::ActionCode::MEDICAL) {
         if (!loc.empty()) oss << loc << " కు వైద్య సహాయం / అంబులెన్స్ పంపండి.";
         else oss << "వైద్య సహాయం పంపండి.";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::SEND_TEAM) {
+        if (!loc.empty()) oss << "మా బృందం సిద్ధంగా ఉంది మరియు " << loc << " వైపు వెళుతోంది.";
+        else oss << "మా బృందం సిద్ధంగా ఉంది.";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::ALERT) {
+        if (res.hazard == semantic::HazardCode::FIRE) oss << "అగ్నిప్రమాద హెచ్చరిక!";
+        else if (res.hazard == semantic::HazardCode::FLOOD) oss << "వరద హెచ్చరిక!";
+        else oss << "హెచ్చరిక!";
+        if (!loc.empty()) oss << " (" << loc << ")";
         return oss.str();
     }
 
@@ -715,7 +841,7 @@ std::string TranslationBridge::realizeOdia(const semantic::SemanticResult& res) 
             else oss << "ଡାକ୍ତରୀ ସହାୟତା ଆବଶ୍ୟକ ନାହିଁ।";
             return oss.str();
         }
-        if (res.intent == semantic::ActionCode::RESCUE_REQUEST) {
+        if (res.intent == semantic::ActionCode::RESCUE_REQUEST || res.intent == semantic::ActionCode::REQUEST_HELP) {
             if (!loc.empty()) oss << loc << " ପାଇଁ ଉଦ୍ଧାର ସହାୟତା ଆବଶ୍ୟକ ନାହିଁ।";
             else oss << "ସହାୟତା ଆବଶ୍ୟକ ନାହିଁ।";
             return oss.str();
@@ -725,13 +851,20 @@ std::string TranslationBridge::realizeOdia(const semantic::SemanticResult& res) 
         return oss.str();
     }
 
-    if (res.intent == semantic::ActionCode::RESCUE_REQUEST) {
+    if (res.intent == semantic::ActionCode::RESCUE_REQUEST || res.intent == semantic::ActionCode::REQUEST_HELP) {
         if (res.personCount > 0 && !loc.empty()) {
             oss << loc << " ପାଖରେ " << res.personCount << " ଲୋକ ଫସି ରହିଛନ୍ତି। ତୁରନ୍ତ ଉଦ୍ଧାରକାରୀ ଦଳ ପଠାନ୍ତୁ।";
         } else if (res.hazard == semantic::HazardCode::FLOOD) {
-            oss << "ସାହାଯ୍ୟ କରନ୍ତୁ, ବନ୍ୟା ଆସିଛି। ତୁରନ୍ତ ଉଦ୍ଧାରକାରୀ ଦଳ ପଠାନ୍ତୁ।";
+            oss << "ସାହାଯ୍ୟ କରନ୍ତୁ, ବନ୍ୟା ଆସିଛି";
+            if (!loc.empty()) oss << " " << loc << " ରେ";
+            oss << "। ତୁରନ୍ତ ଉଦ୍ଧାରକାରୀ ଦଳ ପଠାନ୍ତୁ।";
+        } else if (res.hazard == semantic::HazardCode::FIRE) {
+            oss << "ନିଆଁ ଲାଗିଛି";
+            if (!loc.empty()) oss << " " << loc << " ରେ";
+            oss << "। ତୁରନ୍ତ ସହାୟତା ପଠାନ୍ତୁ।";
         } else {
-            oss << "ତୁରନ୍ତ ଉଦ୍ଧାର ସହାୟତା ପଠାନ୍ତୁ।";
+            if (!loc.empty()) oss << loc << " ରେ ତୁରନ୍ତ ଉଦ୍ଧାର ସହାୟତା ପଠାନ୍ତୁ।";
+            else oss << "ତୁରନ୍ତ ଉଦ୍ଧାର ସହାୟତା ପଠାନ୍ତୁ।";
         }
         return oss.str();
     }
@@ -751,6 +884,20 @@ std::string TranslationBridge::realizeOdia(const semantic::SemanticResult& res) 
     if (res.intent == semantic::ActionCode::MEDICAL) {
         if (!loc.empty()) oss << loc << " କୁ ଡାକ୍ତରୀ ସହାୟତା / ଆମ୍ବୁଲାନ୍ସ ପଠାନ୍ତୁ।";
         else oss << "ଡାକ୍ତରୀ ସହାୟତା ପଠାନ୍ତୁ।";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::SEND_TEAM) {
+        if (!loc.empty()) oss << "ଆମର ଦଳ ପ୍ରସ୍ତୁତ ଅଛି ଏବଂ " << loc << " ଆଡକୁ ଯାଉଛି।";
+        else oss << "ଆମର ଦଳ ପ୍ରସ୍ତୁତ ଅଛି।";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::ALERT) {
+        if (res.hazard == semantic::HazardCode::FIRE) oss << "ଅଗ୍ନି ବିପଦ ଚେତାବନୀ!";
+        else if (res.hazard == semantic::HazardCode::FLOOD) oss << "ବନ୍ୟା ବିପଦ ଚେତାବନୀ!";
+        else oss << "ଚେତାବନୀ!";
+        if (!loc.empty()) oss << " (" << loc << ")";
         return oss.str();
     }
 
@@ -774,7 +921,7 @@ std::string TranslationBridge::realizeBengali(const semantic::SemanticResult& re
             else oss << "চিকিৎসা সহায়তার প্রয়োজন নেই।";
             return oss.str();
         }
-        if (res.intent == semantic::ActionCode::RESCUE_REQUEST) {
+        if (res.intent == semantic::ActionCode::RESCUE_REQUEST || res.intent == semantic::ActionCode::REQUEST_HELP) {
             if (!loc.empty()) oss << loc << " এ উদ্ধারকারী দলের প্রয়োজন নেই।";
             else oss << "সহায়তার প্রয়োজন নেই।";
             return oss.str();
@@ -784,13 +931,20 @@ std::string TranslationBridge::realizeBengali(const semantic::SemanticResult& re
         return oss.str();
     }
 
-    if (res.intent == semantic::ActionCode::RESCUE_REQUEST) {
+    if (res.intent == semantic::ActionCode::RESCUE_REQUEST || res.intent == semantic::ActionCode::REQUEST_HELP) {
         if (res.personCount > 0 && !loc.empty()) {
             oss << loc << " এর কাছে " << res.personCount << " জন মানুষ আটকা পড়েছেন। অবিলম্বে উদ্ধারকারী দল পাঠান।";
         } else if (res.hazard == semantic::HazardCode::FLOOD) {
-            oss << "সাহায্য করুন, বন্যা হয়েছে। অবিলম্বে উদ্ধারকারী দল পাঠান।";
+            oss << "সাহায্য করুন, বন্যা হয়েছে";
+            if (!loc.empty()) oss << " " << loc << " এ";
+            oss << "। অবিলম্বে উদ্ধারকারী দল পাঠান।";
+        } else if (res.hazard == semantic::HazardCode::FIRE) {
+            oss << "আগুন লেগেছে";
+            if (!loc.empty()) oss << " " << loc << " এ";
+            oss << "। অবিলম্বে উদ্ধারকারী দল পাঠান।";
         } else {
-            oss << "অবিলম্বে উদ্ধার সহায়তা পাঠান।";
+            if (!loc.empty()) oss << loc << " এ অবিলম্বে উদ্ধার সহায়তা পাঠান।";
+            else oss << "অবিলম্বে উদ্ধার সহায়তা পাঠান।";
         }
         return oss.str();
     }
@@ -810,6 +964,20 @@ std::string TranslationBridge::realizeBengali(const semantic::SemanticResult& re
     if (res.intent == semantic::ActionCode::MEDICAL) {
         if (!loc.empty()) oss << loc << " এ চিকিৎসা সহায়তা / অ্যাম্বুলেন্স পাঠান।";
         else oss << "চিকিৎসা সহায়তা পাঠান।";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::SEND_TEAM) {
+        if (!loc.empty()) oss << "আমাদের দল প্রস্তুত এবং " << loc << " এর দিকে অগ্রসর হচ্ছে।";
+        else oss << "আমাদের দল প্রস্তুত।";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::ALERT) {
+        if (res.hazard == semantic::HazardCode::FIRE) oss << "অগ্নিকাণ্ডের সতর্কতা!";
+        else if (res.hazard == semantic::HazardCode::FLOOD) oss << "বন্যা সতর্কতা!";
+        else oss << "সতর্কতা!";
+        if (!loc.empty()) oss << " (" << loc << ")";
         return oss.str();
     }
 

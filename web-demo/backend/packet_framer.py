@@ -148,6 +148,7 @@ LANG_TO_CODE = {
 CODE_TO_LANG = {v: k for k, v in LANG_TO_CODE.items()}
 
 MAX_FRAME_SIZE = 38
+UNFRAGMENTED_MAX_SIZE = 64
 MAX_FRAGMENT_PAYLOAD = 27
 FLAG_FRAGMENTED = 0x80
 
@@ -190,8 +191,8 @@ def frame_payload(
     prosody_len = 16 if (has_prosody and prosody_vector) else 0
     unfragmented_total = 1 + 1 + 2 + 2 + 1 + len(payload) + prosody_len + 2
 
-    # Case 1: Unfragmented single frame (<= 38 bytes)
-    if unfragmented_total <= MAX_FRAME_SIZE:
+    # Case 1: Unfragmented single frame
+    if unfragmented_total <= UNFRAGMENTED_MAX_SIZE:
         flags = (prio << 5) | (0x10 if has_prosody else 0x00) | (lang_code & 0x0F)
         payload_len = min(len(payload), 255)
         header = struct.pack("!BBHHB", COMPACT_MAGIC, flags, seq16, cid16, payload_len)
@@ -200,7 +201,6 @@ def frame_payload(
             body += prosody_vector[:16].ljust(16, b'\x00')
         crc = calculate_crc16(body)
         frame = body + struct.pack("!H", crc)
-        assert len(frame) <= MAX_FRAME_SIZE
         return [frame]
 
     # Case 2: Fragmented into multiple <=38B frames (chunk <= 27B)

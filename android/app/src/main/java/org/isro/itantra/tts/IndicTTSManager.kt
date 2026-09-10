@@ -194,7 +194,7 @@ class IndicTTSManager(
 
     fun playEmergencyAlert(text: String, langCode: String) {
         postStatus("🚨 EMERGENCY ALERT: Playing tone, then voice message...")
-        nativeBridge.setVolume(0.45f) // Lowered, comfortable alert tone volume
+        nativeBridge.setVolume(0.30f) // 30% alert tone volume
 
         audioExecutor.execute {
             try {
