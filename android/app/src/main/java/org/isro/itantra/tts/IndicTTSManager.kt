@@ -90,36 +90,23 @@ class IndicTTSManager(
         if (isTtsReady && androidTts != null) {
             mainHandler.post {
                 try {
-                    // Apply Voice Conditioning from 16-byte Prosody Vector
-                    // Base baseline human pitch = 140Hz (scale 0.5 to 2.0)
                     val pitchFactor = (prosody.f0PitchMean / 140.0f).coerceIn(0.5f, 2.0f)
-                    val rateFactor = prosody.cadenceRate.coerceIn(0.5f, 2.0f)
+                    val rateFactor = prosody.cadenceRate.coerceIn(0.85f, 1.15f)
 
                     androidTts?.setPitch(pitchFactor)
                     androidTts?.setSpeechRate(rateFactor)
 
                     val targetLocale = getLocaleForLang(langCode)
-                    val langAvail = androidTts?.isLanguageAvailable(targetLocale) ?: TextToSpeech.LANG_NOT_SUPPORTED
+                    val langResult = androidTts?.setLanguage(targetLocale)
+                    Log.i(TAG, "TTS setLanguage to $targetLocale (code=$langResult)")
 
-                    if (langAvail >= TextToSpeech.LANG_AVAILABLE && langCode.lowercase() != "en") {
-                        androidTts?.language = targetLocale
-                        androidTts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "iTantra_" + System.currentTimeMillis())
-                    } else if (langCode.lowercase() == "en") {
-                        androidTts?.language = Locale.ENGLISH
-                        androidTts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "iTantra_en")
-                    } else {
-                        val speakablePhonetic = transliterateIndicToSyllables(text)
-                        androidTts?.language = Locale("en", "IN")
-                        androidTts?.speak(speakablePhonetic, TextToSpeech.QUEUE_FLUSH, null, "iTantra_syllable")
-                    }
+                    androidTts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "iTantra_" + System.currentTimeMillis())
                 } catch (e: Exception) {
                     Log.e(TAG, "Android TTS speak error", e)
-                    // Fallback to Native C++ Formant Synthesizer only if OS TTS throws an error
                     playViaNativeCpp(text, langCode, prosody)
                 }
             }
         } else {
-            // If OS TTS is not available on device, use Native C++20 Formant Synthesizer
             playViaNativeCpp(text, langCode, prosody)
         }
     }
@@ -137,81 +124,8 @@ class IndicTTSManager(
         }
     }
 
-    // Complete Syllable-Based Transliteration for all 10 Indian Scripts
-    private fun transliterateIndicToSyllables(text: String): String {
-        val consonants = mapOf(
-            0x15 to "k", 0x16 to "kh", 0x17 to "g", 0x18 to "gh", 0x19 to "ng",
-            0x1A to "ch", 0x1B to "chh", 0x1C to "j", 0x1D to "jh", 0x1E to "ny",
-            0x1F to "t", 0x20 to "th", 0x21 to "d", 0x22 to "dh", 0x23 to "n",
-            0x24 to "t", 0x25 to "th", 0x26 to "d", 0x27 to "dh", 0x28 to "n",
-            0x2A to "p", 0x2B to "ph", 0x2C to "b", 0x2D to "bh", 0x2E to "m",
-            0x2F to "y", 0x30 to "r", 0x31 to "r", 0x32 to "l", 0x33 to "l", 0x34 to "l", 0x35 to "v",
-            0x36 to "sh", 0x37 to "sh", 0x38 to "s", 0x39 to "h"
-        )
-        val vowels = mapOf(
-            0x05 to "a", 0x06 to "aa", 0x07 to "i", 0x08 to "ee", 0x09 to "u", 0x0A to "oo",
-            0x0E to "e", 0x0F to "e", 0x10 to "ai", 0x12 to "o", 0x13 to "o", 0x14 to "au"
-        )
-        val matras = mapOf(
-            0x3E to "aa", 0x3F to "i", 0x40 to "ee", 0x41 to "u", 0x42 to "oo",
-            0x46 to "e", 0x47 to "ay", 0x48 to "ai", 0x4A to "o", 0x4B to "o", 0x4C to "au"
-        )
-
-        val sb = StringBuilder()
-        var i = 0
-        val len = text.length
-
-        while (i < len) {
-            val c = text[i].code
-            if (c < 128) {
-                sb.append(text[i])
-                i++
-                continue
-            }
-
-            var base = 0
-            if (c in 0x0900..0x097F) base = 0x0900      // Devanagari (Hindi, Marathi)
-            else if (c in 0x0C80..0x0CFF) base = 0x0C80 // Kannada
-            else if (c in 0x0B80..0x0BFF) base = 0x0B80 // Tamil
-            else if (c in 0x0C00..0x0C7F) base = 0x0C00 // Telugu
-            else if (c in 0x0D00..0x0D7F) base = 0x0D00 // Malayalam
-            else if (c in 0x0A80..0x0AFF) base = 0x0A80 // Gujarati
-            else if (c in 0x0980..0x09FF) base = 0x0980 // Bengali
-            else if (c in 0x0B00..0x0B7F) base = 0x0B00 // Odia
-
-            if (base != 0) {
-                val off = c - base
-                if (vowels.containsKey(off)) {
-                    sb.append(vowels[off])
-                } else if (consonants.containsKey(off)) {
-                    val cons = consonants[off] ?: ""
-                    if (i + 1 < len) {
-                        val nextOff = text[i + 1].code - base
-                        if (matras.containsKey(nextOff)) {
-                            sb.append(cons).append(matras[nextOff])
-                            i++
-                        } else if (nextOff == 0x4D) {
-                            sb.append(cons)
-                            i++
-                        } else {
-                            sb.append(cons).append("a")
-                        }
-                    } else {
-                        sb.append(cons).append("a")
-                    }
-                } else if (off == 0x02) {
-                    sb.append("m")
-                } else if (off == 0x03) {
-                    sb.append("h")
-                }
-            }
-            i++
-        }
-        return sb.toString()
-    }
-
     private fun getLocaleForLang(langCode: String): Locale {
-        return when (langCode.lowercase()) {
+        return when (langCode.lowercase().trim()) {
             "hi" -> Locale("hi", "IN")
             "ta" -> Locale("ta", "IN")
             "te" -> Locale("te", "IN")
@@ -221,14 +135,15 @@ class IndicTTSManager(
             "gu" -> Locale("gu", "IN")
             "bn" -> Locale("bn", "IN")
             "or" -> Locale("or", "IN")
-            else -> Locale.ENGLISH
+            "pa" -> Locale("pa", "IN")
+            else -> Locale("en", "IN")
         }
     }
 
     private fun playPcmStreaming(pcm: FloatArray, isAlarm: Boolean) {
         var track: AudioTrack? = null
         try {
-            val usage = if (isAlarm) AudioAttributes.USAGE_ALARM else AudioAttributes.USAGE_MEDIA
+            val usage = AudioAttributes.USAGE_MEDIA
             val contentType = if (isAlarm) AudioAttributes.CONTENT_TYPE_SONIFICATION else AudioAttributes.CONTENT_TYPE_SPEECH
 
             val audioAttributes = AudioAttributes.Builder()
@@ -278,24 +193,25 @@ class IndicTTSManager(
     }
 
     fun playEmergencyAlert(text: String, langCode: String) {
-        postStatus("EMERGENCY OVERRIDE: 100% HARDWARE VOLUME")
-        alarmRouter.enforceEmergencyAudioRoute()
-        nativeBridge.setVolume(2.5f)
+        postStatus("🚨 EMERGENCY ALERT: Playing tone, then voice message...")
+        nativeBridge.setVolume(0.45f) // Lowered, comfortable alert tone volume
 
         audioExecutor.execute {
-            val sirenPcm = nativeBridge.generateSiren(1.5f)
-            if (sirenPcm.isNotEmpty()) {
-                playPcmStreaming(sirenPcm, isAlarm = true)
+            try {
+                // 1. First: Short, clear alert tone (0.7s)
+                val sirenPcm = nativeBridge.generateSiren(0.7f)
+                if (sirenPcm.isNotEmpty()) {
+                    playPcmStreaming(sirenPcm, isAlarm = true)
+                }
+                // Short pause after tone before speech
+                Thread.sleep(200)
+            } catch (e: Throwable) {
+                Log.w(TAG, "Alert tone error: ${e.message}")
             }
 
+            // 2. Second: Speak the emergency message in the selected language
             mainHandler.post {
-                if (isTtsReady && androidTts != null) {
-                    val locale = getLocaleForLang(langCode)
-                    androidTts?.language = locale
-                    androidTts?.setPitch(1.3f)
-                    androidTts?.setSpeechRate(1.2f)
-                    androidTts?.speak(text, TextToSpeech.QUEUE_ADD, null, "iTantra_SOS")
-                }
+                speak(text, langCode)
             }
         }
     }

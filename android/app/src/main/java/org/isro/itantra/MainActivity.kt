@@ -90,7 +90,6 @@ class MainActivity : AppCompatActivity() {
 
     private var speechRecognizer: SpeechRecognizer? = null
     private var indicTTSManager: org.isro.itantra.tts.IndicTTSManager? = null
-    private var androidTts: android.speech.tts.TextToSpeech? = null
     private var lastRecognizedText: String = ""
     @Volatile private var isRecording = false
     @Volatile private var isWalkieTalkieMode = true
@@ -187,17 +186,6 @@ class MainActivity : AppCompatActivity() {
             }
         } catch (e: Throwable) {
             Log.w(TAG, "IndicTTSManager init notice: ${e.message}")
-        }
-
-        // Initialize Android System Text-To-Speech fallback
-        try {
-            androidTts = android.speech.tts.TextToSpeech(this) { status ->
-                if (status == android.speech.tts.TextToSpeech.SUCCESS) {
-                    androidTts?.language = Locale("en", "IN")
-                }
-            }
-        } catch (e: Throwable) {
-            Log.w(TAG, "TTS init notice: ${e.message}")
         }
 
         // Init WFB-ng Transport & Receiver Pipeline with applicationContext
@@ -842,35 +830,11 @@ class MainActivity : AppCompatActivity() {
         try {
             if (isEmergency && isWalkieTalkieMode) {
                 indicTTSManager?.playEmergencyAlert(text, langCode)
-                return
-            }
-            if (indicTTSManager != null) {
+            } else {
                 indicTTSManager?.speak(text, langCode)
-                return
             }
         } catch (e: Throwable) {
             Log.w(TAG, "IndicTTSManager speak notice: ${e.message}")
-        }
-
-        // Fallback to Android OS TTS
-        try {
-            val locale = when (langCode) {
-                "hi" -> Locale("hi", "IN")
-                "ta" -> Locale("ta", "IN")
-                "te" -> Locale("te", "IN")
-                "mr" -> Locale("mr", "IN")
-                "bn" -> Locale("bn", "IN")
-                "kn" -> Locale("kn", "IN")
-                "ml" -> Locale("ml", "IN")
-                "gu" -> Locale("gu", "IN")
-                "or" -> Locale("or", "IN")
-                "pa" -> Locale("pa", "IN")
-                else -> Locale("en", "IN")
-            }
-            androidTts?.language = locale
-            androidTts?.speak(text, android.speech.tts.TextToSpeech.QUEUE_FLUSH, null, "iTantra_TTS")
-        } catch (e: Throwable) {
-            Log.w(TAG, "Android TTS fallback notice: ${e.message}")
         }
     }
 
@@ -1215,8 +1179,6 @@ class MainActivity : AppCompatActivity() {
             silenceHandler.removeCallbacks(silenceRunnable)
             speechRecognizer?.destroy()
             indicTTSManager?.shutdown()
-            androidTts?.stop()
-            androidTts?.shutdown()
             transport?.stop()
             if (multicastLock?.isHeld == true) {
                 multicastLock?.release()
