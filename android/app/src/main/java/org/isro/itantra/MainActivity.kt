@@ -837,48 +837,37 @@ class MainActivity : AppCompatActivity() {
             }
         }.start()
     }
-
-
     private fun transmitMessage(rawText: String, langCode: String) {
         val correctedText = autoCorrectAndFormatText(rawText, langCode)
+        if (correctedText.isBlank()) return
 
         Log.i(TAG, "━━ STT_TRANSCRIPT  lang=$langCode  text='$correctedText'")
 
-        // Extract prosody from the PCM captured during this recording session
-        // (pitch + energy encoded in 16 bytes, included in the packet header)
+        // Extract prosody from PCM captured during recording (pitch + energy)
         val prosodyBytes = extractProsodyBytes()
         prosodyPcmBuffer.clear()
 
-        // Auto-detect the actual spoken language using MLKit Language ID.
-        // The spinner sets the *expected* language, but if the user switches languages
-        // mid-session without changing the spinner, we catch it here.
-        // If detection matches spinner → use spinner (reliable). If different → trust detection.
+        // SEND IMMEDIATELY — do not wait for async language detection
+        // Language detection runs in parallel for logging only
+        val packet: ByteArray = correctedText.toByteArray(Charsets.UTF_8)
+        Log.i(TAG, "━━ OUTGOING_MSG    lang=$langCode  bytes=${packet.size}  text='$correctedText'")
+
+        try {
+            transport?.sendVoiceMessage(packet, langCode, 1.toByte(), "RESCUE_ALL")
+        } catch (e: Throwable) {
+            Log.e(TAG, "Transport send error: ${e.message}", e)
+            runOnUiThread { statusText.text = "Send error: ${e.message}" }
+            return
+        }
+
+        runOnUiThread {
+            statusText.text = "Sent [$langCode]: $correctedText"
+        }
+
+        // Language detection runs async for diagnostics — does NOT block transmission
         detectLanguage(correctedText) { detectedLang ->
-            val effectiveLang = when {
-                detectedLang == null -> langCode  // detection failed, trust spinner
-                detectedLang == langCode -> langCode  // match, use spinner value
-                // Detection disagrees with spinner — only override for non-script-ambiguous cases
-                // (e.g. if spinner says "en" but text is clearly Hindi, trust detection)
-                else -> {
-                    Log.i(TAG, "━━ LANG_DETECTION  spinner=$langCode  detected=$detectedLang  → using $detectedLang")
-                    detectedLang
-                }
-            }
-
-            val packet: ByteArray = correctedText.toByteArray(Charsets.UTF_8)
-            Log.i(TAG, "━━ OUTGOING_MSG    lang=$effectiveLang  bytes=${packet.size}  prosody=${prosodyBytes.size}B  text='$correctedText'")
-
-            try {
-                // Send with effective language code so receiver knows the actual source language
-                transport?.sendVoiceMessage(packet, effectiveLang, 1.toByte(), "RESCUE_ALL")
-            } catch (e: Throwable) {
-                Log.e(TAG, "Transport send error: ${e.message}", e)
-                runOnUiThread { statusText.text = "Send error: ${e.message}" }
-                return@detectLanguage
-            }
-
-            runOnUiThread {
-                statusText.text = "Sent [$effectiveLang]: $correctedText"
+            if (detectedLang != null && detectedLang != langCode) {
+                Log.i(TAG, "━━ LANG_DETECTION  spinner=$langCode  detected=$detectedLang  (informational only)")
             }
         }
     }
@@ -1531,5 +1520,3 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {}
     }
 }
-
-
