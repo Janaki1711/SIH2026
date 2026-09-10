@@ -8,13 +8,19 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [MessageAuditLog::class],
-    version = 2,
+    entities = [
+        MessageAuditLog::class,
+        MeshPeerRegistry::class,
+        EmergencyCodebook::class
+    ],
+    version = 3,
     exportSchema = false
 )
 abstract class MessageDatabase : RoomDatabase() {
 
     abstract fun messageAuditLogDao(): MessageAuditLogDao
+    abstract fun meshPeerRegistryDao(): MeshPeerRegistryDao
+    abstract fun emergencyCodebookDao(): EmergencyCodebookDao
 
     companion object {
 
@@ -55,6 +61,45 @@ abstract class MessageDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Table 2: MeshPeerRegistry
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `mesh_peer_registry` (
+                        `nodeCallsign` TEXT NOT NULL PRIMARY KEY,
+                        `macOrP2pIp` TEXT NOT NULL DEFAULT '',
+                        `transportType` TEXT NOT NULL DEFAULT 'WiFi',
+                        `lastSeenTimestampMs` INTEGER NOT NULL DEFAULT 0,
+                        `linkQualityRssi` INTEGER NOT NULL DEFAULT 0,
+                        `batteryLevelPct` INTEGER NOT NULL DEFAULT -1,
+                        `hopCount` INTEGER NOT NULL DEFAULT 1
+                    )
+                    """.trimIndent()
+                )
+                // Table 3: EmergencyCodebook
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `emergency_codebook` (
+                        `codeId` TEXT NOT NULL PRIMARY KEY,
+                        `shortMacro` TEXT NOT NULL DEFAULT '',
+                        `expandedTextHi` TEXT NOT NULL DEFAULT '',
+                        `expandedTextTa` TEXT NOT NULL DEFAULT '',
+                        `expandedTextTe` TEXT NOT NULL DEFAULT '',
+                        `expandedTextMr` TEXT NOT NULL DEFAULT '',
+                        `expandedTextBn` TEXT NOT NULL DEFAULT '',
+                        `expandedTextKn` TEXT NOT NULL DEFAULT '',
+                        `expandedTextMl` TEXT NOT NULL DEFAULT '',
+                        `expandedTextGu` TEXT NOT NULL DEFAULT '',
+                        `expandedTextOr` TEXT NOT NULL DEFAULT '',
+                        `expandedTextEn` TEXT NOT NULL DEFAULT '',
+                        `priority` TEXT NOT NULL DEFAULT 'CRITICAL'
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
         @Volatile
         private var INSTANCE: MessageDatabase? = null
 
@@ -67,7 +112,7 @@ abstract class MessageDatabase : RoomDatabase() {
                     MessageDatabase::class.java,
                     "itantra_database"
                 )
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                     .build()
 
                 INSTANCE = instance
