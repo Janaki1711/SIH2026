@@ -105,59 +105,32 @@ class UdpTransceiver(
         return summaries
     }
 
-    private fun bindToWifiNetworkIfAvailable() {
+    private fun registerNetworkCallbackOnly() {
         if (context == null) return
         try {
             val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return
-
-            // Find active Wi-Fi network (including offline hotspot networks)
-            val wifiNetwork = cm.allNetworks.firstOrNull { network ->
-                val caps = cm.getNetworkCapabilities(network)
-                caps != null && (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
-                                 caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI_AWARE))
-            }
-
-            if (wifiNetwork != null) {
-                activeWifiNetwork = wifiNetwork
-                try {
-                    // bindProcessToNetwork routes all sockets through Wi-Fi — do NOT call
-                    // bindSocket() on an already-bound UDP socket as it silently breaks receive
-                    cm.bindProcessToNetwork(wifiNetwork)
-                    Log.i(TAG, "NET_INTERFACE Process bound to Wi-Fi network ($wifiNetwork)")
-                } catch (e: Throwable) {
-                    Log.w(TAG, "NET_INTERFACE Wi-Fi binding notice: ${e.message}")
-                }
-            }
-
-            // Register callback to rebind when hotspot Wi-Fi becomes available
             val request = NetworkRequest.Builder()
                 .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
                 .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
                 .build()
-
             networkCallback = object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) {
-                    Log.i(TAG, "NET_INTERFACE Wi-Fi network available: $network")
                     activeWifiNetwork = network
-                    try {
-                        cm.bindProcessToNetwork(network)
-                        Log.i(TAG, "NET_INTERFACE Process rebound to Wi-Fi network $network")
-                    } catch (e: Throwable) {
-                        Log.w(TAG, "NET_INTERFACE rebind notice: ${e.message}")
-                    }
+                    Log.i(TAG, "NET_INTERFACE Wi-Fi network available: $network")
                 }
                 override fun onLost(network: Network) {
-                    Log.w(TAG, "NET_INTERFACE Wi-Fi network lost: $network")
-                    if (activeWifiNetwork == network) {
-                        activeWifiNetwork = null
-                        try { cm.bindProcessToNetwork(null) } catch (e: Throwable) {}
-                    }
+                    if (activeWifiNetwork == network) activeWifiNetwork = null
                 }
             }
             cm.registerNetworkCallback(request, networkCallback!!)
         } catch (e: Throwable) {
-            Log.w(TAG, "Wi-Fi network binding notice: ${e.message}")
+            Log.w(TAG, "NetworkCallback register notice: ${e.message}")
         }
+    }
+
+    private fun bindToWifiNetworkIfAvailable() {
+        // Legacy — replaced by registerNetworkCallbackOnly() + no bindProcessToNetwork
+        registerNetworkCallbackOnly()
     }
 
     fun start() {
@@ -167,20 +140,29 @@ class UdpTransceiver(
         }
 
         try {
-            // Symmetrical single-socket transceiver on 0.0.0.0:8988
+            // Unbind process from any previously bound network so we get the default routing table
+            if (context != null) {
+                try {
+                    val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+                    cm?.bindProcessToNetwork(null)
+                } catch (e: Throwable) {}
+            }
+
+            // Bind socket to 0.0.0.0 — let the OS pick the correct interface via routing table
             socket = DatagramSocket(null).apply {
                 reuseAddress = true
                 broadcast = true
                 soTimeout = 1000
-                bind(InetSocketAddress(port))
+                bind(InetSocketAddress("0.0.0.0", port))
             }
 
             Log.i(TAG, "UDP_BIND local=0.0.0.0:$port bound=${socket?.isBound}")
             Log.i(TAG, "UDP_RECEIVER_READY port=$port")
             Log.i(TAG, "NET_INTERFACE active interfaces: ${getActiveInterfacesSummary().joinToString(" | ")}")
 
-            // Bind process to Wi-Fi network to avoid 5G/cellular routing issues
-            bindToWifiNetworkIfAvailable()
+            // Register network callback only — do NOT call bindProcessToNetwork or bindSocket
+            // as both interfere with the socket's routing after it's already bound
+            registerNetworkCallbackOnly()
         } catch (e: Throwable) {
             Log.e(TAG, "UDP_ERROR failed to bind UDP socket on port $port: ${e.message}", e)
             return
@@ -345,8 +327,9 @@ class UdpTransceiver(
 
     fun sendRawDirect(target: InetAddress, targetPort: Int = port, data: ByteArray) {
         try {
+            val s = socket ?: return
+            if (s.isClosed) return
             val packet = DatagramPacket(data, data.size, target, targetPort)
-            val s = socket ?: DatagramSocket().apply { broadcast = true }
             s.send(packet)
             txCount.incrementAndGet()
             Log.i(TAG, "UDP_TX dst=$target:$targetPort bytes=${data.size}")
