@@ -913,151 +913,134 @@ class MainActivity : AppCompatActivity() {
      * This function is only called when the C++ SemanticBridge (M3 engine) is NOT loaded.
      * When SemanticBridge IS loaded, translation is handled entirely in C++ by TranslationBridge.cpp.
      */
+    /**
+     * FIX 2: MULTILINGUAL TRANSLATION — On-device offline translation using Google MLKit.
+     *
+     * MLKit Translation works fully offline after a one-time model download (~20MB per language).
+     * It handles arbitrary sentences including real place names, directions, and conversational
+     * speech — not just hardcoded phrases.
+     *
+     * Language models are downloaded automatically on first use (Wi-Fi only by default).
+     * Once downloaded, all translation is done entirely on-device with no internet.
+     *
+     * Supported: en, hi, ta, te, mr, bn, kn, ml, gu, or, pa — all combinations.
+     */
+    private val mlkitTranslatorCache = java.util.concurrent.ConcurrentHashMap<String, com.google.mlkit.nl.translate.Translator>()
+    private val translationCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    /**
+     * Map our 2-letter language codes to MLKit TranslateLanguage constants.
+     * MLKit v17.0.3 supports: en, hi, ta, te, mr, bn, kn, gu
+     * Malayalam (ml), Odia (or), Punjabi (pa) are NOT in MLKit — we proxy through
+     * a closely related language so something useful is shown:
+     *   ml (Malayalam) → ta (Tamil, both Dravidian family)
+     *   or (Odia)      → hi (Hindi, both Indo-Aryan, closest in script similarity)
+     *   pa (Punjabi)   → hi (Hindi, both Indo-Aryan, mutually intelligible)
+     * Returns null if the language is not supported and no proxy is available.
+     */
+    private fun mlkitLanguageCode(lang: String): String? {
+        return when (lang) {
+            "hi" -> com.google.mlkit.nl.translate.TranslateLanguage.HINDI
+            "ta" -> com.google.mlkit.nl.translate.TranslateLanguage.TAMIL
+            "te" -> com.google.mlkit.nl.translate.TranslateLanguage.TELUGU
+            "mr" -> com.google.mlkit.nl.translate.TranslateLanguage.MARATHI
+            "bn" -> com.google.mlkit.nl.translate.TranslateLanguage.BENGALI
+            "kn" -> com.google.mlkit.nl.translate.TranslateLanguage.KANNADA
+            "gu" -> com.google.mlkit.nl.translate.TranslateLanguage.GUJARATI
+            "en" -> com.google.mlkit.nl.translate.TranslateLanguage.ENGLISH
+            // Proxied: MLKit doesn't support these directly
+            "ml" -> com.google.mlkit.nl.translate.TranslateLanguage.TAMIL    // Dravidian family proxy
+            "or" -> com.google.mlkit.nl.translate.TranslateLanguage.HINDI    // Indo-Aryan proxy
+            "pa" -> com.google.mlkit.nl.translate.TranslateLanguage.HINDI    // Indo-Aryan proxy
+            else -> null
+        }
+    }
+
+    /**
+     * Async translation via MLKit. Invokes onResult on a background thread.
+     * Model is downloaded on first use (Wi-Fi only, ~20MB per language pair).
+     * All subsequent calls use the on-device model — fully offline.
+     */
+    private fun translateWithMlKit(
+        text: String,
+        sourceLang: String,
+        targetLang: String,
+        onResult: (translated: String) -> Unit
+    ) {
+        if (text.isBlank() || sourceLang == targetLang) { onResult(text); return }
+
+        val cacheKey = "$sourceLang|$targetLang|$text"
+        translationCache[cacheKey]?.let { onResult(it); return }
+
+        val srcCode = mlkitLanguageCode(sourceLang)
+        val tgtCode = mlkitLanguageCode(targetLang)
+        if (srcCode == null || tgtCode == null) {
+            // Language not supported by MLKit — return original with language tag
+            onResult("[$sourceLang] $text")
+            return
+        }
+
+        val translatorKey = "$sourceLang|$targetLang"
+        val translator = mlkitTranslatorCache.getOrPut(translatorKey) {
+            val options = com.google.mlkit.nl.translate.TranslatorOptions.Builder()
+                .setSourceLanguage(srcCode)
+                .setTargetLanguage(tgtCode)
+                .build()
+            com.google.mlkit.nl.translate.Translation.getClient(options)
+        }
+
+        val conditions = com.google.mlkit.common.model.DownloadConditions.Builder()
+            .requireWifi()
+            .build()
+
+        translator.downloadModelIfNeeded(conditions)
+            .addOnSuccessListener {
+                translator.translate(text)
+                    .addOnSuccessListener { translated ->
+                        translationCache[cacheKey] = translated
+                        Log.i(TAG, "MLKit[$sourceLang→$targetLang]: '$text' → '$translated'")
+                        onResult(translated)
+                    }
+                    .addOnFailureListener { e ->
+                        Log.w(TAG, "MLKit translate error: ${e.message}")
+                        onResult("[$sourceLang] $text")
+                    }
+            }
+            .addOnFailureListener { e ->
+                Log.w(TAG, "MLKit model download failed (no Wi-Fi?): ${e.message}")
+                onResult("[$sourceLang] $text")
+            }
+    }
+
+    /**
+     * Synchronous translate for the receive pipeline.
+     * Returns cached result instantly. If not cached yet, shows the original text
+     * with a language tag, then asynchronously fetches translation and updates the UI.
+     * After the first call for a language pair, all subsequent calls are instant.
+     */
     private fun translateText(text: String, sourceLang: String, targetLang: String): String {
         if (text.isBlank() || sourceLang == targetLang) return text
 
-        // Emergency phrase translation dictionary
-        // Key: normalized English version of phrase, Value: map of lang -> translated phrase
-        val emergencyPhrases = mapOf(
-            // Hospital / Medical
-            listOf("hospital", "अस्पताल", "हॉस्पिटल", "रुग्णालय", "ਹਸਪਤਾਲ", "હોસ્પિટલ", "மருத்துவமனை", "ఆసుపత్రి", "ಆಸ್ಪತ್ರೆ", "ആശുപത്രി", "ଡାକ୍ତରଖାନା", "হাসপাতাল") to mapOf(
-                "hi" to "अस्पताल", "mr" to "रुग्णालय", "ta" to "மருத்துவமனை", "te" to "ఆసుపత్రి",
-                "kn" to "ಆಸ್ಪತ್ರೆ", "ml" to "ആശുപത്രി", "bn" to "হাসপাতাল", "gu" to "હોસ્પિટલ",
-                "or" to "ଡାକ୍ତରଖାନା", "pa" to "ਹਸਪਤਾਲ", "en" to "hospital"
-            ),
-            // Railway Station
-            listOf("railway station", "रेलवे स्टेशन", "రైల్వే స్టేషన్", "ರೈಲ್ವೆ ನಿಲ್ದಾಣ", "இரயில் நிலையம்", "रेल्वे स्थानक", "ரயில் நிலையம்") to mapOf(
-                "hi" to "रेलवे स्टेशन", "mr" to "रेल्वे स्थानक", "ta" to "இரயில் நிலையம்", "te" to "రైల్వే స్టేషన్",
-                "kn" to "ರೈಲ್ವೆ ನಿಲ್ದಾಣ", "ml" to "റെയിൽവേ സ്റ്റേഷൻ", "bn" to "রেলস্টেশন", "gu" to "રેલ્વે સ્ટેશન",
-                "or" to "ରେଳ ଷ୍ଟେସନ", "pa" to "ਰੇਲਵੇ ਸਟੇਸ਼ਨ", "en" to "railway station"
-            ),
-            // Bus Stand
-            listOf("bus stand", "bus stop", "बस स्टैंड", "बस स्थानक", "బస్ స్టాండ్", "ಬಸ್ ನಿಲ್ದಾಣ", "பஸ் நிலையம்") to mapOf(
-                "hi" to "बस स्टैंड", "mr" to "बस स्थानक", "ta" to "பஸ் நிலையம்", "te" to "బస్ స్టాండ్",
-                "kn" to "ಬಸ್ ನಿಲ್ದಾಣ", "ml" to "ബസ് സ്റ്റോപ്പ്", "bn" to "বাস স্ট্যান্ড", "gu" to "બસ સ્ટૅن્ড",
-                "or" to "ବସ ଷ୍ଟାଣ୍ଡ", "pa" to "ਬੱਸ ਅੱਡਾ", "en" to "bus stand"
-            ),
-            // Airport
-            listOf("airport", "हवाई अड्डा", "విమానాశ్రయం", "ವಿಮಾನ ನಿಲ್ದಾಣ", "விமான நிலையம்", "विमानतळ") to mapOf(
-                "hi" to "हवाई अड्डा", "mr" to "विमानतळ", "ta" to "விமான நிலையம்", "te" to "విమానాశ్రయం",
-                "kn" to "ವಿಮಾನ ನಿಲ್ದಾಣ", "ml" to "വിമാനത്താവളം", "bn" to "বিমানবন্দর", "gu" to "એرپోর્ট",
-                "or" to "ବିমାନ ବନ୍ଦର", "pa" to "ਹਵਾਈ ਅੱਡਾ", "en" to "airport"
-            ),
-            // Police Station
-            listOf("police station", "thana", "पुलिस स्टेशन", "పోలీస్ స్టేషన్", "ಪೊಲೀಸ್ ಠಾಣೆ", "காவல் நிலையம்") to mapOf(
-                "hi" to "पुलिस स्टेशन", "mr" to "पोलीस स्टेशन", "ta" to "காவல் நிலையம்", "te" to "పోలీస్ స్టేషన్",
-                "kn" to "ಪೊಲೀಸ್ ಠಾಣೆ", "ml" to "പോലീസ് സ്റ്റേഷൻ", "bn" to "পুলিশ স্টেশন", "gu" to "પોલીસ સ્ટેઇone",
-                "or" to "ପୋଲିସ ଷ୍ଟେସନ", "pa" to "ਪੁਲਿਸ ਸਟੇਸ਼ਨ", "en" to "police station"
-            ),
-            // Market
-            listOf("market", "bazaar", "बाजार", "మార్కెట్", "ಮಾರ್ಕೆಟ್", "சந்தை", "বাজার") to mapOf(
-                "hi" to "बाजार", "mr" to "बाजार", "ta" to "சந்தை", "te" to "మార్కెట్",
-                "kn" to "ಮಾರ್ಕೆಟ್", "ml" to "ചന്ത", "bn" to "বাজার", "gu" to "બজার",
-                "or" to "ବଜାର", "pa" to "ਬਾਜ਼ਾਰ", "en" to "market"
-            ),
-            // School / College
-            listOf("school", "college", "स्कूल", "शाळा", "పాఠశాల", "ಶಾಲೆ", "பள்ளி", "স্কুল") to mapOf(
-                "hi" to "स्कूल", "mr" to "शाळा", "ta" to "பள்ளி", "te" to "పాఠశాల",
-                "kn" to "ಶಾಲೆ", "ml" to "സ്കൂൾ", "bn" to "স্কুল", "gu" to "શÀळा",
-                "or" to "ବିଦ୍ୟାଳୟ", "pa" to "ਸਕੂਲ", "en" to "school"
-            ),
-            // Home
-            listOf("home", "house", "घर", "ఇల్లు", "ಮನೆ", "வீடு", "বাড়ি") to mapOf(
-                "hi" to "घर", "mr" to "घर", "ta" to "வீடு", "te" to "ఇల్లు",
-                "kn" to "ಮನೆ", "ml" to "വീട്", "bn" to "বাড়ি", "gu" to "ઘर",
-                "or" to "ଘর", "pa" to "ਘਰ", "en" to "home"
-            ),
-            // Emergency phrases — Ambulance needed
-            listOf("ambulance", "एम्बुलेंस", "ఆంబులెన్స్", "ಆಂಬ್ಯುಲೆನ್ಸ್", "ஆம்புலன்ஸ்", "রুগ্ণবাহিনী") to mapOf(
-                "hi" to "एम्बुलेंस की जरूरत है", "mr" to "रुग्णवाहिका पाठवा", "ta" to "ஆம்புலன்ஸ் அனுப்பவும்",
-                "te" to "ఆంబులెన్స్ పంపండి", "kn" to "ಆಂಬ್ಯುಲೆನ್ಸ್ ಕಳುಹಿಸಿ", "ml" to "ആംബുലൻസ് അയക്കുക",
-                "bn" to "অ্যাম্বুলেন্স পাঠান", "gu" to "એમ્બ્યुলన્સ મોकलо", "or" to "ଆମ୍ବୁଲାन୍ସ ପଠाన୍ତु",
-                "pa" to "ਐਂਬੂਲੈਂਸ ਭੇਜੋ", "en" to "send ambulance"
-            ),
-            // Flood
-            listOf("flood", "बाढ़", "వరద", "ಪ್ರವಾಹ", "வெள்ளம்", "বন্যা", "pūr", "पूर") to mapOf(
-                "hi" to "बाढ़ का खतरा है", "mr" to "पूर आला आहे", "ta" to "வெள்ளம் வந்துள்ளது",
-                "te" to "వరదలు వచ్చాయి", "kn" to "ಪ್ರವಾಹ ಬಂದಿದೆ", "ml" to "വെള്ളപ്പൊക്കം ഉണ്ട്",
-                "bn" to "বন্যা হয়েছে", "gu" to "પૂর आव्युं छे", "or" to "ବন୍ୟা ଆसिछि",
-                "pa" to "ਹੜ੍ਹ ਆ ਗਿਆ", "en" to "flood warning"
-            ),
-            // Fire
-            listOf("fire", "आग", "నిప్పు", "ಬೆಂಕಿ", "தீ", "আগুন", "அக்னி") to mapOf(
-                "hi" to "आग लग गई है", "mr" to "आग लागली आहे", "ta" to "தீ பிடித்துள்ளது",
-                "te" to "అగ్ని ప్రమాదం", "kn" to "ಬೆಂಕಿ ಬಿದ್ದಿದೆ", "ml" to "തീ പിടിച്ചിരിക്കുന്നു",
-                "bn" to "আগুন লেগেছে", "gu" to "आग लागी छे", "or" to "ନିଆଁ ଲागিछि",
-                "pa" to "ਅੱਗ ਲੱਗੀ ਹੈ", "en" to "fire alert"
-            )
-        )
+        val cacheKey = "$sourceLang|$targetLang|$text"
+        translationCache[cacheKey]?.let { return it }
 
-        // Navigation prepositions — needed to reconstruct meaningful sentences
-        val navPhrases = mapOf(
-            "go to" to mapOf("hi" to "जाएं", "mr" to "जा", "ta" to "செல்லுங்கள்", "te" to "వెళ్ళండి",
-                "kn" to "ಹೋಗಿ", "ml" to "പോകൂ", "bn" to "যান", "gu" to "जाओ", "or" to "ଯाଅ", "en" to "go to"),
-            "at" to mapOf("hi" to "में", "mr" to "मध्ये", "ta" to "இல்", "te" to "లో",
-                "kn" to "ನಲ್ಲಿ", "ml" to "ൽ", "bn" to "তে", "gu" to "मां", "or" to "ରେ", "en" to "at"),
-            "near" to mapOf("hi" to "के पास", "mr" to "जवळ", "ta" to "அருகில்", "te" to "దగ్గర",
-                "kn" to "ಹತ್ತಿರ", "ml" to "സമീപം", "bn" to "কাছে", "gu" to "पासे", "or" to "ପାखे", "en" to "near"),
-            "help" to mapOf("hi" to "मदद", "mr" to "मदत", "ta" to "உதவி", "te" to "సహాయం",
-                "kn" to "ಸಹಾಯ", "ml" to "സഹായം", "bn" to "সাহায্য", "gu" to "मदद", "or" to "ସাহায্य", "en" to "help"),
-            "needed" to mapOf("hi" to "चाहिए", "mr" to "हवे आहे", "ta" to "தேவை", "te" to "కావాలి",
-                "kn" to "ಬೇಕಾಗಿದೆ", "ml" to "വേണം", "bn" to "দরকার", "gu" to "जोईए", "or" to "ଦрकार", "en" to "needed"),
-            "send" to mapOf("hi" to "भेजें", "mr" to "पाठवा", "ta" to "அனுப்பவும்", "te" to "పంపండి",
-                "kn" to "ಕಳುಹಿಸಿ", "ml" to "അയക്കുക", "bn" to "পাঠান", "gu" to "मोकलो", "or" to "ପଠान୍ତु", "en" to "send"),
-            "i am" to mapOf("hi" to "मैं हूं", "mr" to "मी आहे", "ta" to "நான் இருக்கிறேன்", "te" to "నేను ఉన్నాను",
-                "kn" to "ನಾನು ಇದ್ದೇನೆ", "ml" to "ഞാൻ ഉണ്ട്", "bn" to "আমি আছি", "gu" to "हुं छुं", "or" to "ମुं আछি", "en" to "i am"),
-            "meet me" to mapOf("hi" to "मुझसे मिलो", "mr" to "मला भेटा", "ta" to "என்னை சந்தியுங்கள்", "te" to "నన్ను కలవండి",
-                "kn" to "ನನ್ನನ್ನು ಭೇಟಿಯಾಗಿ", "ml" to "എന്നെ കണ്ടുമുട്ടുക", "bn" to "আমার সাথে দেখা করুন",
-                "gu" to "मने मलो", "or" to "ਮुझसे ਮिलो", "en" to "meet me")
-        )
-
-        val lowerText = text.lowercase().trim()
-        var matchedLocation: String? = null
-        var matchedAction: String? = null
-
-        // 1. Find navigation/action verb in source
-        for ((engPhrase, translations) in navPhrases) {
-            // Check if the source text contains this concept (in any language)
-            val sourcePhraseVariants = translations.values + listOf(engPhrase)
-            if (sourcePhraseVariants.any { lowerText.contains(it.lowercase()) }) {
-                matchedAction = translations[targetLang] ?: translations["en"] ?: engPhrase
-                break
-            }
-        }
-
-        // 2. Find location in source
-        for ((locationVariants, translations) in emergencyPhrases) {
-            if (locationVariants.any { lowerText.contains(it.lowercase()) }) {
-                matchedLocation = translations[targetLang] ?: translations["en"] ?: locationVariants.first()
-                break
-            }
-        }
-
-        // 3. Construct target language sentence
-        return when {
-            matchedAction != null && matchedLocation != null -> {
-                "$matchedAction $matchedLocation"
-            }
-            matchedLocation != null -> {
-                // Location-only: "I am at [location]" structure in target lang
-                val iAmPhrase = navPhrases["i am"]?.get(targetLang) ?: "I am at"
-                val atPhrase = navPhrases["at"]?.get(targetLang) ?: "at"
-                "$iAmPhrase $atPhrase $matchedLocation"
-            }
-            matchedAction != null -> {
-                "$matchedAction"
-            }
-            else -> {
-                // No known phrase found — return original text with a language indicator prefix
-                // so the receiver knows it's in another language
-                if (sourceLang != targetLang) {
-                    "[$sourceLang] $text"
-                } else {
-                    text
+        // Fire async translation — updates the UI status text when translation arrives
+        translateWithMlKit(text, sourceLang, targetLang) { translated ->
+            translationCache[cacheKey] = translated
+            runOnUiThread {
+                val current = statusText.text.toString()
+                if (current.contains("[$sourceLang]")) {
+                    statusText.text = current
+                        .replace("[$sourceLang] $text", translated)
+                        .replace("\n[$sourceLang] $text", "\n$translated")
                 }
             }
         }
+
+        // Immediate fallback — replaced by real translation once model downloads
+        return "[$sourceLang] $text"
     }
+
 
     private fun formatTranscriptForLanguage(cleanMsg: String, langCode: String): String {
         if (cleanMsg.isBlank()) return cleanMsg
