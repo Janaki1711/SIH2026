@@ -192,6 +192,20 @@ class IndicTTSManager(
         }
     }
 
+    /**
+     * Apply sender's prosody characteristics to the Android TTS engine so the
+     * synthesized voice roughly matches the sender's pitch and speaking rate.
+     * Called before speak() when the packet contains prosody data.
+     */
+    fun applyProsodyToTts(pitchMultiplier: Float, speechRate: Float) {
+        try {
+            androidTts?.setPitch(pitchMultiplier.coerceIn(0.5f, 2.0f))
+            androidTts?.setSpeechRate(speechRate.coerceIn(0.5f, 2.0f))
+        } catch (e: Exception) {
+            Log.w(TAG, "applyProsodyToTts: ${e.message}")
+        }
+    }
+
     fun playEmergencyAlert(text: String, langCode: String) {
         postStatus("🚨 EMERGENCY ALERT: Playing tone, then voice message...")
         nativeBridge.setVolume(0.30f) // 30% alert tone volume

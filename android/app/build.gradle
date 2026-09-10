@@ -100,6 +100,10 @@ dependencies {
     // MLKit Translation — offline on-device translation for all Indian languages
     // Models (~20MB each) downloaded once on first use, then fully offline
     implementation 'com.google.mlkit:translate:17.0.3'
+
+    // MLKit Language ID — detect which language the user is speaking
+    // Tiny model (~1MB), works offline, no download needed
+    implementation 'com.google.mlkit:language-id:17.0.6'
     
     testImplementation 'junit:junit:4.13.2'
     implementation 'org.bouncycastle:bcprov-jdk18on:1.77'
