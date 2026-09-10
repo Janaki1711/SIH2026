@@ -297,10 +297,16 @@ class MainActivity : AppCompatActivity() {
 
             transport?.onLinkConfirmed = { peerCallsign, peerIp, rtt ->
                 runOnUiThread {
-                    val rttStr = if (rtt > 0) " | ⚡ RTT: ${rtt}ms" else ""
-                    netStatusText.text = "🟢 CONNECTED TO: $peerCallsign ($peerIp:8988)$rttStr\n📡 Two-Way Walkie-Talkie Mesh Active!"
+                    val rttStr = if (rtt > 0) " | RTT: ${rtt}ms" else ""
+                    // Update new UI status dot
+                    findViewById<android.widget.TextView?>(R.id.statusDotText)?.let {
+                        it.text = "Mesh Online • ${if (rtt > 0) "${rtt}ms" else "—"}"
+                        it.setTextColor(android.graphics.Color.parseColor("#065F46"))
+                    }
+                    findViewById<android.widget.TextView?>(R.id.peerNodeLabel)?.text = peerCallsign
+                    // Legacy status bar (now hidden but keep for logcat)
                     netStatusText.setTextColor(Color.parseColor("#00E676"))
-                    statusText.text = "🟢 Connected to $peerCallsign ($peerIp:8988)$rttStr"
+                    statusText.text = "Connected to $peerCallsign ($peerIp:8988)$rttStr"
                 }
             }
 
@@ -330,31 +336,168 @@ class MainActivity : AppCompatActivity() {
         customMsgInput = findViewById(R.id.customMsgInput)
         btnSendCustom = findViewById(R.id.btnSendCustom)
 
-        btnModeWalkieTalkie.setOnClickListener {
-            isWalkieTalkieMode = true
-            btnModeWalkieTalkie.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#00E5FF"))
-            btnModeWalkieTalkie.setTextColor(Color.parseColor("#0B0E14"))
-            btnModePhone.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#374151"))
-            btnModePhone.setTextColor(Color.parseColor("#FFFFFF"))
-            statusText.text = "📻 Mode: Tactical Walkie-Talkie (PTT active, high volume alerts)"
+        // ── NEW UI: additional view references ────────────────────────
+        val pttLabel      = findViewById<android.widget.TextView?>(R.id.pttLabel)
+        val pttIcon       = findViewById<android.widget.TextView?>(R.id.pttIcon)
+        val pttStateDot   = findViewById<android.view.View?>(R.id.pttStateDot)
+        val pttStateText  = findViewById<android.widget.TextView?>(R.id.pttStateText)
+        val pttRingOuter  = findViewById<android.view.View?>(R.id.startButton)  // reuse parent
+        val txMsgText     = findViewById<android.widget.TextView?>(R.id.txMessageText)
+        val rxLangLbl     = findViewById<android.widget.TextView?>(R.id.rxLangLabel)
+        val rxTimeLbl     = findViewById<android.widget.TextView?>(R.id.rxTimeLabel)
+        val txLangLbl     = findViewById<android.widget.TextView?>(R.id.txLangLabel)
+        val txTimeLbl     = findViewById<android.widget.TextView?>(R.id.txTimeLabel)
+        val statusDotText = findViewById<android.widget.TextView?>(R.id.statusDotText)
+        val peerNodeLabel = findViewById<android.widget.TextView?>(R.id.peerNodeLabel)
+        val diagSheet     = findViewById<android.view.View?>(R.id.diagSheet)
+        val diagPeerIp    = findViewById<android.widget.EditText?>(R.id.diagPeerIpInput)
+        val diagPing      = findViewById<android.widget.Button?>(R.id.btnDiagPing)
+        val diagConnect   = findViewById<android.widget.Button?>(R.id.btnDiagConnect)
+        val diagCpu       = findViewById<android.widget.TextView?>(R.id.diagCpu)
+        val diagRam       = findViewById<android.widget.TextView?>(R.id.diagRam)
+        val diagBattery   = findViewById<android.widget.TextView?>(R.id.diagBattery)
+        val diagTxRx      = findViewById<android.widget.TextView?>(R.id.diagTxRx)
+        val diagPayload   = findViewById<android.widget.TextView?>(R.id.diagPayload)
+        val diagAirtime   = findViewById<android.widget.TextView?>(R.id.diagAirtime)
+        val diagCarrier   = findViewById<android.widget.TextView?>(R.id.diagCarrier)
+        val diagLogText   = findViewById<android.widget.TextView?>(R.id.diagLogText)
+        val btnCloseDiag  = findViewById<android.widget.Button?>(R.id.btnCloseDiag)
+        val peerChip      = findViewById<android.view.View?>(R.id.peerChip)
+
+        // ── PTT HOLD-TO-TALK on the new circular button ───────────────
+        startButton.setOnTouchListener { v, event ->
+            when (event.action) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    // Visual: go red/active
+                    startButton.background = getDrawable(R.drawable.ptt_btn_bg_active)
+                    pttLabel?.text = "TRANSMITTING"
+                    pttStateDot?.background = getDrawable(R.drawable.dot_red)
+                    pttStateText?.text = "TRANSMITTING"
+                    pttStateText?.setTextColor(Color.parseColor("#EF4444"))
+                    if (!isRecording) {
+                        if (checkAndRequestAudioPermission()) startRecording()
+                    }
+                    v.performClick()
+                }
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                    // Visual: restore idle
+                    startButton.background = getDrawable(R.drawable.ptt_btn_bg)
+                    pttLabel?.text = "HOLD TO SPEAK"
+                    pttStateDot?.background = getDrawable(R.drawable.dot_grey)
+                    pttStateText?.text = "CARRIER IDLE"
+                    pttStateText?.setTextColor(Color.parseColor("#475569"))
+                    if (isRecording) {
+                        silenceHandler.removeCallbacks(silenceRunnable)
+                        isRecording = false
+                        stopRecordingAndTranscribe()
+                    }
+                }
+            }
+            true
         }
 
-        btnModePhone.setOnClickListener {
-            isWalkieTalkieMode = false
-            btnModePhone.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#00E5FF"))
-            btnModePhone.setTextColor(Color.parseColor("#0B0E14"))
-            btnModeWalkieTalkie.backgroundTintList = android.content.res.ColorStateList.valueOf(Color.parseColor("#374151"))
-            btnModeWalkieTalkie.setTextColor(Color.parseColor("#FFFFFF"))
-            statusText.text = "📱 Mode: Standard Phone (Normal media voice notes & text)"
+        // ── RECEIVED MESSAGE display helper ─────────────────────────
+        // Override transport callback to also update the new card views
+        val originalDelivered = transport?.onVoicePayloadDelivered
+        transport?.onVoicePayloadDelivered = existingHandler@{ origin, language, priority, payload ->
+            originalDelivered?.invoke(origin, language, priority, payload)
+            // Update RX card metadata
+            val tLang = if (::langSpinner.isInitialized && langSpinner.selectedItem != null)
+                languageMap[langSpinner.selectedItem.toString()]?.substringBefore("-") ?: "en"
+            else "en"
+            val srcDisplay = language.uppercase()
+            val tgtDisplay = tLang.uppercase()
+            runOnUiThread {
+                rxLangLbl?.text = "$srcDisplay → $tgtDisplay"
+                rxTimeLbl?.text = "from $origin • just now"
+                peerNodeLabel?.text = origin
+                // Update TX/RX counters in diagnostics
+                val info = transport?.getDiagnosticInfo() ?: emptyMap()
+                diagTxRx?.text = "${info["txCount"] ?: 0} / ${info["rxCount"] ?: 0}"
+            }
         }
 
+        // ── DIAGNOSTICS SHEET toggle ─────────────────────────────────
+        peerChip?.setOnClickListener {
+            val allIps = getAllLocalIpAddresses()
+            diagPeerIp?.setText(peerIpInput.text.toString().ifEmpty { allIps.firstOrNull() ?: "" })
+            diagSheet?.visibility = android.view.View.VISIBLE
+            updateDiagnosticsPanel(diagCpu, diagRam, diagBattery, diagTxRx, diagPayload, diagAirtime, diagCarrier, diagLogText)
+        }
+        btnCloseDiag?.setOnClickListener { diagSheet?.visibility = android.view.View.GONE }
+
+        // PING from diagnostics sheet
+        diagPing?.setOnClickListener {
+            val ip = diagPeerIp?.text.toString().trim()
+            if (ip.isNotEmpty()) {
+                diagLogText?.append("\n> PING → $ip:8988")
+                transport?.pingPeer(ip, timeoutMs = 1500L, maxAttempts = 3) { success, peer, rtt, msg ->
+                    runOnUiThread {
+                        if (success) {
+                            diagLogText?.append("\n> ACK from $peer  RTT: ${rtt}ms")
+                            peerNodeLabel?.text = peer
+                        } else {
+                            diagLogText?.append("\n> TIMEOUT: no response from $ip")
+                        }
+                    }
+                }
+            }
+        }
+
+        // CONNECT from diagnostics sheet
+        diagConnect?.setOnClickListener {
+            val ip = diagPeerIp?.text.toString().trim()
+            if (ip.isNotEmpty()) {
+                peerIpInput.setText(ip)
+                btnConnectPeer.performClick()
+                diagSheet?.visibility = android.view.View.GONE
+            }
+        }
+
+        // Update diagnostics every 3 seconds when sheet is visible
+        val diagHandler = android.os.Handler(android.os.Looper.getMainLooper())
+        val diagRunnable = object : Runnable {
+            override fun run() {
+                if (diagSheet?.visibility == android.view.View.VISIBLE) {
+                    updateDiagnosticsPanel(diagCpu, diagRam, diagBattery, diagTxRx, diagPayload, diagAirtime, diagCarrier, diagLogText)
+                }
+                diagHandler.postDelayed(this, 3000)
+            }
+        }
+        diagHandler.postDelayed(diagRunnable, 3000)
+
+        // Update sent card when transmitMessage runs — hook via statusText observer
+        // The statusText.text starts with "Sent [lang]:" — parse and push to tx card
+        val txWatcher = object : android.text.TextWatcher {
+            override fun afterTextChanged(s: android.text.Editable?) {
+                val txt = s?.toString() ?: return
+                if (txt.startsWith("Sent [")) {
+                    val langEnd = txt.indexOf("]:")
+                    if (langEnd > 0) {
+                        val lang = txt.substring(6, langEnd).uppercase()
+                        val msg = txt.substring(langEnd + 2).trim()
+                        txMsgText?.text = msg
+                        txLangLbl?.text = lang
+                        txTimeLbl?.text = "just now"
+                    }
+                }
+            }
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+        }
+        statusText.addTextChangedListener(txWatcher)
+
+        // Initial IP display in status dot text
         val allIps = getAllLocalIpAddresses()
         val ipDisplay = if (allIps.isNotEmpty()) allIps.joinToString(" / ") else "Offline"
-        // Show IP and instructions — don't try to guess campus vs hotspot from IP alone
-        // since OnePlus hotspot can use any 10.x.x.x range
-        netStatusText.text = "📱 THIS DEVICE IP: $ipDisplay\n👉 Enter the OTHER phone's IP below:"
-        netStatusText.setTextColor(Color.parseColor("#00E5FF"))
-        peerIpInput.hint = "Enter OTHER Phone's IP"
+        statusDotText?.text = "Searching... | $ipDisplay"
+
+        // Update peer node label and status when connection is established
+        // (transport callbacks handle this via onPeerDiscovered / onLinkConfirmed)
+
+        // Mode buttons (hidden but keep functional)
+        btnModeWalkieTalkie.setOnClickListener { isWalkieTalkieMode = true }
+        btnModePhone.setOnClickListener { isWalkieTalkieMode = false }
 
         btnConnectPeer.setOnClickListener {
             val ip = peerIpInput.text.toString().trim()
@@ -1502,6 +1645,60 @@ class MainActivity : AppCompatActivity() {
 
     private fun getLocalIpAddress(): String {
         return getAllLocalIpAddresses().firstOrNull() ?: "Offline"
+    }
+
+
+    private fun updateDiagnosticsPanel(
+        diagCpu: android.widget.TextView?,
+        diagRam: android.widget.TextView?,
+        diagBattery: android.widget.TextView?,
+        diagTxRx: android.widget.TextView?,
+        diagPayload: android.widget.TextView?,
+        diagAirtime: android.widget.TextView?,
+        diagCarrier: android.widget.TextView?,
+        diagLog: android.widget.TextView?
+    ) {
+        try {
+            // RAM
+            val am = getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            val mi = android.app.ActivityManager.MemoryInfo()
+            am.getMemoryInfo(mi)
+            val ramUsed = ((mi.totalMem - mi.availMem) / (1024 * 1024)).toInt()
+            diagRam?.text = "$ramUsed MB"
+            diagCpu?.text = "—"  // /proc/stat needs root on modern Android
+
+            // Battery
+            val battIntent = registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
+            val level = battIntent?.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1) ?: -1
+            val scale = battIntent?.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, 100) ?: 100
+            val bat = if (level >= 0) "${ level * 100 / scale }%" else "--"
+            diagBattery?.text = bat
+            if (level * 100 / scale < 20) diagBattery?.setTextColor(android.graphics.Color.parseColor("#EF4444"))
+            else if (level * 100 / scale < 50) diagBattery?.setTextColor(android.graphics.Color.parseColor("#F59E0B"))
+            else diagBattery?.setTextColor(android.graphics.Color.parseColor("#059669"))
+
+            // Transport counters
+            val info = transport?.getDiagnosticInfo() ?: emptyMap()
+            val tx = info["txCount"] ?: "0"
+            val rx = info["rxCount"] ?: "0"
+            diagTxRx?.text = "$tx / $rx"
+            diagCarrier?.text = (info["carrier"] ?: "WI-FI").uppercase()
+            diagPayload?.text = "—"
+            diagAirtime?.text = "—"
+
+            // Append log entry
+            val peers = info["discoveredPeers"] ?: ""
+            if (peers.isNotEmpty()) {
+                val ts = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US).format(java.util.Date())
+                val logEntry = "\n> [$ts] Peers: $peers  TX:$tx RX:$rx"
+                val current = diagLog?.text?.toString() ?: ""
+                val logLines = current.split("\n")
+                val trimmed = if (logLines.size > 8) logLines.takeLast(8).joinToString("\n") else current
+                diagLog?.text = trimmed + logEntry
+            }
+        } catch (e: Throwable) {
+            android.util.Log.w(TAG, "Diagnostics update error: ${e.message}")
+        }
     }
 
     override fun onDestroy() {
