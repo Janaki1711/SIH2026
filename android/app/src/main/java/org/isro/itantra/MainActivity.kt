@@ -218,26 +218,24 @@ class MainActivity : AppCompatActivity() {
 
                     val decodedText = try {
                         if (org.isro.itantra.semantic.SemanticBridge.isLibraryLoaded) {
-                            // FIX 2: SemanticBridge path — decompress and translate to receiver's targetLang
-                            // The C++ engine uses targetLang to realize the semantic result in the correct language
+                            // SemanticBridge path — decompress and translate to receiver's targetLang in C++
                             org.isro.itantra.semantic.SemanticBridge.decompressAndTranslate(payload, targetLang)
                         } else {
-                            // FIX 2: Raw text fallback path — translate from source to target language
+                            // Raw text fallback — translate from source to target language via MLKit
                             val rawText = String(payload, java.nio.charset.StandardCharsets.UTF_8).trim()
-                            android.util.Log.i(TAG, "SemanticBridge not loaded — raw payload: '$rawText' src=$sourceLang target=$targetLang")
-
-                            // FIX 1 & 2: Translate the raw text if source != target language
+                            android.util.Log.i(TAG, "Raw payload: '$rawText' src=$sourceLang target=$targetLang")
                             if (sourceLang != targetLang && rawText.isNotBlank()) {
-                                translateText(rawText, sourceLang, targetLang)
+                                // FIX 2: pass speakAloud=true so TTS fires when async translation arrives
+                                translateText(rawText, sourceLang, targetLang, speakAloud = true, isAlert = priority.toInt() >= 1)
                             } else {
                                 rawText
                             }
                         }
                     } catch (e: Throwable) {
-                        Log.w(TAG, "Semantic decompress fallback: ${e.message}")
+                        Log.w(TAG, "Decode fallback: ${e.message}")
                         val rawText = String(payload, java.nio.charset.StandardCharsets.UTF_8).trim()
                         if (sourceLang != targetLang && rawText.isNotBlank()) {
-                            translateText(rawText, sourceLang, targetLang)
+                            translateText(rawText, sourceLang, targetLang, speakAloud = true, isAlert = priority.toInt() >= 1)
                         } else {
                             rawText
                         }
@@ -579,7 +577,9 @@ class MainActivity : AppCompatActivity() {
                 speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
                 speechRecognizer?.setRecognitionListener(object : RecognitionListener {
                     override fun onReadyForSpeech(params: Bundle?) {
-                        runOnUiThread { statusText.text = "🎙️ Listening (English)... Speak clearly into mic!" }
+                        val currentLang = if (::langSpinner.isInitialized && langSpinner.selectedItem != null)
+                            langSpinner.selectedItem.toString() else "Selected language"
+                        runOnUiThread { statusText.text = "🎙️ Listening ($currentLang)... Speak now!" }
                         resetSilenceTimer()
                     }
                     override fun onBeginningOfSpeech() {
@@ -674,91 +674,47 @@ class MainActivity : AppCompatActivity() {
             isTransmitted = false
             totalSamplesPushed = 0L
             lastRecognizedText = ""
+
             val selectedLangName = if (::langSpinner.isInitialized && langSpinner.selectedItem != null) {
                 langSpinner.selectedItem.toString()
-            } else {
-                "English (India)"
-            }
+            } else "English (India)"
+
             val langTag = languageMap[selectedLangName] ?: "en-IN"
             val langCode = langTag.substringBefore("-")
-            val isEnglish = langTag.startsWith("en")
 
-            statusText.text = "🎙️ Listening ($selectedLangName)... Speak clearly into mic!"
+            statusText.text = "🎙️ Listening ($selectedLangName)... Speak now!"
+            Log.i(TAG, "[STT] Starting for language: $selectedLangName ($langTag)")
 
-            if (isEnglish) {
-                // --- PATH 2: DEDICATED ENGLISH ASR ARCHITECTURE ---
-                Log.i(TAG, "[LANGUAGE_ROUTER] Language: English ($langTag) -> Route: Dedicated English ASR")
-                val speechIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, langTag)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, langTag)
-                    putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, langTag)
-                    putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                    putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-                    putExtra("android.speech.extra.DICTATION_MODE", true)
-                }
-                runOnUiThread {
-                    try {
-                        speechRecognizer?.cancel()
-                        speechRecognizer?.startListening(speechIntent)
-                    } catch (e: Throwable) {
-                        Log.w(TAG, "SpeechRecognizer start listening error: ${e.message}")
-                    }
-                }
-            } else {
-                // --- PATH 1: DEDICATED INDIC CONFORMER ASR ARCHITECTURE ---
-                Log.i(TAG, "[LANGUAGE_ROUTER] Language: Indic ($langTag) -> Route: AI4Bharat IndicConformer")
-                if (NativeSTTBridge.isLibraryLoaded) {
-                    NativeSTTBridge.safeStartAudioCapture()
-                }
-
-                if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                    try {
-                        val minBuf = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-                        val bufferSize = maxOf(minBuf, 8192)
-
-                        var record: AudioRecord? = AudioRecord(
-                            MediaRecorder.AudioSource.VOICE_RECOGNITION,
-                            16000,
-                            AudioFormat.CHANNEL_IN_MONO,
-                            AudioFormat.ENCODING_PCM_16BIT,
-                            bufferSize
-                        )
-                        if (record?.state != AudioRecord.STATE_INITIALIZED) {
-                            record?.release()
-                            record = AudioRecord(
-                                MediaRecorder.AudioSource.MIC,
-                                16000,
-                                AudioFormat.CHANNEL_IN_MONO,
-                                AudioFormat.ENCODING_PCM_16BIT,
-                                bufferSize
-                            )
-                        }
-
-                        if (record?.state == AudioRecord.STATE_INITIALIZED) {
-                            audioRecord = record
-                            audioRecord?.startRecording()
-                            recordingThread = Thread {
-                                val pcm = ShortArray(512)
-                                while (isRecording && audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
-                                    val read = audioRecord?.read(pcm, 0, pcm.size) ?: 0
-                                    if (read > 0 && NativeSTTBridge.isLibraryLoaded) {
-                                        NativeSTTBridge.safePushAudioPCM(pcm, read)
-                                        totalSamplesPushed += read
-                                    }
-                                }
-                            }.apply { start() }
-                            Log.i(TAG, "Hardware microphone capture active for Indic STT at 16kHz mono.")
-                        } else {
-                            Log.e(TAG, "AudioRecord failed to initialize.")
-                        }
-                    } catch (e: Throwable) {
-                        Log.w(TAG, "AudioRecord hardware mic stream notice: ${e.message}")
-                    }
+            // PRIMARY PATH: Android SpeechRecognizer — works for ALL languages (en, hi, te, mr, kn, etc.)
+            // Both OnePlus and Motorola have Google's speech service supporting all Indian languages.
+            // The ONNX native path is kept as a secondary fallback below if SpeechRecognizer fails.
+            val speechIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, langTag)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, langTag)
+                putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, langTag)
+                putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+                putExtra("android.speech.extra.DICTATION_MODE", true)
+                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+            }
+            runOnUiThread {
+                try {
+                    speechRecognizer?.cancel()
+                    speechRecognizer?.startListening(speechIntent)
+                } catch (e: Throwable) {
+                    Log.w(TAG, "SpeechRecognizer startListening error: ${e.message}")
+                    // Fallback to ONNX native path if SpeechRecognizer throws
+                    startNativeIndicSTT(langCode)
                 }
             }
 
-            // Start 10-second VAD silence auto-stop timer
+            // Also start ONNX capture in parallel if library is loaded — acts as a silent backup
+            // Its result is only used if SpeechRecognizer returns empty/error
+            if (NativeSTTBridge.isLibraryLoaded && !langTag.startsWith("en")) {
+                startNativeIndicSTT(langCode)
+            }
+
             resetSilenceTimer()
 
         } catch (e: Throwable) {
@@ -767,79 +723,112 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Start native Indic ONNX STT audio capture (AI4Bharat IndicConformer) */
+    private fun startNativeIndicSTT(langCode: String) {
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return
+        try {
+            if (NativeSTTBridge.isLibraryLoaded) NativeSTTBridge.safeStartAudioCapture()
+            val minBuf = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+            val bufferSize = maxOf(minBuf, 8192)
+            var record: AudioRecord? = try {
+                AudioRecord(MediaRecorder.AudioSource.VOICE_RECOGNITION, 16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize)
+            } catch (e: Throwable) { null }
+            if (record?.state != AudioRecord.STATE_INITIALIZED) {
+                record?.release()
+                record = try {
+                    AudioRecord(MediaRecorder.AudioSource.MIC, 16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize)
+                } catch (e: Throwable) { null }
+            }
+            if (record?.state == AudioRecord.STATE_INITIALIZED) {
+                audioRecord = record
+                audioRecord?.startRecording()
+                recordingThread = Thread {
+                    val pcm = ShortArray(512)
+                    while (isRecording && audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                        val read = audioRecord?.read(pcm, 0, pcm.size) ?: 0
+                        if (read > 0 && NativeSTTBridge.isLibraryLoaded) {
+                            NativeSTTBridge.safePushAudioPCM(pcm, read)
+                            totalSamplesPushed += read
+                        }
+                    }
+                }.apply { start() }
+                Log.i(TAG, "ONNX native STT capture started for $langCode")
+            }
+        } catch (e: Throwable) {
+            Log.w(TAG, "Native STT start error: ${e.message}")
+        }
+    }
+
+
     private fun stopRecordingAndTranscribe() {
         val selectedLangName = if (::langSpinner.isInitialized && langSpinner.selectedItem != null) {
             langSpinner.selectedItem.toString()
-        } else {
-            "English (India)"
-        }
+        } else "English (India)"
         val langTag = languageMap[selectedLangName] ?: "en-IN"
         val langCode = langTag.substringBefore("-")
-        val isEnglish = langTag.startsWith("en")
 
-        if (isEnglish) {
-            runOnUiThread {
-                try {
-                    speechRecognizer?.stopListening()
-                } catch (e: Throwable) {
-                    Log.w(TAG, "SpeechRecognizer stop listening notice: ${e.message}")
-                }
-                silenceHandler.postDelayed({
-                    if (!isTransmitted && lastRecognizedText.isNotBlank()) {
+        silenceHandler.removeCallbacks(silenceRunnable)
+        isRecording = false
+
+        // Stop SpeechRecognizer — onResults() will fire automatically and call transmitMessage()
+        runOnUiThread {
+            try { speechRecognizer?.stopListening() } catch (e: Throwable) {}
+            // Give SpeechRecognizer 800ms to return results before falling back to ONNX
+            silenceHandler.postDelayed({
+                if (!isTransmitted) {
+                    // SpeechRecognizer returned something — use it
+                    if (lastRecognizedText.isNotBlank()) {
                         isTransmitted = true
                         transmitMessage(lastRecognizedText, langCode)
+                    } else {
+                        // SpeechRecognizer returned nothing — try ONNX native result
+                        tryNativeSTTResult(langCode)
                     }
-                }, 600)
-            }
-        } else {
-            Thread {
-                try {
-                    isRecording = false
-                    silenceHandler.removeCallbacks(silenceRunnable)
-
-                    try {
-                        recordingThread?.join(500)
-                    } catch (e: Throwable) {}
-
-                    try {
-                        audioRecord?.stop()
-                        audioRecord?.release()
-                        audioRecord = null
-                    } catch (e: Throwable) {}
-
-                    // Query Native C++ STT Bridge (AI4Bharat Indic Conformer + Silero VAD)
-                    var nativeMsg = ""
-                    if (NativeSTTBridge.isLibraryLoaded) {
-                        nativeMsg = NativeSTTBridge.safeStopAudioCaptureAndTranscribe(langCode)
-                    }
-
-                    val cleanMsg = nativeMsg.trim()
-                    val processedMsg = convertIndicScript(cleanMsg, langCode)
-
-                    val candidateText = when {
-                        processedMsg.isNotBlank() && processedMsg != "आ" && processedMsg != "अ" && processedMsg != "aa" && processedMsg != "a" && !processedMsg.startsWith("No speech") && !processedMsg.contains("Exception") -> processedMsg
-                        totalSamplesPushed >= 3200 -> {
-                            val durMs = totalSamplesPushed / 16
-                            "Voice Alert (${durMs}ms captured: emergency message)"
-                        }
-                        else -> ""
-                    }
-
-                    runOnUiThread {
-                        if (candidateText.isNotBlank()) {
-                            transmitMessage(candidateText, langCode)
-                        } else {
-                            statusText.text = "Result:\nNo speech detected. Hold mic close and speak clearly."
-                        }
-                    }
-
-                } catch (e: Throwable) {
-                    Log.e(TAG, "Error stopping recording: ${e.message}", e)
-                    runOnUiThread { statusText.text = "Recording stopped." }
                 }
-            }.start()
+            }, 800)
         }
+
+        // Stop native ONNX audio capture (runs in parallel)
+        Thread {
+            try {
+                recordingThread?.join(300)
+            } catch (e: Throwable) {}
+            try { audioRecord?.stop(); audioRecord?.release(); audioRecord = null } catch (e: Throwable) {}
+        }.start()
     }
+
+    /** Get transcription result from ONNX native STT engine and transmit if not already done */
+    private fun tryNativeSTTResult(langCode: String) {
+        Thread {
+            try {
+                var nativeMsg = ""
+                if (NativeSTTBridge.isLibraryLoaded) {
+                    nativeMsg = NativeSTTBridge.safeStopAudioCaptureAndTranscribe(langCode)
+                }
+                val cleanMsg = nativeMsg.trim()
+                val processedMsg = convertIndicScript(cleanMsg, langCode)
+                val candidateText = when {
+                    processedMsg.isNotBlank()
+                        && processedMsg !in listOf("आ", "अ", "aa", "a", "")
+                        && !processedMsg.startsWith("No speech")
+                        && !processedMsg.contains("Exception") -> processedMsg
+                    totalSamplesPushed >= 3200 -> "Voice alert (${totalSamplesPushed / 16}ms captured)"
+                    else -> ""
+                }
+                runOnUiThread {
+                    if (candidateText.isNotBlank() && !isTransmitted) {
+                        isTransmitted = true
+                        transmitMessage(candidateText, langCode)
+                    } else if (!isTransmitted) {
+                        statusText.text = "No speech detected. Hold mic close and speak clearly."
+                    }
+                }
+            } catch (e: Throwable) {
+                Log.e(TAG, "ONNX STT result error: ${e.message}", e)
+            }
+        }.start()
+    }
+
 
     private fun transmitMessage(rawText: String, langCode: String) {
         val correctedText = autoCorrectAndFormatText(rawText, langCode)
@@ -1015,29 +1004,45 @@ class MainActivity : AppCompatActivity() {
     /**
      * Synchronous translate for the receive pipeline.
      * Returns cached result instantly. If not cached yet, shows the original text
-     * with a language tag, then asynchronously fetches translation and updates the UI.
+     * with a language tag, then asynchronously fetches translation and updates the UI + TTS.
      * After the first call for a language pair, all subsequent calls are instant.
      */
-    private fun translateText(text: String, sourceLang: String, targetLang: String): String {
+    private fun translateText(
+        text: String,
+        sourceLang: String,
+        targetLang: String,
+        speakAloud: Boolean = false,
+        isAlert: Boolean = false
+    ): String {
         if (text.isBlank() || sourceLang == targetLang) return text
 
         val cacheKey = "$sourceLang|$targetLang|$text"
-        translationCache[cacheKey]?.let { return it }
+        translationCache[cacheKey]?.let { cached ->
+            // Cache hit — play TTS immediately if requested
+            if (speakAloud && cached.isNotBlank()) playTTS(cached, targetLang, isAlert)
+            return cached
+        }
 
-        // Fire async translation — updates the UI status text when translation arrives
+        // Fire async translation — updates the UI and plays TTS when translation arrives
         translateWithMlKit(text, sourceLang, targetLang) { translated ->
             translationCache[cacheKey] = translated
             runOnUiThread {
+                // Update status text if it still shows the placeholder
                 val current = statusText.text.toString()
                 if (current.contains("[$sourceLang]")) {
-                    statusText.text = current
+                    val updated = current
                         .replace("[$sourceLang] $text", translated)
                         .replace("\n[$sourceLang] $text", "\n$translated")
+                    statusText.text = updated
+                }
+                // FIX 2: Play TTS in receiver's target language once translation is ready
+                if (speakAloud && translated.isNotBlank() && !translated.startsWith("[$sourceLang]")) {
+                    playTTS(translated, targetLang, isAlert)
                 }
             }
         }
 
-        // Immediate fallback — replaced by real translation once model downloads
+        // Immediate fallback — replaced by real translation once MLKit model downloads
         return "[$sourceLang] $text"
     }
 
