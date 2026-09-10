@@ -738,19 +738,22 @@ class MainActivity : AppCompatActivity() {
                         Log.i(TAG, "Speech end detected cleanly.")
                     }
                     override fun onError(error: Int) {
-                        val errorDesc = when (error) {
-                            5, 13, SpeechRecognizer.ERROR_NETWORK ->
-                                "Offline Voice: Speak close to mic, or tap a 1-Tap Tactical Alert below!"
-                            SpeechRecognizer.ERROR_NO_MATCH ->
-                                "No speech detected. Hold mic close and speak clearly."
-                            SpeechRecognizer.ERROR_SPEECH_TIMEOUT ->
-                                "Silence timeout: no voice heard."
-                            SpeechRecognizer.ERROR_AUDIO ->
-                                "Microphone audio error."
-                            else -> "Mic idle. Tap START RECORDING to speak."
+                        Log.w(TAG, "SpeechRecognizer error code $error")
+                        when (error) {
+                            SpeechRecognizer.ERROR_NO_MATCH,
+                            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
+                                runOnUiThread { statusText.text = "No speech detected. Hold mic and speak clearly." }
+                            }
+                            SpeechRecognizer.ERROR_AUDIO -> {
+                                runOnUiThread { statusText.text = "Microphone error. Check permissions." }
+                            }
+                            else -> {
+                                // Error 5 (network), 7 (no recognition), 13 (insufficient permissions)
+                                // — do NOT show error message, just silently wait
+                                // User can try again with PTT
+                                runOnUiThread { statusText.text = "Ready. Hold PTT to speak." }
+                            }
                         }
-                        Log.w(TAG, "SpeechRecognizer notice: error code $error")
-                        runOnUiThread { statusText.text = "Result:\n$errorDesc" }
                     }
 
                     override fun onResults(results: Bundle?) {
@@ -838,7 +841,8 @@ class MainActivity : AppCompatActivity() {
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
                 putExtra("android.speech.extra.DICTATION_MODE", true)
-                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+                // EXTRA_PREFER_OFFLINE removed — forces failure when offline pack not installed
+                // Online recognition works for all 11 Indian languages without offline packs
             }
             runOnUiThread {
                 try {
@@ -923,19 +927,20 @@ class MainActivity : AppCompatActivity() {
         // Stop SpeechRecognizer — onResults() will fire automatically and call transmitMessage()
         runOnUiThread {
             try { speechRecognizer?.stopListening() } catch (e: Throwable) {}
-            // Give SpeechRecognizer 800ms to return results before falling back to ONNX
+            // Give SpeechRecognizer 2500ms to return results (Indic STT takes longer than English)
             silenceHandler.postDelayed({
                 if (!isTransmitted) {
-                    // SpeechRecognizer returned something — use it
                     if (lastRecognizedText.isNotBlank()) {
                         isTransmitted = true
                         transmitMessage(lastRecognizedText, langCode)
-                    } else {
-                        // SpeechRecognizer returned nothing — try ONNX native result
-                        tryNativeSTTResult(langCode)
+                    }
+                    // If SpeechRecognizer returned nothing after 2.5s, skip ONNX (it has broken encoder)
+                    // and show a clear message instead
+                    else {
+                        runOnUiThread { statusText.text = "No speech detected. Speak clearly and try again." }
                     }
                 }
-            }, 800)
+            }, 2500)
         }
 
         // Stop native ONNX audio capture (runs in parallel)
@@ -959,10 +964,14 @@ class MainActivity : AppCompatActivity() {
                 val processedMsg = convertIndicScript(cleanMsg, langCode)
                 val candidateText = when {
                     processedMsg.isNotBlank()
-                        && processedMsg !in listOf("आ", "अ", "aa", "a", "")
+                        && processedMsg !in listOf("আ", "अ", "aa", "a", "")
                         && !processedMsg.startsWith("No speech")
-                        && !processedMsg.contains("Exception") -> processedMsg
-                    totalSamplesPushed >= 3200 -> "Voice alert (${totalSamplesPushed / 16}ms captured)"
+                        && !processedMsg.contains("Exception")
+                        && !processedMsg.contains("Init Error")
+                        && !processedMsg.contains("Encoder load")
+                        && !processedMsg.contains("failed")
+                        && !processedMsg.contains("Invalid fd") -> processedMsg
+                    // Don't transmit ONNX error messages — SpeechRecognizer result should be used instead
                     else -> ""
                 }
                 runOnUiThread {
