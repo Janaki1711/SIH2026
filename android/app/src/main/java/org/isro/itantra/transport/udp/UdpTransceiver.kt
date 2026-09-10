@@ -148,12 +148,12 @@ class UdpTransceiver(
                 } catch (e: Throwable) {}
             }
 
-            // Bind socket to 0.0.0.0 — let the OS pick the correct interface via routing table
+            // Bind socket to all interfaces on port 8988
             socket = DatagramSocket(null).apply {
                 reuseAddress = true
                 broadcast = true
                 soTimeout = 1000
-                bind(InetSocketAddress("0.0.0.0", port))
+                bind(InetSocketAddress(8988))
             }
 
             Log.i(TAG, "UDP_BIND local=0.0.0.0:$port bound=${socket?.isBound}")
