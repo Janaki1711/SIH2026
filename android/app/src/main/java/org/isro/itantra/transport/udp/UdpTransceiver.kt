@@ -110,25 +110,26 @@ class UdpTransceiver(
         try {
             val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return
 
-            // 1. Check existing active networks for Wi-Fi / Wi-Fi Aware (including offline networks)
+            // Find active Wi-Fi network (including offline hotspot networks)
             val wifiNetwork = cm.allNetworks.firstOrNull { network ->
                 val caps = cm.getNetworkCapabilities(network)
-                caps != null && (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) || 
+                caps != null && (caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
                                  caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI_AWARE))
             }
 
             if (wifiNetwork != null) {
                 activeWifiNetwork = wifiNetwork
                 try {
+                    // bindProcessToNetwork routes all sockets through Wi-Fi — do NOT call
+                    // bindSocket() on an already-bound UDP socket as it silently breaks receive
                     cm.bindProcessToNetwork(wifiNetwork)
-                    socket?.let { s -> wifiNetwork.bindSocket(s) }
-                    Log.i(TAG, "NET_INTERFACE Process and UDP socket bound to active Wi-Fi Network ($wifiNetwork)")
+                    Log.i(TAG, "NET_INTERFACE Process bound to Wi-Fi network ($wifiNetwork)")
                 } catch (e: Throwable) {
-                    Log.w(TAG, "NET_INTERFACE Initial Wi-Fi binding notice: ${e.message}")
+                    Log.w(TAG, "NET_INTERFACE Wi-Fi binding notice: ${e.message}")
                 }
             }
 
-            // 2. Register NetworkCallback without requiring NET_CAPABILITY_INTERNET so offline Hotspot Wi-Fi triggers onAvailable
+            // Register callback to rebind when hotspot Wi-Fi becomes available
             val request = NetworkRequest.Builder()
                 .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
                 .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
@@ -136,14 +137,13 @@ class UdpTransceiver(
 
             networkCallback = object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) {
-                    Log.i(TAG, "NET_INTERFACE Wi-Fi network available: $network, binding process and socket...")
+                    Log.i(TAG, "NET_INTERFACE Wi-Fi network available: $network")
                     activeWifiNetwork = network
                     try {
                         cm.bindProcessToNetwork(network)
-                        socket?.let { s -> network.bindSocket(s) }
-                        Log.i(TAG, "NET_INTERFACE Successfully bound process & socket to Wi-Fi network $network")
+                        Log.i(TAG, "NET_INTERFACE Process rebound to Wi-Fi network $network")
                     } catch (e: Throwable) {
-                        Log.w(TAG, "NET_INTERFACE Notice during network binding: ${e.message}")
+                        Log.w(TAG, "NET_INTERFACE rebind notice: ${e.message}")
                     }
                 }
                 override fun onLost(network: Network) {
