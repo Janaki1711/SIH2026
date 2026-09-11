@@ -288,8 +288,12 @@ class MainActivity : AppCompatActivity() {
 
             transport?.onPeerDiscovered = { peerCallsign, peerIp ->
                 runOnUiThread {
-                    // netStatusText.text (handled by statusDotText)
-                    // netStatusText color update
+                    // Update status dot to show peer discovered
+                    findViewById<android.widget.TextView?>(R.id.statusDotText)?.let {
+                        it.text = "Connected • $peerCallsign"
+                        it.setTextColor(android.graphics.Color.parseColor("#065F46"))
+                    }
+                    findViewById<android.widget.TextView?>(R.id.peerNodeLabel)?.text = peerCallsign
                     statusText.text = "🟢 Connected to $peerCallsign ($peerIp:8988)"
                     android.widget.Toast.makeText(this, "🟢 Connected to $peerCallsign ($peerIp)", android.widget.Toast.LENGTH_SHORT).show()
                 }
@@ -738,8 +742,21 @@ class MainActivity : AppCompatActivity() {
         override fun onError(error: Int) {
             Log.w(TAG, "SpeechRecognizer error $error")
             when (error) {
-                SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT ->
+                SpeechRecognizer.ERROR_NO_MATCH -> {
                     runOnUiThread { statusText.text = "No speech detected. Speak clearly and try again." }
+                }
+                SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
+                    runOnUiThread { statusText.text = "Speech timeout. Hold PTT and speak." }
+                }
+                SpeechRecognizer.ERROR_NETWORK, 5, 13 -> {
+                    // Network error — Google ASR couldn't connect for this language
+                    // This happens when online ASR fails for Indic languages
+                    // Set isTransmitted to prevent any competing delay from double-triggering
+                    isTransmitted = true
+                    runOnUiThread {
+                        statusText.text = "Speech recognition unavailable for this language.\nTry text input or select English."
+                    }
+                }
                 SpeechRecognizer.ERROR_AUDIO ->
                     runOnUiThread { statusText.text = "Microphone error. Check permissions." }
                 else -> runOnUiThread { statusText.text = "Ready. Hold PTT to speak." }
@@ -894,39 +911,28 @@ class MainActivity : AppCompatActivity() {
 
 
     private fun stopRecordingAndTranscribe() {
-        val selectedLangName = if (::langSpinner.isInitialized && langSpinner.selectedItem != null) {
-            langSpinner.selectedItem.toString()
-        } else "English (India)"
-        val langTag = languageMap[selectedLangName] ?: "en-IN"
-        val langCode = langTag.substringBefore("-")
-
         silenceHandler.removeCallbacks(silenceRunnable)
         isRecording = false
 
-        // Stop SpeechRecognizer — onResults() will fire automatically and call transmitMessage()
+        val selectedLangName = if (::langSpinner.isInitialized && langSpinner.selectedItem != null)
+            langSpinner.selectedItem.toString() else "English (India)"
+        val langTag = languageMap[selectedLangName] ?: "en-IN"
+        val langCode = langTag.substringBefore("-")
+
+        // stopListening() tells ASR to process what was recorded and fire onResults()
+        // Do NOT set a competing timeout — onResults() handles transmission
+        // onError() handles the failure cases (no match, timeout, network error)
+        // The 10-second VAD timer is the only additional fallback
         runOnUiThread {
-            try { speechRecognizer?.stopListening() } catch (e: Throwable) {}
-            // Give SpeechRecognizer 2500ms to return results (Indic STT takes longer than English)
-            silenceHandler.postDelayed({
-                if (!isTransmitted) {
-                    if (lastRecognizedText.isNotBlank()) {
-                        isTransmitted = true
-                        transmitMessage(lastRecognizedText, langCode)
-                    }
-                    // If SpeechRecognizer returned nothing after 2.5s, skip ONNX (it has broken encoder)
-                    // and show a clear message instead
-                    else {
-                        runOnUiThread { statusText.text = "No speech detected. Speak clearly and try again." }
-                    }
-                }
-            }, 2500)
+            try {
+                speechRecognizer?.stopListening()
+                statusText.text = "Processing..."
+            } catch (e: Throwable) {}
         }
 
-        // Stop native ONNX audio capture (runs in parallel)
+        // Stop ONNX audio capture
         Thread {
-            try {
-                recordingThread?.join(300)
-            } catch (e: Throwable) {}
+            try { recordingThread?.join(300) } catch (e: Throwable) {}
             try { audioRecord?.stop(); audioRecord?.release(); audioRecord = null } catch (e: Throwable) {}
         }.start()
     }
