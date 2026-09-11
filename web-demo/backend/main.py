@@ -9,8 +9,9 @@ import os
 import time
 from typing import Dict, Optional
 import psutil
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 import m3_adapter
 import translation_engine
@@ -19,6 +20,7 @@ import semantic_parser
 import semantic_compressor
 import semantic_schema
 import crypto
+import auth
 
 app = FastAPI(title="iTantra M3 Semantic Web Demo")
 app.add_middleware(CORSMiddleware, 
@@ -33,6 +35,84 @@ database.init_db()
 @app.get("/codebook")
 def codebook():
     return semantic_schema.get_codebook()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Auth — Pydantic request/response models
+# ──────────────────────────────────────────────────────────────────────────────
+
+class OTPRequest(BaseModel):
+    identifier: str
+    method: str  # 'phone' | 'email'
+
+
+class OTPVerifyRequest(BaseModel):
+    identifier: str
+    otp: str
+
+
+class UpdateProfileRequest(BaseModel):
+    display_name: Optional[str] = None
+    preferred_language: Optional[str] = None
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Auth endpoints
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.post("/auth/request-otp")
+def request_otp(body: OTPRequest):
+    """Request a 6-digit OTP for phone or email authentication.
+    Returns otp_for_demo in demo mode (never in production)."""
+    try:
+        result = auth.generate_otp(body.identifier, body.method)
+        return {"success": True, **result}
+    except ValueError as e:
+        raise HTTPException(status_code=429 if "RATE_LIMIT" in str(e) or "RESEND_TOO_SOON" in str(e) else 400, detail=str(e))
+
+
+@app.post("/auth/verify-otp")
+def verify_otp(body: OTPVerifyRequest):
+    """Verify a 6-digit OTP. Returns session_token and profile on success."""
+    result = auth.verify_otp(body.identifier, body.otp)
+    if not result["success"]:
+        status = 429 if result["error"] == "TOO_MANY_ATTEMPTS" else 401
+        raise HTTPException(status_code=status, detail=result["error"])
+    profile = result["profile"]
+    return {
+        "success": True,
+        "session_token": result["session_token"],
+        "profile": profile.to_dict() if profile else None,
+    }
+
+
+@app.get("/auth/profile")
+def get_profile(authorization: Optional[str] = Header(default=None)):
+    """Return the authenticated user's profile.
+    Requires header: Authorization: Bearer <session_token>"""
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:].strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    profile = auth.get_profile(token)
+    if profile is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired session token")
+    return {"success": True, "profile": profile.to_dict()}
+
+
+@app.post("/auth/update-profile")
+def update_profile(body: UpdateProfileRequest, authorization: Optional[str] = Header(default=None)):
+    """Update display_name and/or preferred_language for the authenticated user."""
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization[7:].strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    profile = auth.update_profile(token, body.display_name, body.preferred_language)
+    if profile is None:
+        raise HTTPException(status_code=401, detail="Invalid or expired session token")
+    return {"success": True, "profile": profile.to_dict()}
 
 connections: Dict[str, WebSocket] = {}
 sequence_counters: Dict[str, int] = {"hubbli": 0, "tolankere": 0}

@@ -71,16 +71,26 @@ def realize(msg_or_result: Any, target_language: str) -> str:
     
     # Target / Location extraction
     target = _extract_field_val(getattr(msg_or_result, 'target', ''))
+
+    # Primary: use location_text (SemanticMessage proper-noun field)
+    loc_text = getattr(msg_or_result, 'location_text', '') or ""
+
+    # Secondary: try legacy 'location' attribute (geo_resolver style objects)
     loc_obj = getattr(msg_or_result, 'location', None)
-    loc_text = ""
     if loc_obj:
         if hasattr(loc_obj, 'canonical_name'):
             if not target or target == "UNKNOWN":
                 target = loc_obj.canonical_name.upper()
-            loc_text = loc_obj.canonical_name
+            if not loc_text:
+                loc_text = loc_obj.canonical_name
         elif isinstance(loc_obj, str) and not loc_obj.startswith("LocationEntity"):
-            loc_text = loc_obj
+            if not loc_text:
+                loc_text = loc_obj
             if not target: target = loc_obj.upper()
+
+    # If target is PROPER_LOCATION sentinel, replace with the actual text
+    if target == "PROPER_LOCATION" and loc_text:
+        target = loc_text.upper()
 
     hazard_text = getattr(msg_or_result, 'hazard', '') or getattr(msg_or_result, 'hazard_text', '')
     if hasattr(hazard_text, 'name'): hazard_text = hazard_text.name
@@ -380,3 +390,15 @@ def _realize_bn(action, entity, target, loc_text, hazard, qty, is_negated=False)
     elif "ALERT" in action:
         return f"সতর্কতা: {l_str} {hazard or 'বিপদ'}।"
     return f"{l_str or 'এলাকার'} পরিস্থিতি रिपोर्ट।"
+
+
+# ==============================================================================
+# PUBLIC TRANSLATION HELPER
+# ==============================================================================
+def translate(source_language: str, target_language: str, text: str) -> str:
+    """Translate text from source to target language via canonical semantic representation.
+    Pipeline: text → parse(source_lang) → SemanticMessage → realize(target_lang)
+    All 90 source×target combinations supported."""
+    import semantic_parser
+    msg = semantic_parser.parse(text, source_language)
+    return realize(msg, target_language)
