@@ -94,6 +94,7 @@ class MainActivity : AppCompatActivity() {
     @Volatile private var isRecording = false
     @Volatile private var isTransmitted = false
     @Volatile private var isWalkieTalkieMode = true
+    @Volatile private var connectedPeer: String = ""  // deduplicate connection events
     private var spellCorrector: org.isro.itantra.audio.SpellCorrector? = null
 
     // Prosody capture — collects PCM floats during recording for pitch/energy extraction
@@ -287,30 +288,43 @@ class MainActivity : AppCompatActivity() {
             }
 
             transport?.onPeerDiscovered = { peerCallsign, peerIp ->
-                runOnUiThread {
-                    // Update status dot to show peer discovered
-                    findViewById<android.widget.TextView?>(R.id.statusDotText)?.let {
-                        it.text = "Connected • $peerCallsign"
-                        it.setTextColor(android.graphics.Color.parseColor("#065F46"))
+                // Deduplicate — only update UI once per unique peer, not on every beacon
+                if (connectedPeer != peerCallsign) {
+                    connectedPeer = peerCallsign
+                    runOnUiThread {
+                        findViewById<android.widget.TextView?>(R.id.statusDotText)?.let {
+                            it.text = "Mesh Link • $peerCallsign"
+                            it.setTextColor(android.graphics.Color.parseColor("#065F46"))
+                        }
+                        findViewById<android.widget.TextView?>(R.id.statusDot)
+                            ?.background = getDrawable(R.drawable.dot_green)
+                        findViewById<android.widget.TextView?>(R.id.peerNodeLabel)?.text = peerCallsign
+                        statusText.text = "Connected: $peerCallsign"
+                        android.widget.Toast.makeText(this@MainActivity, "Connected: $peerCallsign", android.widget.Toast.LENGTH_SHORT).show()
+                        Log.i(TAG, "PEER_DISCOVERED: $peerCallsign @ $peerIp")
                     }
-                    findViewById<android.widget.TextView?>(R.id.peerNodeLabel)?.text = peerCallsign
-                    statusText.text = "🟢 Connected to $peerCallsign ($peerIp:8988)"
-                    android.widget.Toast.makeText(this, "🟢 Connected to $peerCallsign ($peerIp)", android.widget.Toast.LENGTH_SHORT).show()
                 }
             }
 
             transport?.onLinkConfirmed = { peerCallsign, peerIp, rtt ->
                 runOnUiThread {
-                    val rttStr = if (rtt > 0) " | RTT: ${rtt}ms" else ""
-                    // Update new UI status dot
+                    val rttStr = if (rtt > 0) "${rtt}ms" else "—"
+                    connectedPeer = peerCallsign
+                    // Update status dot and peer label
                     findViewById<android.widget.TextView?>(R.id.statusDotText)?.let {
-                        it.text = "Mesh Online • ${if (rtt > 0) "${rtt}ms" else "—"}"
+                        it.text = "Mesh Link • $rttStr"
                         it.setTextColor(android.graphics.Color.parseColor("#065F46"))
                     }
+                    findViewById<android.widget.TextView?>(R.id.statusDot)
+                        ?.background = getDrawable(R.drawable.dot_green)
+                    // Also update header status dot
+                    findViewById<android.view.View?>(R.id.statusDotHeader)
+                        ?.background = getDrawable(R.drawable.dot_green)
                     findViewById<android.widget.TextView?>(R.id.peerNodeLabel)?.text = peerCallsign
-                    // Legacy status bar (now hidden but keep for logcat)
-                    // netStatusText color update
-                    statusText.text = "Connected to $peerCallsign ($peerIp:8988)$rttStr"
+                    // Update RTT display in new UI
+                    findViewById<android.widget.TextView?>(R.id.rttValue)?.text = rttStr
+                    statusText.text = "Connected: $peerCallsign | $rttStr"
+                    Log.i(TAG, "LINK_CONFIRMED: $peerCallsign @ $peerIp (${rttStr})")
                 }
             }
 
@@ -672,6 +686,31 @@ class MainActivity : AppCompatActivity() {
                 transmitMessage(customText, langCode)
                 customMsgInput.setText("")
             }
+        }
+
+        // Wire new START AUDIO and TRANSCRIBE buttons (same as PTT hold/release)
+        findViewById<android.widget.Button?>(R.id.btnStartAudio)?.setOnClickListener {
+            if (!isRecording) {
+                if (checkAndRequestAudioPermission()) startRecording()
+            }
+        }
+        findViewById<android.widget.Button?>(R.id.btnStopTranscribe)?.setOnClickListener {
+            if (isRecording) {
+                silenceHandler.removeCallbacks(silenceRunnable)
+                isRecording = false
+                stopRecordingAndTranscribe()
+            }
+        }
+
+        // Wire header status pill → open diagnostics
+        netStatusText.setOnClickListener {
+            findViewById<android.view.View?>(R.id.diagSheet)?.visibility = android.view.View.VISIBLE
+            updateDiagnosticsPanel(
+                findViewById(R.id.diagCpu), findViewById(R.id.diagRam),
+                findViewById(R.id.diagBattery), findViewById(R.id.diagTxRx),
+                findViewById(R.id.diagPayload), findViewById(R.id.diagAirtime),
+                findViewById(R.id.diagCarrier), findViewById(R.id.diagLogText)
+            )
         }
 
         // 0. Click SEND TEST ALERT (PTT)

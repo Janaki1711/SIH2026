@@ -4,111 +4,162 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F8FAFC"
+    android:background="#F1F5F9"
     tools:context=".MainActivity">
 
-    <!-- ── SCROLLABLE BODY (padded 64dp top for fixed header) ─────────────── -->
+    <!-- SCROLLABLE BODY -->
     <androidx.core.widget.NestedScrollView
         android:id="@+id/scrollContent"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:fillViewport="true"
-        android:paddingTop="64dp"
+        android:paddingTop="60dp"
         android:clipToPadding="false">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:paddingHorizontal="12dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="16dp">
 
-            <!-- ── MODULE 2: LANGUAGE + PEER BAR ────────────────────── -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="52dp"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:paddingHorizontal="16dp"
-                android:background="#FFFFFF"
-                android:elevation="1dp">
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="36dp"
-                    android:layout_weight="1"
-                    android:layout_marginEnd="8dp"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:paddingHorizontal="12dp"
-                    android:background="@drawable/pill_lang_bg">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="LANG:"
-                        android:textColor="#0369A1"
-                        android:textSize="9sp"
-                        android:textStyle="bold"
-                        android:letterSpacing="0.1"
-                        android:layout_marginEnd="4dp" />
-
-                    <Spinner
-                        android:id="@+id/langSpinner"
-                        android:layout_width="0dp"
-                        android:layout_height="match_parent"
-                        android:layout_weight="1"
-                        android:background="@null"
-                        android:textColor="#1E293B" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:id="@+id/peerChip"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:paddingHorizontal="12dp"
-                    android:background="@drawable/pill_peer_bg">
-
-                    <View
-                        android:id="@+id/peerDot"
-                        android:layout_width="8dp"
-                        android:layout_height="8dp"
-                        android:background="@drawable/dot_grey"
-                        android:layout_marginEnd="6dp" />
-
-                    <TextView
-                        android:id="@+id/peerNodeLabel"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="NO PEER"
-                        android:textColor="#334155"
-                        android:textSize="11sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
-            </LinearLayout>
-
-            <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#E2E8F0" />
-
-            <!-- ── MODULE 3: MESSAGE DISPLAY ─────────────────────────── -->
+            <!-- CARD 1: Language + Node Status + Radio Metrics -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:paddingHorizontal="16dp"
-                android:paddingTop="12dp"
-                android:paddingBottom="8dp">
+                android:background="@drawable/card_white_rounded"
+                android:layout_marginBottom="10dp"
+                android:padding="10dp"
+                android:elevation="2dp">
 
-                <!-- RECEIVED CARD -->
+                <!-- Row: Language selector + Node Chip -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <!-- Language pill -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="36dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="8dp"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:paddingHorizontal="10dp"
+                        android:background="@drawable/pill_lang_bg">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="LANG:"
+                            android:textColor="#0369A1"
+                            android:textSize="9sp"
+                            android:textStyle="bold"
+                            android:letterSpacing="0.08"
+                            android:layout_marginEnd="4dp" />
+
+                        <Spinner
+                            android:id="@+id/langSpinner"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:background="@null" />
+                    </LinearLayout>
+
+                    <!-- Node chip -->
+                    <LinearLayout
+                        android:id="@+id/peerChip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="36dp"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:paddingHorizontal="10dp"
+                        android:background="@drawable/pill_peer_sky"
+                        android:clickable="true"
+                        android:focusable="true">
+
+                        <View
+                            android:id="@+id/peerDot"
+                            android:layout_width="8dp"
+                            android:layout_height="8dp"
+                            android:background="@drawable/dot_grey"
+                            android:layout_marginEnd="6dp" />
+
+                        <TextView
+                            android:id="@+id/peerNodeLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="NO PEER"
+                            android:textColor="#1E3A5F"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            android:fontFamily="monospace" />
+
+                        <TextView
+                            android:id="@+id/rttValue"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text=""
+                            android:textColor="#0369A1"
+                            android:textSize="9sp"
+                            android:textStyle="bold"
+                            android:fontFamily="monospace"
+                            android:layout_marginStart="6dp" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- Radio metric chips row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="8dp"
+                    android:paddingTop="8dp">
+
+                    <LinearLayout android:layout_width="0dp" android:layout_height="32dp" android:layout_weight="1" android:layout_marginEnd="4dp" android:orientation="horizontal" android:gravity="center_vertical" android:paddingHorizontal="8dp" android:background="@drawable/chip_metric_bg">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="CH" android:textColor="#64748B" android:textSize="9sp" android:textStyle="bold"/>
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="04-D" android:textColor="#0F172A" android:textSize="9sp" android:textStyle="bold" android:fontFamily="monospace"/>
+                    </LinearLayout>
+
+                    <LinearLayout android:layout_width="0dp" android:layout_height="32dp" android:layout_weight="1" android:layout_marginEnd="4dp" android:orientation="horizontal" android:gravity="center_vertical" android:paddingHorizontal="8dp" android:background="@drawable/chip_metric_bg">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="RSSI" android:textColor="#64748B" android:textSize="9sp" android:textStyle="bold"/>
+                        <TextView android:id="@+id/rssiValue" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="-68dBm" android:textColor="#15803D" android:textSize="9sp" android:textStyle="bold" android:fontFamily="monospace"/>
+                    </LinearLayout>
+
+                    <LinearLayout android:layout_width="0dp" android:layout_height="32dp" android:layout_weight="1" android:layout_marginEnd="4dp" android:orientation="horizontal" android:gravity="center_vertical" android:paddingHorizontal="8dp" android:background="@drawable/chip_metric_bg">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="RTT" android:textColor="#64748B" android:textSize="9sp" android:textStyle="bold"/>
+                        <TextView android:id="@+id/rttChip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="—ms" android:textColor="#0369A1" android:textSize="9sp" android:textStyle="bold" android:fontFamily="monospace"/>
+                    </LinearLayout>
+
+                    <LinearLayout android:layout_width="0dp" android:layout_height="32dp" android:layout_weight="1" android:orientation="horizontal" android:gravity="center_vertical" android:paddingHorizontal="8dp" android:background="@drawable/chip_metric_bg">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="TX/RX" android:textColor="#64748B" android:textSize="9sp" android:textStyle="bold"/>
+                        <TextView android:id="@+id/txRxChip" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0/0" android:textColor="#0369A1" android:textSize="9sp" android:textStyle="bold" android:fontFamily="monospace"/>
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- CARD 2: RECEIVED + SENT messages -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginBottom="10dp">
+
+                <!-- Received card with left border -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:background="@drawable/card_received_bg"
-                    android:paddingLeft="18dp"
-                    android:paddingRight="14dp"
+                    android:background="@drawable/card_received_accent"
+                    android:paddingLeft="14dp"
+                    android:paddingRight="12dp"
                     android:paddingVertical="10dp"
                     android:elevation="2dp"
-                    android:layout_marginBottom="10dp">
+                    android:layout_marginBottom="8dp">
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -124,7 +175,7 @@
                             android:textColor="#0369A1"
                             android:textSize="9sp"
                             android:textStyle="bold"
-                            android:letterSpacing="0.12"
+                            android:letterSpacing="0.1"
                             android:background="@drawable/badge_rx_bg"
                             android:paddingHorizontal="6dp"
                             android:paddingVertical="2dp"
@@ -135,7 +186,7 @@
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="-- to --"
+                            android:text="-- → --"
                             android:textColor="#475569"
                             android:textSize="11sp" />
 
@@ -145,7 +196,8 @@
                             android:layout_height="wrap_content"
                             android:text="--"
                             android:textColor="#94A3B8"
-                            android:textSize="10sp" />
+                            android:textSize="10sp"
+                            android:drawablePadding="2dp" />
                     </LinearLayout>
 
                     <View android:layout_width="match_parent" android:layout_height="1dp" android:background="#F1F5F9" android:layout_marginBottom="8dp" />
@@ -155,19 +207,52 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="No messages received yet"
-                        android:textColor="#1E293B"
-                        android:textSize="16sp"
-                        android:lineSpacingMultiplier="1.4"
+                        android:textColor="#0F172A"
+                        android:textSize="17sp"
+                        android:textStyle="bold"
+                        android:lineSpacingMultiplier="1.35"
                         android:minHeight="48dp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:paddingTop="8dp">
+
+                        <TextView
+                            android:id="@+id/rxOriginalText"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text=""
+                            android:textColor="#64748B"
+                            android:textSize="11sp"
+                            android:fontFamily="serif"
+                            android:visibility="gone" />
+
+                        <TextView
+                            android:id="@+id/crcStatus"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="CRC OK"
+                            android:textColor="#15803D"
+                            android:textSize="9sp"
+                            android:textStyle="bold"
+                            android:background="@drawable/badge_rx_bg"
+                            android:paddingHorizontal="6dp"
+                            android:paddingVertical="2dp"
+                            android:visibility="gone" />
+                    </LinearLayout>
                 </LinearLayout>
 
-                <!-- SENT CARD -->
+                <!-- Sent card -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
                     android:background="@drawable/card_sent_bg"
-                    android:paddingHorizontal="14dp"
+                    android:paddingHorizontal="12dp"
                     android:paddingVertical="8dp"
                     android:elevation="1dp">
 
@@ -185,7 +270,7 @@
                             android:textColor="#475569"
                             android:textSize="9sp"
                             android:textStyle="bold"
-                            android:letterSpacing="0.12"
+                            android:letterSpacing="0.1"
                             android:background="@drawable/badge_tx_bg"
                             android:paddingHorizontal="6dp"
                             android:paddingVertical="2dp"
@@ -221,187 +306,245 @@
                 </LinearLayout>
             </LinearLayout>
 
-            <!-- ── MODULE 4: PTT SECTION ─────────────────────────────── -->
+            <!-- CARD 3: ACOUSTIC TRANSCEIVER (PTT) -->
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="200dp"
+                android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:gravity="center"
-                android:background="#F8FAFC">
+                android:background="@drawable/card_white_rounded"
+                android:padding="12dp"
+                android:elevation="2dp"
+                android:layout_marginBottom="10dp">
 
-                <FrameLayout
-                    android:layout_width="160dp"
-                    android:layout_height="160dp"
-                    android:layout_gravity="center_horizontal">
-
-                    <View
-                        android:layout_width="160dp"
-                        android:layout_height="160dp"
-                        android:background="@drawable/ptt_ring_outer"
-                        android:layout_gravity="center" />
-
-                    <View
-                        android:layout_width="136dp"
-                        android:layout_height="136dp"
-                        android:background="@drawable/ptt_ring_inner"
-                        android:layout_gravity="center" />
-
-                    <LinearLayout
-                        android:id="@+id/startButton"
-                        android:layout_width="118dp"
-                        android:layout_height="118dp"
-                        android:layout_gravity="center"
-                        android:orientation="vertical"
-                        android:gravity="center"
-                        android:background="@drawable/ptt_btn_bg"
-                        android:elevation="6dp"
-                        android:clickable="true"
-                        android:focusable="true">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="mic"
-                            android:textColor="#FFFFFF"
-                            android:textSize="32sp" />
-
-                        <TextView
-                            android:id="@+id/pttLabel"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="HOLD TO SPEAK"
-                            android:textColor="#FFFFFF"
-                            android:textSize="9sp"
-                            android:textStyle="bold"
-                            android:letterSpacing="0.15"
-                            android:paddingTop="2dp" />
-
-                        <Button
-                            android:id="@+id/stopButton"
-                            android:layout_width="0dp"
-                            android:layout_height="0dp"
-                            android:visibility="gone" />
-                    </LinearLayout>
-                </FrameLayout>
-
+                <!-- Header -->
                 <LinearLayout
-                    android:layout_width="wrap_content"
-                    android:layout_height="28dp"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
                     android:orientation="horizontal"
                     android:gravity="center_vertical"
-                    android:paddingHorizontal="14dp"
-                    android:layout_marginTop="10dp"
-                    android:background="@drawable/pill_state_bg">
+                    android:paddingBottom="10dp">
 
                     <View
-                        android:id="@+id/pttStateDot"
+                        android:id="@+id/statusDot"
                         android:layout_width="8dp"
                         android:layout_height="8dp"
                         android:background="@drawable/dot_grey"
-                        android:layout_marginEnd="7dp" />
+                        android:layout_marginEnd="6dp" />
 
                     <TextView
-                        android:id="@+id/pttStateText"
-                        android:layout_width="wrap_content"
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:text="CARRIER IDLE"
-                        android:textColor="#475569"
+                        android:layout_weight="1"
+                        android:text="ACOUSTIC TRANSCEIVER"
+                        android:textColor="#0F172A"
                         android:textSize="10sp"
                         android:textStyle="bold"
-                        android:letterSpacing="0.12" />
+                        android:letterSpacing="0.12"
+                        android:fontFamily="monospace" />
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="24dp"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:paddingHorizontal="8dp"
+                        android:background="@drawable/pill_green_bg">
+
+                        <View
+                            android:layout_width="6dp"
+                            android:layout_height="6dp"
+                            android:background="@drawable/dot_green"
+                            android:layout_marginEnd="5dp" />
+
+                        <TextView
+                            android:id="@+id/pttStateText"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="CARRIER READY"
+                            android:textColor="#15803D"
+                            android:textSize="9sp"
+                            android:textStyle="bold"
+                            android:letterSpacing="0.1"
+                            android:fontFamily="monospace" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- Mic visual row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:background="@drawable/chip_metric_bg"
+                    android:padding="10dp"
+                    android:layout_marginBottom="10dp">
+
+                    <!-- Mic circle -->
+                    <FrameLayout
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginEnd="12dp">
+
+                        <View
+                            android:id="@+id/pttStateDot"
+                            android:layout_width="48dp"
+                            android:layout_height="48dp"
+                            android:background="@drawable/ptt_ring_outer"
+                            android:layout_gravity="center" />
+
+                        <LinearLayout
+                            android:id="@+id/startButton"
+                            android:layout_width="40dp"
+                            android:layout_height="40dp"
+                            android:layout_gravity="center"
+                            android:orientation="vertical"
+                            android:gravity="center"
+                            android:background="@drawable/ptt_btn_bg"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:elevation="4dp">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="mic"
+                                android:textColor="#FFFFFF"
+                                android:textSize="18sp" />
+
+                            <Button
+                                android:id="@+id/stopButton"
+                                android:layout_width="0dp"
+                                android:layout_height="0dp"
+                                android:visibility="gone" />
+                        </LinearLayout>
+                    </FrameLayout>
+
+                    <!-- Spectrum info -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="INPUT SPECTRUM"
+                                android:textColor="#64748B"
+                                android:textSize="9sp"
+                                android:textStyle="bold"
+                                android:fontFamily="monospace"
+                                android:letterSpacing="0.1" />
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="16 kHz PCM"
+                                android:textColor="#0369A1"
+                                android:textSize="9sp"
+                                android:textStyle="bold"
+                                android:fontFamily="monospace" />
+                        </LinearLayout>
+
+                        <!-- Waveform bar (static visual) -->
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="32dp"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical"
+                            android:background="#FFFFFF"
+                            android:paddingHorizontal="8dp"
+                            android:layout_marginTop="4dp">
+
+                            <TextView
+                                android:id="@+id/pttLabel"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="HOLD TO SPEAK"
+                                android:textColor="#64748B"
+                                android:textSize="9sp"
+                                android:textStyle="bold"
+                                android:gravity="center"
+                                android:fontFamily="monospace"
+                                android:letterSpacing="0.12" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- PTT Buttons -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <Button
+                        android:id="@+id/btnStartAudio"
+                        android:layout_width="0dp"
+                        android:layout_height="50dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:text="START AUDIO"
+                        android:textColor="#FFFFFF"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:letterSpacing="0.06"
+                        android:backgroundTint="#16A34A"
+                        android:fontFamily="monospace"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp" />
+
+                    <Button
+                        android:id="@+id/btnStopTranscribe"
+                        android:layout_width="0dp"
+                        android:layout_height="50dp"
+                        android:layout_weight="1"
+                        android:text="TRANSCRIBE"
+                        android:textColor="#FFFFFF"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:letterSpacing="0.06"
+                        android:backgroundTint="#0284C7"
+                        android:fontFamily="monospace"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp" />
                 </LinearLayout>
             </LinearLayout>
 
-            <!-- ── MODULE 5: SOS GRID ─────────────────────────────────── -->
+            <!-- CARD 4: SOS GRID -->
             <GridLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:columnCount="2"
-                android:paddingHorizontal="16dp"
-                android:paddingTop="8dp"
-                android:paddingBottom="4dp">
+                android:layout_marginBottom="10dp">
 
-                <Button
-                    android:id="@+id/btnSosAmbulance"
-                    android:layout_width="0dp"
-                    android:layout_height="50dp"
-                    android:layout_columnWeight="1"
-                    android:layout_margin="4dp"
-                    android:text="AMBULANCE"
-                    android:textColor="#FFFFFF"
-                    android:textSize="11sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="0.07"
-                    android:backgroundTint="#DC2626"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp" />
-
-                <Button
-                    android:id="@+id/btnSosFlood"
-                    android:layout_width="0dp"
-                    android:layout_height="50dp"
-                    android:layout_columnWeight="1"
-                    android:layout_margin="4dp"
-                    android:text="FLOOD"
-                    android:textColor="#FFFFFF"
-                    android:textSize="11sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="0.07"
-                    android:backgroundTint="#1D4ED8"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp" />
-
-                <Button
-                    android:id="@+id/btnSosFire"
-                    android:layout_width="0dp"
-                    android:layout_height="50dp"
-                    android:layout_columnWeight="1"
-                    android:layout_margin="4dp"
-                    android:text="FIRE"
-                    android:textColor="#FFFFFF"
-                    android:textSize="11sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="0.07"
-                    android:backgroundTint="#EA580C"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp" />
-
-                <Button
-                    android:id="@+id/btnSosUrgent"
-                    android:layout_width="0dp"
-                    android:layout_height="50dp"
-                    android:layout_columnWeight="1"
-                    android:layout_margin="4dp"
-                    android:text="URGENT"
-                    android:textColor="#FFFFFF"
-                    android:textSize="11sp"
-                    android:textStyle="bold"
-                    android:letterSpacing="0.07"
-                    android:backgroundTint="#7C3AED"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp" />
+                <Button android:id="@+id/btnSosAmbulance" android:layout_width="0dp" android:layout_height="48dp" android:layout_columnWeight="1" android:layout_margin="4dp" android:text="AMBULANCE" android:textColor="#FFFFFF" android:textSize="11sp" android:textStyle="bold" android:letterSpacing="0.06" android:backgroundTint="#DC2626" android:fontFamily="monospace" android:insetTop="0dp" android:insetBottom="0dp" />
+                <Button android:id="@+id/btnSosFlood" android:layout_width="0dp" android:layout_height="48dp" android:layout_columnWeight="1" android:layout_margin="4dp" android:text="FLOOD" android:textColor="#FFFFFF" android:textSize="11sp" android:textStyle="bold" android:letterSpacing="0.06" android:backgroundTint="#1D4ED8" android:fontFamily="monospace" android:insetTop="0dp" android:insetBottom="0dp" />
+                <Button android:id="@+id/btnSosFire" android:layout_width="0dp" android:layout_height="48dp" android:layout_columnWeight="1" android:layout_margin="4dp" android:text="FIRE" android:textColor="#FFFFFF" android:textSize="11sp" android:textStyle="bold" android:letterSpacing="0.06" android:backgroundTint="#D97706" android:fontFamily="monospace" android:insetTop="0dp" android:insetBottom="0dp" />
+                <Button android:id="@+id/btnSosUrgent" android:layout_width="0dp" android:layout_height="48dp" android:layout_columnWeight="1" android:layout_margin="4dp" android:text="URGENT" android:textColor="#FFFFFF" android:textSize="11sp" android:textStyle="bold" android:letterSpacing="0.06" android:backgroundTint="#7C3AED" android:fontFamily="monospace" android:insetTop="0dp" android:insetBottom="0dp" />
             </GridLayout>
 
-            <!-- ── MODULE 6: TEXT INPUT BAR ───────────────────────────── -->
+            <!-- TEXT INPUT -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="horizontal"
-                android:paddingHorizontal="16dp"
-                android:paddingTop="4dp"
-                android:paddingBottom="16dp"
                 android:gravity="center_vertical">
 
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="48dp"
                     android:layout_weight="1"
-                    android:layout_marginEnd="10dp"
+                    android:layout_marginEnd="8dp"
                     android:orientation="horizontal"
                     android:gravity="center_vertical"
-                    android:paddingHorizontal="14dp"
-                    android:background="@drawable/input_bg"
-                    android:elevation="1dp">
+                    android:paddingHorizontal="12dp"
+                    android:background="@drawable/input_bg">
 
                     <EditText
                         android:id="@+id/customMsgInput"
@@ -409,7 +552,7 @@
                         android:layout_height="match_parent"
                         android:layout_weight="1"
                         android:background="@null"
-                        android:hint="Type a message..."
+                        android:hint="Type tactical message..."
                         android:textColorHint="#94A3B8"
                         android:textColor="#0F172A"
                         android:textSize="13sp"
@@ -420,21 +563,22 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="ENC"
+                        android:text="AES-256"
                         android:textColor="#64748B"
                         android:textSize="9sp"
                         android:textStyle="bold"
                         android:background="@drawable/badge_enc_bg"
                         android:paddingHorizontal="5dp"
                         android:paddingVertical="2dp"
-                        android:layout_marginStart="8dp" />
+                        android:fontFamily="monospace"
+                        android:layout_marginStart="6dp" />
                 </LinearLayout>
 
                 <Button
                     android:id="@+id/btnSendCustom"
                     android:layout_width="48dp"
                     android:layout_height="48dp"
-                    android:text="&#x2192;"
+                    android:text="→"
                     android:textColor="#FFFFFF"
                     android:textSize="18sp"
                     android:backgroundTint="#0284C7"
@@ -442,34 +586,30 @@
                     android:insetBottom="0dp" />
             </LinearLayout>
 
-            <!-- ── HIDDEN LEGACY VIEWS ────────────────────────────────── -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:visibility="gone">
-
+            <!-- HIDDEN LEGACY VIEWS -->
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:visibility="gone">
                 <EditText android:id="@+id/peerIpInput" android:layout_width="0dp" android:layout_height="38dp" android:layout_weight="1" android:hint="Peer IP" />
                 <Button android:id="@+id/btnConnectPeer" android:layout_width="wrap_content" android:layout_height="38dp" android:text="CONNECT" />
                 <Button android:id="@+id/btnModeWalkieTalkie" android:layout_width="wrap_content" android:layout_height="36dp" android:text="WT" />
                 <Button android:id="@+id/btnModePhone" android:layout_width="wrap_content" android:layout_height="36dp" android:text="PHONE" />
                 <Button android:id="@+id/testButton" android:layout_width="wrap_content" android:layout_height="48dp" android:text="TEST" />
             </LinearLayout>
-
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 
-    <!-- ── FIXED TOP HEADER (drawn on top of scroll content) ─────────────── -->
+    <!-- FIXED TOP HEADER -->
     <LinearLayout
         android:id="@+id/topHeader"
         android:layout_width="match_parent"
-        android:layout_height="64dp"
+        android:layout_height="60dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:paddingHorizontal="16dp"
-        android:background="#FFFFFFFF"
+        android:paddingHorizontal="14dp"
+        android:background="#FAFCFF"
         android:elevation="8dp"
         android:layout_gravity="top">
 
+        <!-- Title -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
@@ -482,35 +622,43 @@
                 android:orientation="horizontal"
                 android:gravity="center_vertical">
 
+                <View
+                    android:layout_width="8dp"
+                    android:layout_height="8dp"
+                    android:background="@drawable/diamond_sky"
+                    android:layout_marginEnd="5dp" />
+
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="iTantra"
                     android:textColor="#0F172A"
-                    android:textSize="18sp"
+                    android:textSize="17sp"
                     android:textStyle="bold"
-                    android:letterSpacing="0.02" />
+                    android:letterSpacing="0.01" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
+                    android:layout_marginStart="6dp"
                     android:text="v2.4-TX"
                     android:textColor="#0369A1"
-                    android:textSize="10sp"
+                    android:textSize="9sp"
                     android:textStyle="bold"
                     android:background="@drawable/badge_bg"
-                    android:paddingHorizontal="6dp"
-                    android:paddingVertical="2dp" />
+                    android:paddingHorizontal="5dp"
+                    android:paddingVertical="2dp"
+                    android:fontFamily="monospace" />
             </LinearLayout>
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="OFFLINE MESH TRANSCEIVER"
-                android:textColor="#64748B"
-                android:textSize="9sp"
-                android:letterSpacing="0.15" />
+                android:text="TACTICAL MESH TRANSCEIVER"
+                android:textColor="#94A3B8"
+                android:textSize="8sp"
+                android:letterSpacing="0.2"
+                android:fontFamily="monospace" />
         </LinearLayout>
 
         <!-- Status pill -->
@@ -522,10 +670,12 @@
             android:gravity="center_vertical"
             android:paddingHorizontal="10dp"
             android:background="@drawable/pill_green_bg"
-            android:elevation="2dp">
+            android:elevation="2dp"
+            android:clickable="true"
+            android:focusable="true">
 
             <View
-                android:id="@+id/statusDot"
+                android:id="@+id/statusDotHeader"
                 android:layout_width="8dp"
                 android:layout_height="8dp"
                 android:background="@drawable/dot_grey"
@@ -538,11 +688,12 @@
                 android:text="Searching..."
                 android:textColor="#475569"
                 android:textSize="11sp"
-                android:textStyle="bold" />
+                android:textStyle="bold"
+                android:fontFamily="monospace" />
         </LinearLayout>
     </LinearLayout>
 
-    <!-- ── DIAGNOSTICS BOTTOM SHEET (overlay) ────────────────────────────── -->
+    <!-- DIAGNOSTICS BOTTOM SHEET -->
     <LinearLayout
         android:id="@+id/diagSheet"
         android:layout_width="match_parent"
@@ -556,70 +707,67 @@
         android:visibility="gone"
         android:layout_gravity="bottom">
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:paddingBottom="12dp">
-
+        <!-- Sheet header -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:paddingBottom="12dp">
             <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="TELEMETRY &amp; MESH" android:textColor="#0369A1" android:textSize="9sp" android:textStyle="bold" android:letterSpacing="0.14" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="MESH NODE REGISTRY &amp; TELEMETRY" android:textColor="#0369A1" android:textSize="9sp" android:textStyle="bold" android:letterSpacing="0.14" android:fontFamily="monospace" />
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="HARDWARE DIAGNOSTICS" android:textColor="#0F172A" android:textSize="15sp" android:textStyle="bold" />
             </LinearLayout>
-
-            <Button android:id="@+id/btnCloseDiag" android:layout_width="36dp" android:layout_height="36dp" android:text="X" android:textColor="#475569" android:backgroundTint="#F1F5F9" android:insetTop="0dp" android:insetBottom="0dp" android:textSize="12sp" />
+            <Button android:id="@+id/btnCloseDiag" android:layout_width="36dp" android:layout_height="36dp" android:text="✕" android:textColor="#475569" android:backgroundTint="#F1F5F9" android:insetTop="0dp" android:insetBottom="0dp" android:textSize="12sp" />
         </LinearLayout>
 
         <!-- Peer IP row -->
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:background="@drawable/diag_row_bg" android:paddingHorizontal="14dp" android:paddingVertical="10dp" android:layout_marginBottom="10dp">
             <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="IPv4 PEER TARGET" android:textColor="#64748B" android:textSize="9sp" android:textStyle="bold" android:letterSpacing="0.1" />
-                <EditText android:id="@+id/diagPeerIpInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@null" android:hint="10.163.175.228" android:textColorHint="#94A3B8" android:textColor="#0F172A" android:textSize="14sp" android:textStyle="bold" android:inputType="phone" android:singleLine="true" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="IPv4 PEER TARGET" android:textColor="#64748B" android:textSize="9sp" android:textStyle="bold" android:letterSpacing="0.1" android:fontFamily="monospace" />
+                <EditText android:id="@+id/diagPeerIpInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@null" android:hint="10.163.175.228" android:textColorHint="#94A3B8" android:textColor="#0F172A" android:textSize="14sp" android:textStyle="bold" android:inputType="phone" android:singleLine="true" android:fontFamily="monospace" />
             </LinearLayout>
-            <Button android:id="@+id/btnDiagPing" android:layout_width="wrap_content" android:layout_height="36dp" android:layout_marginStart="8dp" android:text="PING" android:textColor="#334155" android:backgroundTint="#E2E8F0" android:textSize="11sp" android:textStyle="bold" android:insetTop="0dp" android:insetBottom="0dp" />
-            <Button android:id="@+id/btnDiagConnect" android:layout_width="wrap_content" android:layout_height="36dp" android:layout_marginStart="6dp" android:text="CONNECT" android:textColor="#FFFFFF" android:backgroundTint="#0284C7" android:textSize="11sp" android:textStyle="bold" android:insetTop="0dp" android:insetBottom="0dp" />
+            <Button android:id="@+id/btnDiagPing" android:layout_width="wrap_content" android:layout_height="36dp" android:layout_marginStart="8dp" android:text="PING" android:textColor="#334155" android:backgroundTint="#E2E8F0" android:textSize="11sp" android:textStyle="bold" android:fontFamily="monospace" android:insetTop="0dp" android:insetBottom="0dp" />
+            <Button android:id="@+id/btnDiagConnect" android:layout_width="wrap_content" android:layout_height="36dp" android:layout_marginStart="6dp" android:text="CONNECT" android:textColor="#FFFFFF" android:backgroundTint="#0284C7" android:textSize="11sp" android:textStyle="bold" android:fontFamily="monospace" android:insetTop="0dp" android:insetBottom="0dp" />
         </LinearLayout>
 
         <!-- Metrics grid -->
         <GridLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:columnCount="2" android:layout_marginBottom="10dp">
             <LinearLayout android:layout_width="0dp" android:layout_height="44dp" android:layout_columnWeight="1" android:layout_margin="3dp" android:orientation="horizontal" android:gravity="center_vertical" android:paddingHorizontal="10dp" android:background="@drawable/diag_row_bg">
-                <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="CPU LOAD" android:textColor="#64748B" android:textSize="9sp" android:textStyle="bold" />
-                <TextView android:id="@+id/diagCpu" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="--" android:textColor="#0F172A" android:textSize="13sp" android:textStyle="bold" android:fontFamily="monospace" />
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="CPU LOAD" android:textColor="#64748B" android:textSize="9sp" android:textStyle="bold" android:fontFamily="monospace" />
+                <TextView android:id="@+id/diagCpu" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="--" android:textColor="#0F172A" android:textSize="12sp" android:textStyle="bold" android:fontFamily="monospace" />
             </LinearLayout>
             <LinearLayout android:layout_width="0dp" android:layout_height="44dp" android:layout_columnWeight="1" android:layout_margin="3dp" android:orientation="horizontal" android:gravity="center_vertical" android:paddingHorizontal="10dp" android:background="@drawable/diag_row_bg">
-                <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="RAM ACTIVE" android:textColor="#64748B" android:textSize="9sp" android:textStyle="bold" />
-                <TextView android:id="@+id/diagRam" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="--" android:textColor="#0F172A" android:textSize="13sp" android:textStyle="bold" android:fontFamily="monospace" />
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="RAM ACTIVE" android:textColor="#64748B" android:textSize="9sp" android:textStyle="bold" android:fontFamily="monospace" />
+                <TextView android:id="@+id/diagRam" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="-- MB" android:textColor="#0F172A" android:textSize="12sp" android:textStyle="bold" android:fontFamily="monospace" />
             </LinearLayout>
             <LinearLayout android:layout_width="0dp" android:layout_height="44dp" android:layout_columnWeight="1" android:layout_margin="3dp" android:orientation="horizontal" android:gravity="center_vertical" android:paddingHorizontal="10dp" android:background="@drawable/diag_row_bg">
-                <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="BATTERY" android:textColor="#64748B" android:textSize="9sp" android:textStyle="bold" />
-                <TextView android:id="@+id/diagBattery" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="--" android:textColor="#059669" android:textSize="13sp" android:textStyle="bold" android:fontFamily="monospace" />
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="BATTERY" android:textColor="#64748B" android:textSize="9sp" android:textStyle="bold" android:fontFamily="monospace" />
+                <TextView android:id="@+id/diagBattery" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="--%" android:textColor="#15803D" android:textSize="12sp" android:textStyle="bold" android:fontFamily="monospace" />
             </LinearLayout>
             <LinearLayout android:layout_width="0dp" android:layout_height="44dp" android:layout_columnWeight="1" android:layout_margin="3dp" android:orientation="horizontal" android:gravity="center_vertical" android:paddingHorizontal="10dp" android:background="@drawable/diag_row_bg">
-                <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="TX / RX" android:textColor="#64748B" android:textSize="9sp" android:textStyle="bold" />
-                <TextView android:id="@+id/diagTxRx" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0 / 0" android:textColor="#0284C7" android:textSize="13sp" android:textStyle="bold" android:fontFamily="monospace" />
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="TX / RX PKTS" android:textColor="#64748B" android:textSize="9sp" android:textStyle="bold" android:fontFamily="monospace" />
+                <TextView android:id="@+id/diagTxRx" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0 / 0" android:textColor="#0284C7" android:textSize="12sp" android:textStyle="bold" android:fontFamily="monospace" />
             </LinearLayout>
             <LinearLayout android:layout_width="0dp" android:layout_height="44dp" android:layout_columnWeight="1" android:layout_margin="3dp" android:orientation="horizontal" android:gravity="center_vertical" android:paddingHorizontal="10dp" android:background="@drawable/diag_row_bg">
-                <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="PAYLOAD" android:textColor="#64748B" android:textSize="9sp" android:textStyle="bold" />
-                <TextView android:id="@+id/diagPayload" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="-- B" android:textColor="#0F172A" android:textSize="13sp" android:textStyle="bold" android:fontFamily="monospace" />
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="PAYLOAD" android:textColor="#64748B" android:textSize="9sp" android:textStyle="bold" android:fontFamily="monospace" />
+                <TextView android:id="@+id/diagPayload" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="-- B" android:textColor="#0F172A" android:textSize="12sp" android:textStyle="bold" android:fontFamily="monospace" />
             </LinearLayout>
             <LinearLayout android:layout_width="0dp" android:layout_height="44dp" android:layout_columnWeight="1" android:layout_margin="3dp" android:orientation="horizontal" android:gravity="center_vertical" android:paddingHorizontal="10dp" android:background="@drawable/diag_row_bg">
-                <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="AIRTIME" android:textColor="#64748B" android:textSize="9sp" android:textStyle="bold" />
-                <TextView android:id="@+id/diagAirtime" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="-- ms" android:textColor="#0F172A" android:textSize="13sp" android:textStyle="bold" android:fontFamily="monospace" />
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="FEC SCHEME" android:textColor="#64748B" android:textSize="9sp" android:textStyle="bold" android:fontFamily="monospace" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="4 PARITY (RS)" android:textColor="#0F172A" android:textSize="12sp" android:textStyle="bold" android:fontFamily="monospace" />
             </LinearLayout>
             <LinearLayout android:layout_width="0dp" android:layout_height="44dp" android:layout_columnWeight="1" android:layout_margin="3dp" android:orientation="horizontal" android:gravity="center_vertical" android:paddingHorizontal="10dp" android:background="@drawable/diag_row_bg">
-                <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="FEC SCHEME" android:textColor="#64748B" android:textSize="9sp" android:textStyle="bold" />
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="4 PARITY" android:textColor="#0F172A" android:textSize="13sp" android:textStyle="bold" android:fontFamily="monospace" />
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="CARRIER" android:textColor="#64748B" android:textSize="9sp" android:textStyle="bold" android:fontFamily="monospace" />
+                <TextView android:id="@+id/diagCarrier" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="WI-FI MESH" android:textColor="#0284C7" android:textSize="12sp" android:textStyle="bold" android:fontFamily="monospace" />
             </LinearLayout>
             <LinearLayout android:layout_width="0dp" android:layout_height="44dp" android:layout_columnWeight="1" android:layout_margin="3dp" android:orientation="horizontal" android:gravity="center_vertical" android:paddingHorizontal="10dp" android:background="@drawable/diag_row_bg">
-                <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="CARRIER" android:textColor="#64748B" android:textSize="9sp" android:textStyle="bold" />
-                <TextView android:id="@+id/diagCarrier" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="WI-FI" android:textColor="#0284C7" android:textSize="13sp" android:textStyle="bold" android:fontFamily="monospace" />
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="AIRTIME BURST" android:textColor="#64748B" android:textSize="9sp" android:textStyle="bold" android:fontFamily="monospace" />
+                <TextView android:id="@+id/diagAirtime" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="-- ms" android:textColor="#0F172A" android:textSize="12sp" android:textStyle="bold" android:fontFamily="monospace" />
             </LinearLayout>
         </GridLayout>
 
-        <!-- Trace log -->
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:background="@drawable/log_bg" android:paddingHorizontal="14dp" android:paddingVertical="10dp">
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="LIVE TRACE LOGS" android:textColor="#94A3B8" android:textSize="9sp" android:textStyle="bold" android:letterSpacing="0.14" android:paddingBottom="6dp" />
+        <!-- Trace log terminal -->
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:background="@drawable/log_bg" android:paddingHorizontal="12dp" android:paddingVertical="10dp">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:paddingBottom="6dp">
+                <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="LIVE TRACE ROUTE LOGS" android:textColor="#94A3B8" android:textSize="9sp" android:textStyle="bold" android:letterSpacing="0.14" android:fontFamily="monospace" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="ACTIVE" android:textColor="#34D399" android:textSize="9sp" android:textStyle="bold" android:fontFamily="monospace" />
+            </LinearLayout>
             <TextView android:id="@+id/diagLogText" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="> Waiting for activity..." android:textColor="#CBD5E1" android:textSize="11sp" android:fontFamily="monospace" android:lineSpacingMultiplier="1.5" />
         </LinearLayout>
     </LinearLayout>
