@@ -797,58 +797,55 @@ class MainActivity : AppCompatActivity() {
     @Volatile private var totalSamplesPushed = 0L
 
     private fun startRecording() {
+        // Called from setOnTouchListener (UI thread) — do NOT use runOnUiThread() here
+        // as it would defer execution and cause a race condition with startListening()
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED) {
+            statusText.text = "Microphone permission required."
+            return
+        }
+
+        isRecording = true
+        isTransmitted = false
+        totalSamplesPushed = 0L
+        lastRecognizedText = ""
+        prosodyPcmBuffer.clear()
+
+        val selectedLangName = if (::langSpinner.isInitialized && langSpinner.selectedItem != null)
+            langSpinner.selectedItem.toString() else "English (India)"
+        val langTag = languageMap[selectedLangName] ?: "en-IN"
+        val langCode = langTag.substringBefore("-")
+
+        statusText.text = "Listening ($selectedLangName)... Speak now!"
+        Log.i(TAG, "[STT] Starting: $selectedLangName  langTag=$langTag")
+
+        // Destroy + recreate + startListening all in sequence on the current (UI) thread
+        // No runOnUiThread needed — we ARE on the UI thread already
         try {
-            isRecording = true
-            isTransmitted = false
-            totalSamplesPushed = 0L
-            lastRecognizedText = ""
-            prosodyPcmBuffer.clear()
+            speechRecognizer?.destroy()
+            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+            speechRecognizer?.setRecognitionListener(buildRecognitionListener())
 
-            val selectedLangName = if (::langSpinner.isInitialized && langSpinner.selectedItem != null)
-                langSpinner.selectedItem.toString() else "English (India)"
-            val langTag = languageMap[selectedLangName] ?: "en-IN"
-            val langCode = langTag.substringBefore("-")
-
-            statusText.text = "Listening ($selectedLangName)... Speak now!"
-            Log.i(TAG, "[STT] Starting: $selectedLangName  langTag=$langTag")
-
-            // Build speech intent for this language
             val speechIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, langTag)          // e.g. "kn-IN"
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, langTag)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, langTag)
-                // NOTE: Do NOT set EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE — it blocks non-English on some devices
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
             }
 
-            // Must run on UI thread — recreate + startListening in ONE runOnUiThread block
-            // to avoid race condition where startListening fires before recreate completes
-            runOnUiThread {
-                try {
-                    // Step 1: Destroy stale recognizer
-                    speechRecognizer?.destroy()
-                    speechRecognizer = null
-
-                    // Step 2: Recreate fresh with correct listener
-                    speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this@MainActivity)
-                    speechRecognizer?.setRecognitionListener(buildRecognitionListener())
-
-                    // Step 3: Start listening — immediately after creation, same runOnUiThread block
-                    speechRecognizer?.startListening(speechIntent)
-                    Log.i(TAG, "[STT] startListening called for $langTag")
-                } catch (e: Throwable) {
-                    Log.w(TAG, "[STT] startListening error: ${e.message}")
-                    statusText.text = "Microphone error. Try again."
-                }
-            }
-
-            resetSilenceTimer()
-
+            speechRecognizer?.startListening(speechIntent)
+            Log.i(TAG, "[STT] startListening($langTag) called")
         } catch (e: Throwable) {
-            Log.e(TAG, "startRecording error: ${e.message}", e)
+            Log.e(TAG, "[STT] startListening error: ${e.message}")
+            statusText.text = "Microphone error. Try again."
+            isRecording = false
+            return
         }
+
+        resetSilenceTimer()
     }
+
 
 
     /** Start native Indic ONNX STT audio capture (AI4Bharat IndicConformer) */
