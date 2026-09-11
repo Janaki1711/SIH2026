@@ -83,8 +83,8 @@ class IndicTTSManager(
     fun speak(text: String, langCode: String, prosody: ProsodyVector = ProsodyVector()) {
         if (text.isBlank()) return
 
-        postStatus("SYNTHESIZING: '" + text.take(25) + "...' [" + langCode.uppercase() + "]")
-        Log.i(TAG, "Synthesizing: text='$text', lang='$langCode', pitch=${prosody.f0PitchMean}, cadence=${prosody.cadenceRate}")
+        postStatus("SYNTHESIZING: '${text.take(25)}...' [${langCode.uppercase()}]")
+        Log.i(TAG, "TTS speak: lang=$langCode  text='$text'")
         initSystemVolume()
 
         if (isTtsReady && androidTts != null) {
@@ -98,9 +98,23 @@ class IndicTTSManager(
 
                     val targetLocale = getLocaleForLang(langCode)
                     val langResult = androidTts?.setLanguage(targetLocale)
-                    Log.i(TAG, "TTS setLanguage to $targetLocale (code=$langResult)")
 
-                    androidTts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "iTantra_" + System.currentTimeMillis())
+                    Log.i(TAG, "TTS setLanguage($targetLocale) = $langResult  " +
+                        "(${if (langResult == TextToSpeech.LANG_AVAILABLE || langResult == TextToSpeech.LANG_COUNTRY_AVAILABLE) "OK" else "MISSING/UNSUPPORTED"})")
+
+                    if (langResult == TextToSpeech.LANG_MISSING_DATA) {
+                        // Language pack not installed — trigger install intent
+                        Log.w(TAG, "TTS language pack missing for $langCode — requesting install")
+                        val installIntent = android.content.Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA)
+                        installIntent.setPackage("com.google.android.tts")
+                        installIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        try { context.startActivity(installIntent) } catch (e: Throwable) {}
+                        // Still speak — TTS will use whatever voice is available
+                    }
+
+                    // Speak regardless — if language pack is missing, Android TTS uses
+                    // the closest available voice. The text is still transmitted correctly.
+                    androidTts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "iTantra_${System.currentTimeMillis()}")
                 } catch (e: Exception) {
                     Log.e(TAG, "Android TTS speak error", e)
                     playViaNativeCpp(text, langCode, prosody)
