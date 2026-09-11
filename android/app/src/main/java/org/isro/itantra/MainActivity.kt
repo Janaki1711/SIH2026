@@ -802,67 +802,54 @@ class MainActivity : AppCompatActivity() {
             isTransmitted = false
             totalSamplesPushed = 0L
             lastRecognizedText = ""
-            prosodyPcmBuffer.clear()  // fresh prosody capture for this utterance
+            prosodyPcmBuffer.clear()
 
-            val selectedLangName = if (::langSpinner.isInitialized && langSpinner.selectedItem != null) {
-                langSpinner.selectedItem.toString()
-            } else "English (India)"
-
+            val selectedLangName = if (::langSpinner.isInitialized && langSpinner.selectedItem != null)
+                langSpinner.selectedItem.toString() else "English (India)"
             val langTag = languageMap[selectedLangName] ?: "en-IN"
             val langCode = langTag.substringBefore("-")
 
-            statusText.text = "🎙️ Listening ($selectedLangName)... Speak now!"
-            Log.i(TAG, "[STT] Starting for language: $selectedLangName ($langTag)")
+            statusText.text = "Listening ($selectedLangName)... Speak now!"
+            Log.i(TAG, "[STT] Starting: $selectedLangName  langTag=$langTag")
 
-            // Recreate SpeechRecognizer to avoid stale state from previous session
-            runOnUiThread {
-                try {
-                    speechRecognizer?.destroy()
-                    speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this@MainActivity)
-                    speechRecognizer?.setRecognitionListener(buildRecognitionListener())
-                } catch (e: Throwable) {
-                    Log.w(TAG, "SpeechRecognizer recreate: ${e.message}")
-                }
-            }
-
-            // PRIMARY PATH: Android SpeechRecognizer — works for ALL languages (en, hi, te, mr, kn, etc.)
-            // Both OnePlus and Motorola have Google's speech service supporting all Indian languages.
-            // The ONNX native path is kept as a secondary fallback below if SpeechRecognizer fails.
+            // Build speech intent for this language
             val speechIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, langTag)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, langTag)          // e.g. "kn-IN"
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, langTag)
-                putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, langTag)
+                // NOTE: Do NOT set EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE — it blocks non-English on some devices
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-                putExtra("android.speech.extra.DICTATION_MODE", true)
-                // EXTRA_PREFER_OFFLINE removed — forces failure when offline pack not installed
-                // Online recognition works for all 11 Indian languages without offline packs
-            }
-            runOnUiThread {
-                try {
-                    speechRecognizer?.cancel()
-                    speechRecognizer?.startListening(speechIntent)
-                } catch (e: Throwable) {
-                    Log.w(TAG, "SpeechRecognizer startListening error: ${e.message}")
-                    // Fallback to ONNX native path if SpeechRecognizer throws
-                    startNativeIndicSTT(langCode)
-                }
             }
 
-            // Also start ONNX capture in parallel if library is loaded — acts as a silent backup
-            // Its result is only used if SpeechRecognizer returns empty/error
-            if (NativeSTTBridge.isLibraryLoaded && !langTag.startsWith("en")) {
-                startNativeIndicSTT(langCode)
+            // Must run on UI thread — recreate + startListening in ONE runOnUiThread block
+            // to avoid race condition where startListening fires before recreate completes
+            runOnUiThread {
+                try {
+                    // Step 1: Destroy stale recognizer
+                    speechRecognizer?.destroy()
+                    speechRecognizer = null
+
+                    // Step 2: Recreate fresh with correct listener
+                    speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this@MainActivity)
+                    speechRecognizer?.setRecognitionListener(buildRecognitionListener())
+
+                    // Step 3: Start listening — immediately after creation, same runOnUiThread block
+                    speechRecognizer?.startListening(speechIntent)
+                    Log.i(TAG, "[STT] startListening called for $langTag")
+                } catch (e: Throwable) {
+                    Log.w(TAG, "[STT] startListening error: ${e.message}")
+                    statusText.text = "Microphone error. Try again."
+                }
             }
 
             resetSilenceTimer()
 
         } catch (e: Throwable) {
-            Log.e(TAG, "Error starting recording: ${e.message}", e)
-            statusText.text = "Recording active."
+            Log.e(TAG, "startRecording error: ${e.message}", e)
         }
     }
+
 
     /** Start native Indic ONNX STT audio capture (AI4Bharat IndicConformer) */
     private fun startNativeIndicSTT(langCode: String) {
