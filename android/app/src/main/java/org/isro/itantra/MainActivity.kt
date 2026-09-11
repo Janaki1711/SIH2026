@@ -1286,34 +1286,37 @@ class MainActivity : AppCompatActivity() {
      * Once downloaded (~20MB per language), all translation is fully offline forever.
      */
     private fun preDownloadTranslationModels() {
-        // MLKit translates non-English pairs via English pivot: hi→kn = hi→en + en→kn
-        // So we must download BOTH directions for every language:
-        //   lang→en  (for sending: Hindi speaker sends to English receiver)
-        //   en→lang  (for receiving: English pivot output to target language)
-        val languages = listOf("hi", "kn", "te", "mr", "ta", "bn", "gu")
+        // Download ALL lang↔en models so every 10×10 language combination works via pivot.
+        // Any pair X→Y (both non-English) is handled as X→en→Y automatically.
+        // ml proxied via ta, or/pa proxied via hi (same model downloads).
+        val allLangs = listOf("hi", "kn", "te", "mr", "ta", "bn", "gu",
+                              "ml",  // uses ta model
+                              "or",  // uses hi model
+                              "pa")  // uses hi model
         val conditions = com.google.mlkit.common.model.DownloadConditions.Builder().build()
         val enCode = mlkitLanguageCode("en") ?: return
 
-        for (lang in languages) {
-            val langCode = mlkitLanguageCode(lang) ?: continue
+        // Deduplicate proxy languages (ml/ta, or/pa/hi share the same model)
+        val uniqueCodes = allLangs.mapNotNull { mlkitLanguageCode(it) }.toSet()
 
-            // Download lang→en (for sending in this language)
+        for (langCode in uniqueCodes) {
+            // Download lang→en (needed when this language is the sender)
             val optSend = com.google.mlkit.nl.translate.TranslatorOptions.Builder()
                 .setSourceLanguage(langCode).setTargetLanguage(enCode).build()
             com.google.mlkit.nl.translate.Translation.getClient(optSend)
                 .downloadModelIfNeeded(conditions)
-                .addOnSuccessListener { Log.i(TAG, "MLKit downloaded: $lang→en") }
-                .addOnFailureListener { e -> Log.w(TAG, "MLKit failed $lang→en: ${e.message}") }
+                .addOnSuccessListener { Log.i(TAG, "MLKit ready: $langCode→en") }
+                .addOnFailureListener { e -> Log.w(TAG, "MLKit fail $langCode→en: ${e.message}") }
 
-            // Download en→lang (for receiving in this language — English pivot second step)
+            // Download en→lang (needed when this language is the receiver / pivot target)
             val optRecv = com.google.mlkit.nl.translate.TranslatorOptions.Builder()
                 .setSourceLanguage(enCode).setTargetLanguage(langCode).build()
             com.google.mlkit.nl.translate.Translation.getClient(optRecv)
                 .downloadModelIfNeeded(conditions)
-                .addOnSuccessListener { Log.i(TAG, "MLKit downloaded: en→$lang") }
-                .addOnFailureListener { e -> Log.w(TAG, "MLKit failed en→$lang: ${e.message}") }
+                .addOnSuccessListener { Log.i(TAG, "MLKit ready: en→$langCode") }
+                .addOnFailureListener { e -> Log.w(TAG, "MLKit fail en→$langCode: ${e.message}") }
         }
-        Log.i(TAG, "MLKit: downloading ${languages.size * 2} models (both directions)")
+        Log.i(TAG, "MLKit: pre-downloading ${uniqueCodes.size * 2} models — all ${allLangs.size}×${allLangs.size} combinations covered")
     }
 
     /**
