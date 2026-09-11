@@ -716,79 +716,63 @@ class MainActivity : AppCompatActivity() {
         try {
             if (SpeechRecognizer.isRecognitionAvailable(this)) {
                 speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
-                speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-                    override fun onReadyForSpeech(params: Bundle?) {
-                        val currentLang = if (::langSpinner.isInitialized && langSpinner.selectedItem != null)
-                            langSpinner.selectedItem.toString() else "Selected language"
-                        runOnUiThread { statusText.text = "🎙️ Listening ($currentLang)... Speak now!" }
-                        resetSilenceTimer()
-                    }
-                    override fun onBeginningOfSpeech() {
-                        resetSilenceTimer()
-                    }
-                    override fun onRmsChanged(rmsdB: Float) {
-                        if (rmsdB > 0.0f) {
-                            resetSilenceTimer()
-                        }
-                    }
-                    override fun onBufferReceived(buffer: ByteArray?) {
-                        resetSilenceTimer()
-                    }
-                    override fun onEndOfSpeech() {
-                        Log.i(TAG, "Speech end detected cleanly.")
-                    }
-                    override fun onError(error: Int) {
-                        Log.w(TAG, "SpeechRecognizer error code $error")
-                        when (error) {
-                            SpeechRecognizer.ERROR_NO_MATCH,
-                            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
-                                runOnUiThread { statusText.text = "No speech detected. Hold mic and speak clearly." }
-                            }
-                            SpeechRecognizer.ERROR_AUDIO -> {
-                                runOnUiThread { statusText.text = "Microphone error. Check permissions." }
-                            }
-                            else -> {
-                                // Error 5 (network), 7 (no recognition), 13 (insufficient permissions)
-                                // — do NOT show error message, just silently wait
-                                // User can try again with PTT
-                                runOnUiThread { statusText.text = "Ready. Hold PTT to speak." }
-                            }
-                        }
-                    }
-
-                    override fun onResults(results: Bundle?) {
-                        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                        if (!matches.isNullOrEmpty()) {
-                            lastRecognizedText = matches[0]
-                            val selectedLangName = if (::langSpinner.isInitialized && langSpinner.selectedItem != null) {
-                                langSpinner.selectedItem.toString()
-                            } else {
-                                "English (India)"
-                            }
-                            val langCode = languageMap[selectedLangName]?.substringBefore("-") ?: "en"
-                            if (!isTransmitted && lastRecognizedText.isNotBlank()) {
-                                isTransmitted = true
-                                transmitMessage(lastRecognizedText, langCode)
-                            }
-                        }
-                    }
-
-                    override fun onPartialResults(partialResults: Bundle?) {
-                        val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                        if (!matches.isNullOrEmpty()) {
-                            lastRecognizedText = matches[0]
-                            runOnUiThread { statusText.text = "🗣️ Hearing: $lastRecognizedText..." }
-                            resetSilenceTimer()
-                        }
-                    }
-
-                    override fun onEvent(eventType: Int, params: Bundle?) {}
-                })
+                speechRecognizer?.setRecognitionListener(buildRecognitionListener())
             }
         } catch (e: Exception) {
-            Log.w(TAG, "SpeechRecognizer setup notice: ${e.message}")
+            Log.w(TAG, "SpeechRecognizer setup: ${e.message}")
         }
     }
+
+    private fun buildRecognitionListener(): RecognitionListener = object : RecognitionListener {
+        override fun onReadyForSpeech(params: Bundle?) {
+            val lang = if (::langSpinner.isInitialized && langSpinner.selectedItem != null)
+                langSpinner.selectedItem.toString() else "Selected language"
+            runOnUiThread { statusText.text = "Listening ($lang)... Speak now!" }
+            resetSilenceTimer()
+        }
+        override fun onBeginningOfSpeech() { resetSilenceTimer() }
+        override fun onRmsChanged(rmsdB: Float) { if (rmsdB > 0f) resetSilenceTimer() }
+        override fun onBufferReceived(buffer: ByteArray?) { resetSilenceTimer() }
+        override fun onEndOfSpeech() {}
+
+        override fun onError(error: Int) {
+            Log.w(TAG, "SpeechRecognizer error $error")
+            when (error) {
+                SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT ->
+                    runOnUiThread { statusText.text = "No speech detected. Speak clearly and try again." }
+                SpeechRecognizer.ERROR_AUDIO ->
+                    runOnUiThread { statusText.text = "Microphone error. Check permissions." }
+                else -> runOnUiThread { statusText.text = "Ready. Hold PTT to speak." }
+            }
+        }
+
+        override fun onResults(results: Bundle?) {
+            val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+            if (!matches.isNullOrEmpty() && matches[0].isNotBlank()) {
+                lastRecognizedText = matches[0]
+                val selectedLangName = if (::langSpinner.isInitialized && langSpinner.selectedItem != null)
+                    langSpinner.selectedItem.toString() else "English (India)"
+                val langCode = languageMap[selectedLangName]?.substringBefore("-") ?: "en"
+                Log.i(TAG, "STT_RESULT lang=$langCode text=\'${matches[0]}\'")
+                if (!isTransmitted) {
+                    isTransmitted = true
+                    transmitMessage(lastRecognizedText, langCode)
+                }
+            }
+        }
+
+        override fun onPartialResults(partialResults: Bundle?) {
+            val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+            if (!matches.isNullOrEmpty()) {
+                lastRecognizedText = matches[0]
+                runOnUiThread { statusText.text = "Hearing: $lastRecognizedText..." }
+                resetSilenceTimer()
+            }
+        }
+
+        override fun onEvent(eventType: Int, params: Bundle?) {}
+    }
+
 
     private fun resetSilenceTimer() {
         silenceHandler.removeCallbacks(silenceRunnable)
@@ -829,6 +813,17 @@ class MainActivity : AppCompatActivity() {
 
             statusText.text = "🎙️ Listening ($selectedLangName)... Speak now!"
             Log.i(TAG, "[STT] Starting for language: $selectedLangName ($langTag)")
+
+            // Recreate SpeechRecognizer to avoid stale state from previous session
+            runOnUiThread {
+                try {
+                    speechRecognizer?.destroy()
+                    speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this@MainActivity)
+                    speechRecognizer?.setRecognitionListener(buildRecognitionListener())
+                } catch (e: Throwable) {
+                    Log.w(TAG, "SpeechRecognizer recreate: ${e.message}")
+                }
+            }
 
             // PRIMARY PATH: Android SpeechRecognizer — works for ALL languages (en, hi, te, mr, kn, etc.)
             // Both OnePlus and Motorola have Google's speech service supporting all Indian languages.
