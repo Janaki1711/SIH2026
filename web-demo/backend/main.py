@@ -1,16 +1,18 @@
 """
 main.py — iTantra M3 Web Demo FastAPI WebSocket Server
-Updated for Semantic Communication
+Updated for Semantic Communication + Multi-User Chat
 """
 
 import asyncio
 import json
+import logging
 import os
 import time
 from typing import Dict, Optional
 import psutil
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import m3_adapter
@@ -21,20 +23,69 @@ import semantic_compressor
 import semantic_schema
 import crypto
 import auth
+from chat_router import router as chat_router
+
+logger = logging.getLogger("itantra")
+
+# ── Read env config ────────────────────────────────────────────────────────────
+AUTH_MODE = os.getenv("AUTH_MODE", "development")  # 'development' | 'production'
 
 app = FastAPI(title="iTantra M3 Semantic Web Demo")
-app.add_middleware(CORSMiddleware, 
-    allow_origins=["*"], 
+app.add_middleware(CORSMiddleware,
+    allow_origins=["*"],
     allow_credentials=False,
-    allow_methods=["*"], 
+    allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
     max_age=86400)
 database.init_db()
 
+# Include chat router (REST + /ws/chat)
+app.include_router(chat_router, prefix="/api")
+
+# Mount static frontend (create placeholder dir if missing)
+_STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
+os.makedirs(_STATIC_DIR, exist_ok=True)
+# Write a minimal index.html placeholder if the dir is empty
+_INDEX = os.path.join(_STATIC_DIR, "index.html")
+if not os.path.exists(_INDEX):
+    with open(_INDEX, "w") as _f:
+        _f.write("<!DOCTYPE html><html><body><h1>iTantra Frontend Placeholder</h1></body></html>\n")
+app.mount("/static", StaticFiles(directory=_STATIC_DIR, html=True), name="static")
+
+
 @app.get("/codebook")
 def codebook():
     return semantic_schema.get_codebook()
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# CAPTCHA validation helper
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _validate_captcha(captcha_token: str) -> bool:
+    """
+    Validate a CAPTCHA token.
+
+    Development mode (AUTH_MODE=development):
+      - Any non-empty token passes.
+      - captcha_token='dev_bypass' also passes with a WARNING logged.
+      ⚠️  NEVER use 'dev_bypass' in production — it is a developer shortcut only.
+
+    Production mode: integrate with a real CAPTCHA provider (e.g. hCaptcha, reCAPTCHA).
+    """
+    if AUTH_MODE != "production":
+        if captcha_token == "dev_bypass":
+            logger.warning(
+                "⚠️  CAPTCHA dev_bypass used — NEVER allow this in production! "
+                "Set AUTH_MODE=production and configure CAPTCHA_SECRET_KEY."
+            )
+        # Accept any token in development
+        return bool(captcha_token)
+
+    # Production: validate against CAPTCHA provider
+    # TODO: call CAPTCHA_PROVIDER API with CAPTCHA_SECRET_KEY
+    raise HTTPException(status_code=501, detail="Production CAPTCHA validation not yet configured")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -51,13 +102,33 @@ class OTPVerifyRequest(BaseModel):
     otp: str
 
 
+class SendOTPRequest(BaseModel):
+    phone: str
+    captcha_token: str
+
+
+class VerifyOTPRequest(BaseModel):
+    phone: str
+    otp: str
+
+
+class SetupProfileRequest(BaseModel):
+    token: str
+    display_name: str
+    preferred_language: str = "en"
+
+
+class LogoutRequest(BaseModel):
+    token: str
+
+
 class UpdateProfileRequest(BaseModel):
     display_name: Optional[str] = None
     preferred_language: Optional[str] = None
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Auth endpoints
+# Auth endpoints — legacy /auth/* (kept for demo UI compatibility)
 # ──────────────────────────────────────────────────────────────────────────────
 
 @app.post("/auth/request-otp")
@@ -68,11 +139,14 @@ def request_otp(body: OTPRequest):
         result = auth.generate_otp(body.identifier, body.method)
         return {"success": True, **result}
     except ValueError as e:
-        raise HTTPException(status_code=429 if "RATE_LIMIT" in str(e) or "RESEND_TOO_SOON" in str(e) else 400, detail=str(e))
+        raise HTTPException(
+            status_code=429 if "RATE_LIMIT" in str(e) or "RESEND_TOO_SOON" in str(e) else 400,
+            detail=str(e)
+        )
 
 
 @app.post("/auth/verify-otp")
-def verify_otp(body: OTPVerifyRequest):
+def verify_otp_legacy(body: OTPVerifyRequest):
     """Verify a 6-digit OTP. Returns session_token and profile on success."""
     result = auth.verify_otp(body.identifier, body.otp)
     if not result["success"]:
@@ -87,7 +161,7 @@ def verify_otp(body: OTPVerifyRequest):
 
 
 @app.get("/auth/profile")
-def get_profile(authorization: Optional[str] = Header(default=None)):
+def get_profile_endpoint(authorization: Optional[str] = Header(default=None)):
     """Return the authenticated user's profile.
     Requires header: Authorization: Bearer <session_token>"""
     token = None
@@ -102,7 +176,7 @@ def get_profile(authorization: Optional[str] = Header(default=None)):
 
 
 @app.post("/auth/update-profile")
-def update_profile(body: UpdateProfileRequest, authorization: Optional[str] = Header(default=None)):
+def update_profile_endpoint(body: UpdateProfileRequest, authorization: Optional[str] = Header(default=None)):
     """Update display_name and/or preferred_language for the authenticated user."""
     token = None
     if authorization and authorization.startswith("Bearer "):
@@ -113,6 +187,80 @@ def update_profile(body: UpdateProfileRequest, authorization: Optional[str] = He
     if profile is None:
         raise HTTPException(status_code=401, detail="Invalid or expired session token")
     return {"success": True, "profile": profile.to_dict()}
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Auth endpoints — /api/auth/* (new chat auth flow)
+# ──────────────────────────────────────────────────────────────────────────────
+
+@app.post("/api/auth/send-otp")
+def api_send_otp(body: SendOTPRequest):
+    """
+    Send OTP to a phone number.
+    Requires a captcha_token (any token in development; real token in production).
+
+    ⚠️  captcha_token='dev_bypass' is accepted in development for testing.
+        NEVER use 'dev_bypass' in a production deployment.
+    """
+    _validate_captcha(body.captcha_token)
+    try:
+        result = auth.generate_otp(body.phone, "phone")
+        return {"success": True, **result}
+    except ValueError as e:
+        raise HTTPException(
+            status_code=429 if "RATE_LIMIT" in str(e) or "RESEND_TOO_SOON" in str(e) else 400,
+            detail=str(e)
+        )
+
+
+@app.post("/api/auth/verify-otp")
+def api_verify_otp(body: VerifyOTPRequest):
+    """Verify phone OTP. Returns session_token + profile on success."""
+    result = auth.verify_otp(body.phone, body.otp)
+    if not result["success"]:
+        status = 429 if result["error"] == "TOO_MANY_ATTEMPTS" else 401
+        raise HTTPException(status_code=status, detail=result["error"])
+    profile = result["profile"]
+    return {
+        "success": True,
+        "session_token": result["session_token"],
+        "profile": profile.to_dict() if profile else None,
+    }
+
+
+@app.post("/api/auth/setup-profile")
+def api_setup_profile(body: SetupProfileRequest):
+    """Set display_name and preferred_language after first OTP verification."""
+    profile = auth.get_profile(body.token)
+    if not profile:
+        raise HTTPException(status_code=401, detail="Invalid or expired session token")
+    if body.preferred_language not in translation_engine.SUPPORTED_LANGUAGES:
+        raise HTTPException(status_code=400, detail=f"Unsupported language: {body.preferred_language}")
+    updated = auth.update_profile(body.token, body.display_name, body.preferred_language)
+    if not updated:
+        raise HTTPException(status_code=401, detail="Invalid or expired session token")
+    # Mirror into DB
+    from database import create_user, get_user_by_phone
+    phone = profile.phone or profile.email or profile.id
+    if not get_user_by_phone(phone):
+        create_user(
+            user_id=profile.id,
+            phone=phone,
+            display_name=body.display_name,
+            preferred_language=body.preferred_language,
+        )
+    else:
+        from database import update_user_language
+        update_user_language(profile.id, body.preferred_language)
+    return {"success": True, "profile": updated.to_dict()}
+
+
+@app.post("/api/auth/logout")
+def api_logout(body: LogoutRequest):
+    """Invalidate a session token."""
+    from auth import _session_store
+    _session_store.pop(body.token, None)
+    return {"success": True}
 
 connections: Dict[str, WebSocket] = {}
 sequence_counters: Dict[str, int] = {"hubbli": 0, "tolankere": 0}

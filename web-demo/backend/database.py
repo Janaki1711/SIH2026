@@ -2,12 +2,14 @@
 database.py — iTantra M3 Web Demo SQLite Persistence
 
 Stores message history and test results for the demo session.
+Also provides the multi-user chat schema (users, conversations, messages).
 """
 
 import sqlite3
 import json
 import time
 import os
+import uuid as _uuid
 
 _DB_PATH = os.path.join(os.path.dirname(__file__), 'itantra_demo.db')
 
@@ -21,8 +23,9 @@ def _get_conn() -> sqlite3.Connection:
 def init_db():
     """Create tables if they don't exist."""
     with _get_conn() as conn:
+        # ── Legacy demo tables ─────────────────────────────────────────────
         conn.execute("""
-            CREATE TABLE IF NOT EXISTS messages (
+            CREATE TABLE IF NOT EXISTS demo_messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp REAL NOT NULL,
                 sender_location TEXT NOT NULL,
@@ -63,16 +66,72 @@ def init_db():
                 results TEXT NOT NULL
             )
         """)
+
+        # ── Chat: users ────────────────────────────────────────────────────
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                phone TEXT UNIQUE,
+                display_name TEXT,
+                preferred_language TEXT DEFAULT 'en',
+                created_at REAL,
+                last_seen REAL
+            )
+        """)
+
+        # ── Chat: conversations ────────────────────────────────────────────
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS conversations (
+                id TEXT PRIMARY KEY,
+                type TEXT DEFAULT 'direct',
+                created_at REAL,
+                updated_at REAL
+            )
+        """)
+
+        # ── Chat: conversation_members ─────────────────────────────────────
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS conversation_members (
+                conversation_id TEXT,
+                user_id TEXT,
+                joined_at REAL,
+                PRIMARY KEY (conversation_id, user_id)
+            )
+        """)
+
+        # ── Chat: messages ─────────────────────────────────────────────────
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS messages (
+                id TEXT PRIMARY KEY,
+                conversation_id TEXT,
+                sender_id TEXT,
+                original_text TEXT,
+                source_language TEXT,
+                target_language TEXT,
+                semantic_payload TEXT,
+                translated_text TEXT,
+                timestamp REAL,
+                status TEXT DEFAULT 'sent',
+                priority INTEGER DEFAULT 0
+            )
+        """)
+
+        # ── Indexes ────────────────────────────────────────────────────────
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_messages_ts ON messages(timestamp)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_conv_members_user ON conversation_members(user_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone)")
+
         conn.commit()
 
 
 def save_message(msg: dict):
-    """Persist a delivered message to SQLite."""
+    """Persist a delivered demo message to SQLite (legacy demo pipeline)."""
     m = msg.get("metrics", {})
     try:
         with _get_conn() as conn:
             conn.execute("""
-                INSERT INTO messages (
+                INSERT INTO demo_messages (
                     timestamp, sender_location, receiver_location,
                     source_language, target_language, original_text, translated_text,
                     translation_mode, raw_text_bytes, compressed_payload_bytes,
@@ -133,11 +192,11 @@ def save_test_result(test_type: str, location: str, results: dict):
 
 
 def get_recent_messages(limit: int = 50) -> list[dict]:
-    """Retrieve recent messages for history display."""
+    """Retrieve recent messages for history display (legacy demo pipeline)."""
     try:
         with _get_conn() as conn:
             rows = conn.execute("""
-                SELECT * FROM messages ORDER BY timestamp DESC LIMIT ?
+                SELECT * FROM demo_messages ORDER BY timestamp DESC LIMIT ?
             """, (limit,)).fetchall()
             return [dict(row) for row in rows]
     except Exception as e:
@@ -146,7 +205,7 @@ def get_recent_messages(limit: int = 50) -> list[dict]:
 
 
 def get_stats() -> dict:
-    """Aggregate statistics from stored messages."""
+    """Aggregate statistics from stored messages (legacy demo pipeline)."""
     try:
         with _get_conn() as conn:
             row = conn.execute("""
@@ -157,7 +216,7 @@ def get_stats() -> dict:
                     MAX(total_latency_ms) as max_latency_ms,
                     AVG(compression_ratio) as avg_compression_ratio,
                     AVG(final_packet_bytes) as avg_packet_bytes
-                FROM messages
+                FROM demo_messages
                 WHERE delivery_status = 'DELIVERED'
             """).fetchone()
             if row:
@@ -172,8 +231,211 @@ def clear_history():
     """Clear all stored messages (for demo reset)."""
     try:
         with _get_conn() as conn:
-            conn.execute("DELETE FROM messages")
+            conn.execute("DELETE FROM demo_messages")
             conn.execute("DELETE FROM test_results")
             conn.commit()
     except Exception as e:
         print(f"[DB] Error clearing history: {e}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Chat: User helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+def create_user(user_id: str, phone: str, display_name: str, preferred_language: str = 'en') -> None:
+    """Insert a new user row. Silently ignores duplicate phone (UNIQUE constraint)."""
+    now = time.time()
+    try:
+        with _get_conn() as conn:
+            conn.execute(
+                """INSERT OR IGNORE INTO users (id, phone, display_name, preferred_language, created_at, last_seen)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (user_id, phone, display_name, preferred_language, now, now)
+            )
+            conn.commit()
+    except Exception as e:
+        print(f"[DB] create_user error: {e}")
+
+
+def get_user_by_phone(phone: str) -> dict | None:
+    """Return user row as dict or None."""
+    try:
+        with _get_conn() as conn:
+            row = conn.execute("SELECT * FROM users WHERE phone = ?", (phone,)).fetchone()
+            return dict(row) if row else None
+    except Exception as e:
+        print(f"[DB] get_user_by_phone error: {e}")
+        return None
+
+
+def get_user_by_id(user_id: str) -> dict | None:
+    """Return user row as dict or None."""
+    try:
+        with _get_conn() as conn:
+            row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+            return dict(row) if row else None
+    except Exception as e:
+        print(f"[DB] get_user_by_id error: {e}")
+        return None
+
+
+def update_user_language(user_id: str, language: str) -> None:
+    """Update a user's preferred_language and last_seen."""
+    try:
+        with _get_conn() as conn:
+            conn.execute(
+                "UPDATE users SET preferred_language = ?, last_seen = ? WHERE id = ?",
+                (language, time.time(), user_id)
+            )
+            conn.commit()
+    except Exception as e:
+        print(f"[DB] update_user_language error: {e}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Chat: Conversation helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+def get_or_create_direct_conversation(user_a_id: str, user_b_id: str) -> str:
+    """Return existing direct conversation_id for the pair, or create one."""
+    try:
+        with _get_conn() as conn:
+            # Find a 'direct' conversation that contains both users
+            row = conn.execute("""
+                SELECT cm1.conversation_id
+                FROM conversation_members cm1
+                JOIN conversation_members cm2 ON cm1.conversation_id = cm2.conversation_id
+                JOIN conversations c ON c.id = cm1.conversation_id
+                WHERE cm1.user_id = ? AND cm2.user_id = ? AND c.type = 'direct'
+                LIMIT 1
+            """, (user_a_id, user_b_id)).fetchone()
+
+            if row:
+                return row["conversation_id"]
+
+            # Create a new direct conversation
+            conv_id = str(_uuid.uuid4())
+            now = time.time()
+            conn.execute(
+                "INSERT INTO conversations (id, type, created_at, updated_at) VALUES (?, 'direct', ?, ?)",
+                (conv_id, now, now)
+            )
+            conn.execute(
+                "INSERT INTO conversation_members (conversation_id, user_id, joined_at) VALUES (?, ?, ?)",
+                (conv_id, user_a_id, now)
+            )
+            conn.execute(
+                "INSERT INTO conversation_members (conversation_id, user_id, joined_at) VALUES (?, ?, ?)",
+                (conv_id, user_b_id, now)
+            )
+            conn.commit()
+            return conv_id
+    except Exception as e:
+        print(f"[DB] get_or_create_direct_conversation error: {e}")
+        raise
+
+
+def save_chat_message(message_dict: dict) -> str:
+    """Persist a chat message. Returns the message_id."""
+    try:
+        with _get_conn() as conn:
+            conn.execute("""
+                INSERT INTO messages (id, conversation_id, sender_id, original_text,
+                    source_language, target_language, semantic_payload, translated_text,
+                    timestamp, status, priority)
+                VALUES (:id, :conversation_id, :sender_id, :original_text,
+                    :source_language, :target_language, :semantic_payload, :translated_text,
+                    :timestamp, :status, :priority)
+            """, {
+                "id": message_dict.get("id", str(_uuid.uuid4())),
+                "conversation_id": message_dict.get("conversation_id", ""),
+                "sender_id": message_dict.get("sender_id", ""),
+                "original_text": message_dict.get("original_text", ""),
+                "source_language": message_dict.get("source_language", "en"),
+                "target_language": message_dict.get("target_language", "en"),
+                "semantic_payload": message_dict.get("semantic_payload", ""),
+                "translated_text": message_dict.get("translated_text", ""),
+                "timestamp": message_dict.get("timestamp", time.time()),
+                "status": message_dict.get("status", "sent"),
+                "priority": message_dict.get("priority", 0),
+            })
+            # Update conversation updated_at
+            conn.execute(
+                "UPDATE conversations SET updated_at = ? WHERE id = ?",
+                (message_dict.get("timestamp", time.time()), message_dict.get("conversation_id"))
+            )
+            conn.commit()
+        return message_dict["id"]
+    except Exception as e:
+        print(f"[DB] save_chat_message error: {e}")
+        raise
+
+
+def get_conversation_messages(conversation_id: str, limit: int = 50) -> list[dict]:
+    """Return the most recent `limit` messages in a conversation, oldest first."""
+    try:
+        with _get_conn() as conn:
+            rows = conn.execute("""
+                SELECT * FROM messages
+                WHERE conversation_id = ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+            """, (conversation_id, limit)).fetchall()
+            return list(reversed([dict(r) for r in rows]))
+    except Exception as e:
+        print(f"[DB] get_conversation_messages error: {e}")
+        return []
+
+
+def get_user_conversations(user_id: str) -> list[dict]:
+    """Return all conversations for a user with a last_message preview."""
+    try:
+        with _get_conn() as conn:
+            rows = conn.execute("""
+                SELECT c.id, c.type, c.created_at, c.updated_at,
+                       m.original_text AS last_message_text,
+                       m.timestamp AS last_message_ts,
+                       m.sender_id AS last_message_sender
+                FROM conversations c
+                JOIN conversation_members cm ON cm.conversation_id = c.id
+                LEFT JOIN messages m ON m.id = (
+                    SELECT id FROM messages
+                    WHERE conversation_id = c.id
+                    ORDER BY timestamp DESC
+                    LIMIT 1
+                )
+                WHERE cm.user_id = ?
+                ORDER BY c.updated_at DESC
+            """, (user_id,)).fetchall()
+            return [dict(r) for r in rows]
+    except Exception as e:
+        print(f"[DB] get_user_conversations error: {e}")
+        return []
+
+
+def get_conversation_members(conversation_id: str) -> list[str]:
+    """Return list of user_ids who are members of the conversation."""
+    try:
+        with _get_conn() as conn:
+            rows = conn.execute(
+                "SELECT user_id FROM conversation_members WHERE conversation_id = ?",
+                (conversation_id,)
+            ).fetchall()
+            return [r["user_id"] for r in rows]
+    except Exception as e:
+        print(f"[DB] get_conversation_members error: {e}")
+        return []
+
+
+def is_conversation_member(conversation_id: str, user_id: str) -> bool:
+    """Return True if user_id is a member of conversation_id."""
+    try:
+        with _get_conn() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id = ?",
+                (conversation_id, user_id)
+            ).fetchone()
+            return row is not None
+    except Exception as e:
+        print(f"[DB] is_conversation_member error: {e}")
+        return False
