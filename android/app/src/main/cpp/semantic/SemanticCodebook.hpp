@@ -31,7 +31,9 @@ enum class ActionCode : uint8_t {
     REQUEST_HELP     = 0x11,
     CANCEL           = 0x12,
     HOLD             = 0x13,
-    RESPOND          = 0x14
+    RESPOND          = 0x14,
+    // FIX 3: Navigation/movement intent
+    GO_TO            = 0x15
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -75,6 +77,18 @@ namespace GeoID {
     constexpr uint16_t BRIDGE                  = 0x4E10;
     constexpr uint16_t HOSPITAL                = 0x4E11;
     constexpr uint16_t SCHOOL                  = 0x4E12;
+    // FIX 3: Added missing location types
+    constexpr uint16_t RAILWAY_STATION         = 0x4E13;
+    constexpr uint16_t BUS_STAND               = 0x4E14;
+    constexpr uint16_t AIRPORT                 = 0x4E15;
+    constexpr uint16_t POLICE_STATION          = 0x4E16;
+    constexpr uint16_t FIRE_STATION            = 0x4E17;
+    constexpr uint16_t MARKET                  = 0x4E18;
+    constexpr uint16_t TEMPLE                  = 0x4E19;
+    constexpr uint16_t MOSQUE                  = 0x4E1A;
+    constexpr uint16_t CHURCH                  = 0x4E1B;
+    constexpr uint16_t HOME                    = 0x4E1C;
+    constexpr uint16_t VILLAGE                 = 0x4E1D;
     constexpr uint16_t PROPER_LOCATION_DYNAMIC = 0x4FFF;
 }
 

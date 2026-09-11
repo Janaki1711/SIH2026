@@ -418,10 +418,30 @@ ActionCode TinyMLAgent::extractActionAndIntent(const std::string& text, ActionCo
         lower.find("सूचना") != std::string::npos || lower.find("अहवाल") != std::string::npos ||
         lower.find("અહેવાલ") != std::string::npos || lower.find("அறிக்கை") != std::string::npos ||
         lower.find("నివేదిక") != std::string::npos || lower.find("ವರದಿ") != std::string::npos ||
-        lower.find("റിപ്പോർട്ട്") != std::string::npos || lower.find("ରିପୋର୍ଟ") != std::string::npos ||
-        lower.find("রিপোর্ট") != std::string::npos) {
+        lower.find("റിപ്പോർട്ട്") != std::string::npos || lower.find("ರಿಪೋರ್ಟ") != std::string::npos ||
+        lower.find("ରିପୋର୍ଟ") != std::string::npos || lower.find("রিপোর্ট") != std::string::npos) {
         outAction = ActionCode::REPORT;
         return ActionCode::REPORT;
+    }
+
+    // FIX 3: 10. GO_TO / Navigate / Movement to a location
+    if (lower.find("go to") != std::string::npos || lower.find("proceed to") != std::string::npos ||
+        lower.find("move to") != std::string::npos || lower.find("head to") != std::string::npos ||
+        lower.find("navigate to") != std::string::npos || lower.find("reach the") != std::string::npos ||
+        lower.find("go towards") != std::string::npos || lower.find("heading to") != std::string::npos ||
+        lower.find("take me to") != std::string::npos || lower.find("direct to") != std::string::npos ||
+        lower.find("जाओ") != std::string::npos || lower.find("जाएं") != std::string::npos ||
+        lower.find("चलो") != std::string::npos || lower.find("पहुंचो") != std::string::npos ||
+        lower.find("जाओ") != std::string::npos ||
+        lower.find("જાઓ") != std::string::npos || lower.find("પહોંચો") != std::string::npos ||
+        lower.find("যাও") != std::string::npos || lower.find("পৌঁছাও") != std::string::npos ||
+        lower.find("போ") != std::string::npos || lower.find("செல்") != std::string::npos ||
+        lower.find("వెళ్ళండి") != std::string::npos || lower.find("చేరండి") != std::string::npos ||
+        lower.find("ಹೋಗಿ") != std::string::npos || lower.find("ತಲುಪಿ") != std::string::npos ||
+        lower.find("പോകൂ") != std::string::npos || lower.find("എത്തൂ") != std::string::npos ||
+        lower.find("ଯାଅ") != std::string::npos || lower.find("ପହଞ୍ଚ") != std::string::npos) {
+        outAction = ActionCode::GO_TO;
+        return ActionCode::GO_TO;
     }
 
     return ActionCode::UNKNOWN;
