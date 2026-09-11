@@ -1141,42 +1141,96 @@ class MainActivity : AppCompatActivity() {
         val srcCode = mlkitLanguageCode(sourceLang)
         val tgtCode = mlkitLanguageCode(targetLang)
         if (srcCode == null || tgtCode == null) {
-            // Language not supported by MLKit — return original with language tag
             onResult("[$sourceLang] $text")
             return
         }
 
-        val translatorKey = "$sourceLang|$targetLang"
-        val translator = mlkitTranslatorCache.getOrPut(translatorKey) {
-            val options = com.google.mlkit.nl.translate.TranslatorOptions.Builder()
-                .setSourceLanguage(srcCode)
-                .setTargetLanguage(tgtCode)
-                .build()
-            com.google.mlkit.nl.translate.Translation.getClient(options)
+        val enCode = mlkitLanguageCode("en")!!
+        val conditions = com.google.mlkit.common.model.DownloadConditions.Builder().build()
+
+        // MLKit only has direct translation pairs with English.
+        // Non-English pairs (hi→kn, kn→te, etc.) MUST go through English as pivot:
+        //   Step 1: hi → en
+        //   Step 2: en → kn
+        // English pairs (en→hi, hi→en) go directly.
+
+        val needsPivot = sourceLang != "en" && targetLang != "en"
+
+        if (!needsPivot) {
+            // Direct translation (one of the languages is English)
+            val translatorKey = "$sourceLang|$targetLang"
+            val translator = mlkitTranslatorCache.getOrPut(translatorKey) {
+                val options = com.google.mlkit.nl.translate.TranslatorOptions.Builder()
+                    .setSourceLanguage(srcCode).setTargetLanguage(tgtCode).build()
+                com.google.mlkit.nl.translate.Translation.getClient(options)
+            }
+            translator.downloadModelIfNeeded(conditions)
+                .addOnSuccessListener {
+                    translator.translate(text)
+                        .addOnSuccessListener { translated ->
+                            translationCache[cacheKey] = translated
+                            Log.i(TAG, "MLKit[$sourceLang→$targetLang] direct: '$text' → '$translated'")
+                            onResult(translated)
+                        }
+                        .addOnFailureListener { e ->
+                            Log.w(TAG, "MLKit direct translate error: ${e.message}")
+                            onResult(text)
+                        }
+                }
+                .addOnFailureListener { e ->
+                    Log.w(TAG, "MLKit model download failed: ${e.message}")
+                    onResult(text)
+                }
+        } else {
+            // Pivot via English: srcLang → en → targetLang
+            val step1Key = "$sourceLang|en"
+            val step1 = mlkitTranslatorCache.getOrPut(step1Key) {
+                val options = com.google.mlkit.nl.translate.TranslatorOptions.Builder()
+                    .setSourceLanguage(srcCode).setTargetLanguage(enCode).build()
+                com.google.mlkit.nl.translate.Translation.getClient(options)
+            }
+            val step2Key = "en|$targetLang"
+            val step2 = mlkitTranslatorCache.getOrPut(step2Key) {
+                val options = com.google.mlkit.nl.translate.TranslatorOptions.Builder()
+                    .setSourceLanguage(enCode).setTargetLanguage(tgtCode).build()
+                com.google.mlkit.nl.translate.Translation.getClient(options)
+            }
+
+            step1.downloadModelIfNeeded(conditions)
+                .addOnSuccessListener {
+                    step2.downloadModelIfNeeded(conditions)
+                        .addOnSuccessListener {
+                            // Step 1: source → English
+                            step1.translate(text)
+                                .addOnSuccessListener { englishText ->
+                                    Log.i(TAG, "MLKit pivot step1 [$sourceLang→en]: '$text' → '$englishText'")
+                                    // Step 2: English → target
+                                    step2.translate(englishText)
+                                        .addOnSuccessListener { finalText ->
+                                            translationCache[cacheKey] = finalText
+                                            Log.i(TAG, "MLKit pivot step2 [en→$targetLang]: '$englishText' → '$finalText'")
+                                            onResult(finalText)
+                                        }
+                                        .addOnFailureListener { e ->
+                                            Log.w(TAG, "MLKit pivot step2 error: ${e.message}")
+                                            onResult(englishText) // fallback to English intermediate
+                                        }
+                                }
+                                .addOnFailureListener { e ->
+                                    Log.w(TAG, "MLKit pivot step1 error: ${e.message}")
+                                    onResult(text)
+                                }
+                        }
+                        .addOnFailureListener { e ->
+                            Log.w(TAG, "MLKit en→$targetLang model download failed: ${e.message}")
+                            onResult(text)
+                        }
+                }
+                .addOnFailureListener { e ->
+                    Log.w(TAG, "MLKit $sourceLang→en model download failed: ${e.message}")
+                    onResult(text)
+                }
         }
-
-        // Download model on ANY network (Wi-Fi or mobile data)
-        // requireWifi() was blocking downloads on college/office networks
-        val conditions = com.google.mlkit.common.model.DownloadConditions.Builder()
-            .build()  // No network restriction — download anywhere
-
-        translator.downloadModelIfNeeded(conditions)
-            .addOnSuccessListener {
-                translator.translate(text)
-                    .addOnSuccessListener { translated ->
-                        translationCache[cacheKey] = translated
-                        Log.i(TAG, "MLKit[$sourceLang→$targetLang]: '$text' → '$translated'")
-                        onResult(translated)
-                    }
-                    .addOnFailureListener { e ->
-                        Log.w(TAG, "MLKit translate error: ${e.message}")
-                        onResult("[$sourceLang] $text")
-                    }
-            }
-            .addOnFailureListener { e ->
-                Log.w(TAG, "MLKit model download failed (no Wi-Fi?): ${e.message}")
-                onResult("[$sourceLang] $text")
-            }
     }
 
     /**
@@ -1232,25 +1286,34 @@ class MainActivity : AppCompatActivity() {
      * Once downloaded (~20MB per language), all translation is fully offline forever.
      */
     private fun preDownloadTranslationModels() {
-        // Common pairs: en↔hi, en↔kn, en↔te, en↔mr, en↔ta, en↔bn, en↔gu, hi↔kn, hi↔mr, mr↔kn
-        val languagesToDownload = listOf("hi", "kn", "te", "mr", "ta", "bn", "gu", "en")
+        // MLKit translates non-English pairs via English pivot: hi→kn = hi→en + en→kn
+        // So we must download BOTH directions for every language:
+        //   lang→en  (for sending: Hindi speaker sends to English receiver)
+        //   en→lang  (for receiving: English pivot output to target language)
+        val languages = listOf("hi", "kn", "te", "mr", "ta", "bn", "gu")
         val conditions = com.google.mlkit.common.model.DownloadConditions.Builder().build()
+        val enCode = mlkitLanguageCode("en") ?: return
 
-        for (lang in languagesToDownload) {
-            val options = com.google.mlkit.nl.translate.TranslatorOptions.Builder()
-                .setSourceLanguage(mlkitLanguageCode(lang) ?: continue)
-                .setTargetLanguage(mlkitLanguageCode("en") ?: continue)
-                .build()
-            val t = com.google.mlkit.nl.translate.Translation.getClient(options)
-            t.downloadModelIfNeeded(conditions)
-                .addOnSuccessListener {
-                    Log.i(TAG, "MLKit model downloaded: $lang→en")
-                }
-                .addOnFailureListener { e ->
-                    Log.w(TAG, "MLKit model download failed ($lang→en): ${e.message}")
-                }
+        for (lang in languages) {
+            val langCode = mlkitLanguageCode(lang) ?: continue
+
+            // Download lang→en (for sending in this language)
+            val optSend = com.google.mlkit.nl.translate.TranslatorOptions.Builder()
+                .setSourceLanguage(langCode).setTargetLanguage(enCode).build()
+            com.google.mlkit.nl.translate.Translation.getClient(optSend)
+                .downloadModelIfNeeded(conditions)
+                .addOnSuccessListener { Log.i(TAG, "MLKit downloaded: $lang→en") }
+                .addOnFailureListener { e -> Log.w(TAG, "MLKit failed $lang→en: ${e.message}") }
+
+            // Download en→lang (for receiving in this language — English pivot second step)
+            val optRecv = com.google.mlkit.nl.translate.TranslatorOptions.Builder()
+                .setSourceLanguage(enCode).setTargetLanguage(langCode).build()
+            com.google.mlkit.nl.translate.Translation.getClient(optRecv)
+                .downloadModelIfNeeded(conditions)
+                .addOnSuccessListener { Log.i(TAG, "MLKit downloaded: en→$lang") }
+                .addOnFailureListener { e -> Log.w(TAG, "MLKit failed en→$lang: ${e.message}") }
         }
-        Log.i(TAG, "MLKit: background model pre-download started for ${languagesToDownload.size} languages")
+        Log.i(TAG, "MLKit: downloading ${languages.size * 2} models (both directions)")
     }
 
     /**
