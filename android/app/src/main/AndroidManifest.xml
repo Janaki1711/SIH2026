@@ -38,13 +38,23 @@
         android:theme="@style/Theme.SIH2026"
         tools:targetApi="31">
 
+        <!-- AUTH: Login is the entry point — checks token, skips to MainActivity if already logged in -->
+        <activity
+            android:name=".LoginActivity"
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+
+        <activity android:name=".OtpActivity" android:windowSoftInputMode="adjustResize"/>
+        <activity android:name=".ProfileSetupActivity" android:windowSoftInputMode="adjustResize"/>
+
         <activity
             android:name=".MainActivity"
             android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
         </activity>
 
         <activity

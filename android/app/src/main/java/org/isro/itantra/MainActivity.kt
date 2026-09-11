@@ -688,6 +688,38 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // Show logged-in user info in status dot
+        val prefs = getSharedPreferences(LoginActivity.PREF_FILE, android.content.Context.MODE_PRIVATE)
+        val displayName = prefs.getString(LoginActivity.PREF_DISPLAY_NAME, null)
+        val savedLang = prefs.getString(LoginActivity.PREF_LANGUAGE, null)
+        if (displayName != null) {
+            findViewById<android.widget.TextView?>(R.id.statusDotText)?.text = displayName
+        }
+        // Pre-select the saved language in spinner
+        if (savedLang != null && ::langSpinner.isInitialized) {
+            val langEntries = languageMap.entries.toList()
+            val idx = langEntries.indexOfFirst { it.value.substringBefore("-") == savedLang }
+            if (idx >= 0) langSpinner.setSelection(idx)
+        }
+
+        // Logout when header pill long-pressed
+        netStatusText.setOnLongClickListener {
+            android.app.AlertDialog.Builder(this)
+                .setTitle("Sign Out")
+                .setMessage("Sign out from iTantra?")
+                .setPositiveButton("Sign Out") { _, _ ->
+                    getSharedPreferences(LoginActivity.PREF_FILE, android.content.Context.MODE_PRIVATE)
+                        .edit().clear().apply()
+                    connectedPeer = ""
+                    transport?.stop()
+                    startActivity(android.content.Intent(this, LoginActivity::class.java))
+                    finish()
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+            true
+        }
+
         // Wire new START AUDIO and TRANSCRIBE buttons (same as PTT hold/release)
         findViewById<android.widget.Button?>(R.id.btnStartAudio)?.setOnClickListener {
             if (!isRecording) {
