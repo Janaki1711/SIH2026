@@ -27,14 +27,17 @@ import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
     private val myCallsign: String by lazy {
-        // Use the logged-in display name so the user's name shows in chat on other phones
+        // Use the unique NODE_ID as the mesh identity — never the display name (names collide)
         val prefs = getSharedPreferences(LoginActivity.PREF_FILE, android.content.Context.MODE_PRIVATE)
-        val savedName = prefs.getString(LoginActivity.PREF_DISPLAY_NAME, null)
-        if (!savedName.isNullOrBlank()) {
-            savedName.replace(" ", "_").take(16)
+        val nodeId = prefs.getString(LoginActivity.PREF_NODE_ID, null)
+        if (!nodeId.isNullOrBlank()) {
+            nodeId
         } else {
-            val model = android.os.Build.MODEL.filter { it.isLetterOrDigit() }
-            "NODE_" + if (model.isNotEmpty()) model.takeLast(6) else "${(1000..9999).random()}"
+            // Offline fallback: generate and persist
+            val seed = "${prefs.getString(LoginActivity.PREF_USER_ID, "")}${android.os.Build.MODEL.takeLast(4)}${(1000..9999).random()}"
+            val generated = LoginActivity.generateNodeId(seed)
+            prefs.edit().putString(LoginActivity.PREF_NODE_ID, generated).apply()
+            generated
         }
     }
     private var multicastLock: android.net.wifi.WifiManager.MulticastLock? = null
@@ -103,10 +106,15 @@ class MainActivity : AppCompatActivity() {
     @Volatile private var isTransmitted = false
     @Volatile private var isWalkieTalkieMode = true
     @Volatile private var connectedPeer: String = ""  // deduplicate connection events
-    @Volatile private var selectedTargetPeer: String = "ALL"  // "ALL" = broadcast, else unicast to callsign
-    private val knownPeersList = java.util.concurrent.CopyOnWriteArrayList<String>() // live peer list for spinner
-    private val knownPeersIpMap = java.util.concurrent.ConcurrentHashMap<String, String>() // callsign → IP
+    // Broadcast-only: no peer targeting. Roster maps nodeId → "lang|gps"
+    private val meshRoster = java.util.concurrent.ConcurrentHashMap<String, String>()
     private var spellCorrector: org.isro.itantra.audio.SpellCorrector? = null
+
+    // MessageScheduler for FIFO inbound playback
+    private lateinit var messageScheduler: org.isro.itantra.runtime.MessageScheduler
+
+    // Offline GPS
+    private var offlineGps: org.isro.itantra.location.OfflineGpsFix? = null
 
     // Prosody capture — collects PCM floats during recording for pitch/energy extraction
     // These are sent in the packet so the receiver can match the speaker's voice character
@@ -202,6 +210,10 @@ class MainActivity : AppCompatActivity() {
             indicTTSManager = org.isro.itantra.tts.IndicTTSManager(this) { statusMsg ->
                 runOnUiThread { Log.i(TAG, "TTS: $statusMsg") }
             }
+            // Wire TTS playback-done → MessageScheduler so queue advances correctly
+            indicTTSManager?.onTtsDone = {
+                if (::messageScheduler.isInitialized) messageScheduler.onPlaybackDone()
+            }
         } catch (e: Throwable) {
             Log.w(TAG, "IndicTTSManager init notice: ${e.message}")
         }
@@ -277,104 +289,82 @@ class MainActivity : AppCompatActivity() {
                     }
                 } catch (e: Throwable) {}
 
-                showChannelLock(origin)
-                // Add sender to peer list only if not already known (no UI churn on every message)
-                if (!knownPeersList.contains(origin)) {
-                    updatePeerSpinner(origin, isActive = true)
-                } else {
-                    // Already known — just update last-active silently
-                    lastActivePeer = origin
+                // Update roster with sender info
+                if (!meshRoster.containsKey(origin)) {
+                    meshRoster[origin] = "$sourceLang|GPS_UNAVAIL|"
+                    runOnUiThread { updateRosterUi() }
                 }
+
                 if (sourceLang == targetLang) {
-                    // Same language — display and speak directly, no translation needed
-                    Log.i(TAG, "━━ TTS_INPUT  lang=$targetLang  text='$rawText'  (same language)")
+                    // Same language — enqueue directly
+                    Log.i(TAG, "━━ RX_SAME_LANG  lang=$targetLang  text='$rawText'")
                     runOnUiThread {
-                        statusText.text = "📥 From $origin [$sourceLang]:\n$rawText"
                         addChatMessageToUi(origin, sourceLang, targetLang, rawText, false, rawText)
+                        statusText.text = "📥 From $origin [$sourceLang]: $rawText"
                     }
-                    playTTS(rawText, effectiveTtsLang(targetLang), isAlert)
+                    val item = org.isro.itantra.runtime.MessageScheduler.Item(
+                        nodeId = origin, lang = effectiveTtsLang(targetLang),
+                        text = rawText, isSos = isAlert
+                    )
+                    messageScheduler.enqueue(item)
                 } else {
-                    // Different languages
+                    // Different languages — translate first, then enqueue for TTS in localLang ONLY
                     runOnUiThread {
-                        statusText.text = "📥 From $origin [$sourceLang→$targetLang]:\n$rawText\n⏳ Translating..."
                         addChatMessageToUi(origin, sourceLang, targetLang, rawText, false, rawText)
+                        statusText.text = "📥 From $origin [$sourceLang→$targetLang]: translating…"
                     }
-                    // ALWAYS speak immediately — even before translation
-                    // Speak in source language right away so user hears something instantly
-                    playTTS(rawText, effectiveTtsLang(sourceLang), isAlert)
-
                     translateWithMlKit(rawText, sourceLang, targetLang) { translated ->
-                        // translated == rawText means model not downloaded yet (fallback fired)
-                        val isRealTranslation = translated.isNotBlank() &&
-                            translated != rawText &&
-                            !translated.startsWith("[$sourceLang]")
-
-                        val displayText = if (isRealTranslation) translated else rawText
-                        val ttsLang = if (isRealTranslation) effectiveTtsLang(targetLang) else effectiveTtsLang(sourceLang)
-
-                        Log.i(TAG, "━━ RX_RESULT  $sourceLang→$targetLang  realTranslation=$isRealTranslation  ttsLang=$ttsLang  text='$displayText'")
-
+                        val isReal = translated.isNotBlank() &&
+                            translated != rawText && !translated.startsWith("[$sourceLang]")
+                        val displayText = if (isReal) translated else rawText
+                        val ttsLang = if (isReal) effectiveTtsLang(targetLang) else effectiveTtsLang(sourceLang)
+                        Log.i(TAG, "━━ RX_TRANSLATED  $sourceLang→$targetLang  '$rawText' → '$displayText'  ttsLang=$ttsLang")
                         runOnUiThread {
-                            statusText.text = "📥 $origin [$sourceLang→$targetLang]:\n$displayText"
+                            statusText.text = "📥 $origin [$sourceLang→$targetLang]: $displayText"
                             addChatMessageToUi(origin, sourceLang, targetLang, displayText, false, rawText)
                         }
-                        // Speak translated version after a gap (original already playing)
-                        // If no real translation, skip second TTS (already spoke original above)
-                        if (isRealTranslation) {
-                            Handler(Looper.getMainLooper()).postDelayed({
-                                playTTS(displayText, ttsLang, isAlert)
-                            }, 600)
-                        }
+                        // Enqueue for scheduler — speak ONLY in target language
+                        val item = org.isro.itantra.runtime.MessageScheduler.Item(
+                            nodeId = origin, lang = ttsLang,
+                            text = displayText, isSos = isAlert
+                        )
+                        messageScheduler.enqueue(item)
                     }
                 }
             }
 
 
-            transport?.onPeerDiscovered = { peerCallsign, peerIp ->
-                // Always track the peer and IP regardless of UI debounce
-                if (peerIp.isNotBlank()) knownPeersIpMap[peerCallsign] = peerIp
-                val isNew = connectedPeer != peerCallsign
-                // Only update UI when this is a genuinely new peer
-                // Beacon fires every 15s — this check prevents any duplicate UI flicker
-                if (isNew && peerCallsign != myCallsign) {
-                    connectedPeer = peerCallsign
-                    updatePeerSpinner(peerCallsign, isActive = true)
-                    runOnUiThread {
-                        val myName = getSharedPreferences(LoginActivity.PREF_FILE, android.content.Context.MODE_PRIVATE)
-                            .getString(LoginActivity.PREF_DISPLAY_NAME, myCallsign) ?: myCallsign
-                        findViewById<android.widget.TextView?>(R.id.statusDotText)?.let {
-                            it.text = "● $peerCallsign connected"
-                            it.setTextColor(android.graphics.Color.parseColor("#065F46"))
-                        }
-                        findViewById<android.view.View?>(R.id.statusDotHeader)?.background = getDrawable(R.drawable.dot_green)
-                        Log.i(TAG, "PEER_DISCOVERED: $peerCallsign @ $peerIp")
+            transport?.onPeerDiscovered = { peerCallsign, peerInfo ->
+                // peerInfo format from new beacon: "ip|lang|gps"  (old format: just "ip")
+                if (peerCallsign != myCallsign && peerCallsign.isNotBlank()) {
+                    val parts = peerInfo.split("|")
+                    val peerIp  = parts.getOrElse(0) { "" }
+                    val peerLang = parts.getOrElse(1) { "en" }
+                    val peerGps  = parts.getOrElse(2) { "GPS_UNAVAIL" }
+                    // Store roster entry: "lang|gps|ip"
+                    val rosterEntry = "$peerLang|$peerGps|$peerIp"
+                    val isNew = meshRoster[peerCallsign] == null
+                    meshRoster[peerCallsign] = rosterEntry
+                    if (isNew) {
+                        runOnUiThread { updateRosterUi() }
+                        Log.i(TAG, "PEER_DISCOVERED: $peerCallsign lang=$peerLang gps=$peerGps @ $peerIp")
+                    } else {
+                        // Silently refresh GPS/lang on repeated beacons
+                        runOnUiThread { updateRosterUi() }
                     }
-                } else if (!isNew) {
-                    // Silently update IP if we now have a better one — no UI change
-                    if (peerIp.isNotBlank()) knownPeersIpMap[peerCallsign] = peerIp
                 }
             }
 
             transport?.onLinkConfirmed = { peerCallsign, peerIp, rtt ->
-                if (peerIp.isNotBlank()) knownPeersIpMap[peerCallsign] = peerIp
                 val rttStr = if (rtt > 0) "${rtt}ms" else "—"
-                val isNewLink = connectedPeer != peerCallsign
-                connectedPeer = peerCallsign
-                updatePeerSpinner(peerCallsign, isActive = true)
-                runOnUiThread {
-                    val myName = getSharedPreferences(LoginActivity.PREF_FILE, android.content.Context.MODE_PRIVATE)
-                        .getString(LoginActivity.PREF_DISPLAY_NAME, myCallsign) ?: myCallsign
-                    // Only show toast on genuinely new link confirmation
-                    if (isNewLink) {
-                        android.widget.Toast.makeText(this@MainActivity, "✅ Linked: $peerCallsign (RTT: $rttStr)", android.widget.Toast.LENGTH_SHORT).show()
+                if (peerCallsign != myCallsign) {
+                    val existing = meshRoster[peerCallsign] ?: "en|GPS_UNAVAIL|$peerIp"
+                    meshRoster[peerCallsign] = existing  // preserve lang/gps, update ip
+                    runOnUiThread {
+                        updateRosterUi()
+                        findViewById<android.widget.TextView?>(R.id.rttValue)?.text = "RTT: $rttStr"
+                        Log.i(TAG, "LINK_CONFIRMED: $peerCallsign @ $peerIp ($rttStr)")
                     }
-                    findViewById<android.widget.TextView?>(R.id.statusDotText)?.let {
-                        it.text = "● $peerCallsign · $rttStr"
-                        it.setTextColor(android.graphics.Color.parseColor("#065F46"))
-                    }
-                    findViewById<android.view.View?>(R.id.statusDotHeader)?.background = getDrawable(R.drawable.dot_green)
-                    findViewById<android.widget.TextView?>(R.id.rttValue)?.text = "RTT: $rttStr"
-                    Log.i(TAG, "LINK_CONFIRMED: $peerCallsign @ $peerIp ($rttStr)")
                 }
             }
 
@@ -490,6 +480,11 @@ class MainActivity : AppCompatActivity() {
         startButton.setOnClickListener {
             if (!isRecording) {
                 // ── TAP 1: START RECORDING ──
+                // Block PTT if channel is busy (scheduler is playing inbound messages)
+                if (::messageScheduler.isInitialized && messageScheduler.isChannelBusy) {
+                    messageScheduler.checkPttAllowed()  // fires onPttBlocked toast
+                    return@setOnClickListener
+                }
                 if (checkAndRequestAudioPermission()) {
                     startButton.backgroundTintList = null
                     startButton.background = getDrawable(R.drawable.ptt_btn_bg_active)
@@ -625,31 +620,6 @@ class MainActivity : AppCompatActivity() {
         // Seed initial log line
         appendDiagLog("Diagnostics started. Device IP: ${getAllLocalIpAddresses().firstOrNull() ?: "offline"}")
 
-        // ── KEEPALIVE: ping the selected peer every 10 seconds ───────────
-        // This maintains the TCP hole-punch / UDP route even if no messages are sent
-        val keepAliveHandler = android.os.Handler(android.os.Looper.getMainLooper())
-        val keepAliveRunnable = object : Runnable {
-            override fun run() {
-                val peer = selectedTargetPeer
-                if (peer != "ALL" && peer.isNotBlank()) {
-                    // Ping known peer to confirm link is alive
-                    val peerIp = try {
-                        (transport?.getDiagnosticInfo()?.get("discoveredPeers") ?: "")
-                            .split(",").map { it.trim() }
-                            .find { it.isNotBlank() }
-                    } catch (e: Throwable) { null }
-                    // Send a silent keepalive beacon directly
-                    try {
-                        val ka = "ITANTRA_KA:${myCallsign}:${System.currentTimeMillis()}".toByteArray()
-                        transport?.sendVoiceMessage(ka, "en", 0.toByte(), peer)
-                        Log.d(TAG, "KEEPALIVE sent to $peer")
-                    } catch (e: Throwable) {}
-                }
-                keepAliveHandler.postDelayed(this, 10_000)
-            }
-        }
-        keepAliveHandler.postDelayed(keepAliveRunnable, 10_000)
-
         // Update sent card when transmitMessage runs — hook via statusText observer
         // The statusText.text starts with "Sent [lang]:" — parse and push to tx card
         val txWatcher = object : android.text.TextWatcher {
@@ -758,62 +728,73 @@ class MainActivity : AppCompatActivity() {
                 val selectedLangName = languagesList[position]
                 val langCode = languageMap[selectedLangName]?.substringBefore("-") ?: "hi"
                 spellCorrector?.switchLanguageAsync(langCode)
+                // Update beacon so other nodes know our language changed
+                transport?.updateBeaconLang(langCode)
+                updateRosterUi()
             }
             override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
         }
 
-        // ── PEER SELECTOR SPINNER ─────────────────────────────────────
-        val peerSelectSpinner = findViewById<android.widget.Spinner?>(R.id.peerSelectSpinner)
-        // Initialise with broadcast-only option
-        updatePeerSpinner(null)
-        // When user picks a peer — ping+connect immediately to establish the UDP route
-        peerSelectSpinner?.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
-                if (position == 0) {
-                    selectedTargetPeer = "ALL"
-                    statusText.text = "📡 Broadcasting to all nodes"
-                } else {
-                    val sortedPeers = knownPeersList.sortedWith(compareByDescending { it == lastActivePeer })
-                    val chosen = sortedPeers.getOrNull(position - 1) ?: "ALL"
-                    selectedTargetPeer = chosen
+        // ── BROADCAST ONLY — no peer targeting ────────────────────────
+        // All messages go to "ALL". Roster shows who's on the mesh.
+        // Show my own node ID in the header
+        val myNodeId = myCallsign
+        val myDisplayName = getSharedPreferences(LoginActivity.PREF_FILE, Context.MODE_PRIVATE)
+            .getString(LoginActivity.PREF_DISPLAY_NAME, myNodeId) ?: myNodeId
+        findViewById<android.widget.TextView?>(R.id.statusDotText)?.text = "$myNodeId · $myDisplayName"
+        updateRosterUi()
 
-                    // Look up IP for this callsign and establish/refresh the UDP route
-                    val peerIp = knownPeersIpMap[chosen]
-                    if (!peerIp.isNullOrBlank()) {
-                        statusText.text = "🔗 Connecting to $chosen ($peerIp)…"
-                        transport?.pingPeer(peerIp, timeoutMs = 2000L, maxAttempts = 3) { success, callsign, rtt, _ ->
-                            runOnUiThread {
-                                if (success) {
-                                    selectedTargetPeer = chosen  // confirm after pong
-                                    statusText.text = "✅ Connected: $chosen | RTT: ${rtt}ms\nReady to send"
-                                    updatePeerSpinner(chosen, isActive = true)
-                                } else {
-                                    statusText.text = "⚠️ $chosen unreachable — will retry on send"
-                                }
-                            }
-                        }
-                    } else {
-                        // No IP known yet — will be discovered on first message exchange
-                        statusText.text = "📡 Selected: $chosen (waiting for discovery…)"
-                    }
-                }
-            }
-            override fun onNothingSelected(parent: android.widget.AdapterView<*>?) { selectedTargetPeer = "ALL" }
+        // ── MESSAGE SCHEDULER ─────────────────────────────────────────
+        messageScheduler = org.isro.itantra.runtime.MessageScheduler(stateMachine)
+        messageScheduler.onPlayItem = { item ->
+            val isSos = item.isSos
+            playTTS(item.text, item.lang, isSos)
         }
-        // Refresh button — re-scan for peers from already discovered set in transport
-        findViewById<android.widget.Button?>(R.id.btnRefreshPeers)?.setOnClickListener {
-            val info = transport?.getDiagnosticInfo() ?: emptyMap()
-            val rawPeers = info["discoveredPeers"]?.toString()?.split(",")?.map { it.trim() }?.filter { it.isNotBlank() } ?: emptyList()
-            // Filter: only real callsigns, not PEER_192.x.x.x entries
-            rawPeers.forEach { entry ->
-                if (!entry.matches(Regex("PEER_\\d+.*"))) {
-                    updatePeerSpinner(entry)
+        messageScheduler.onQueueStatus = { queued, currentNode ->
+            runOnUiThread {
+                val banner = findViewById<android.widget.LinearLayout?>(R.id.channelLockBanner)
+                val text   = findViewById<android.widget.TextView?>(R.id.channelLockText)
+                if (queued > 0) {
+                    text?.text = "🎙️ Playing $currentNode ($queued waiting) — PTT blocked"
+                    banner?.visibility = android.view.View.VISIBLE
+                    startButton.isEnabled = false
+                } else if (currentNode.isNotBlank()) {
+                    text?.text = "🎙️ Receiving from $currentNode…"
+                    banner?.visibility = android.view.View.VISIBLE
+                    startButton.isEnabled = false
                 }
             }
-            android.widget.Toast.makeText(this,
-                if (knownPeersList.isEmpty()) "No peers found — make sure both phones are on the same Wi-Fi"
-                else "Found ${knownPeersList.size} peer(s): ${knownPeersList.joinToString(", ")}",
-                android.widget.Toast.LENGTH_SHORT).show()
+        }
+        messageScheduler.onQueueEmpty = {
+            runOnUiThread {
+                val banner = findViewById<android.widget.LinearLayout?>(R.id.channelLockBanner)
+                banner?.visibility = android.view.View.GONE
+                startButton.isEnabled = true
+                startButton.text = "🎙️  TAP TO SPEAK"
+                stateMachine.handleEvent(org.isro.itantra.runtime.PTTEvent.QUEUE_DRAIN)
+            }
+        }
+        messageScheduler.onPttBlocked = {
+            runOnUiThread {
+                android.widget.Toast.makeText(this, "⏳ Channel busy — wait for playback to finish", android.widget.Toast.LENGTH_SHORT).show()
+                startButton.text = "⏳  Channel busy…"
+            }
+        }
+
+        // ── OFFLINE GPS ───────────────────────────────────────────────
+        offlineGps = org.isro.itantra.location.OfflineGpsFix(this)
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED) {
+            offlineGps?.start { fix ->
+                // Update beacon GPS payload
+                transport?.updateBeaconGps(fix.toBeaconString())
+                // Update roster UI with fresh GPS
+                updateRosterUi()
+                Log.i(TAG, "GPS fix: ${fix.lat},${fix.lon} ±${fix.accuracyM}m")
+            }
+        } else {
+            ActivityCompat.requestPermissions(this,
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION), 101)
         }
 
         // Safe startup initialization
@@ -1041,51 +1022,14 @@ class MainActivity : AppCompatActivity() {
                 val selectedLangName = if (::langSpinner.isInitialized && langSpinner.selectedItem != null)
                     langSpinner.selectedItem.toString() else "English (India)"
                 val selectedLangCode = languageMap[selectedLangName]?.substringBefore("-") ?: "en"
-                Log.i(TAG, "STT_RESULT(en-IN) selectedLang=$selectedLangCode text='${matches[0]}'")
+                Log.i(TAG, "STT_RESULT lang=$selectedLangCode text='${matches[0]}'")
 
                 if (!isTransmitted) {
                     isTransmitted = true
-                    if (selectedLangCode == "en") {
-                        // English selected — transmit English STT result directly
-                        transmitMessage(lastRecognizedText, "en")
-                    } else {
-                        // Non-English selected — translate EN→selectedLang then transmit
-                        // Phone A (Hindi): speaks → STT→EN → translate EN→HI → transmit as "hi"
-                        // Phone B (Marathi): receives "hi" → translate HI→EN→MR → TTS in Marathi
-                        runOnUiThread {
-                            statusText.text = "🗣️ Heard: ${lastRecognizedText}\n⏳ Translating to ${selectedLangName}..."
-                            startButton.text = "⏳  Translating…"
-                        }
-                        // translateWithMlKit now always fires immediately (no hanging).
-                        // If model not downloaded: returns original English text unchanged.
-                        // In that case transmit as "en" so receiver TTS always works.
-                        var translationDone = false
-                        val timeoutHandler = Handler(Looper.getMainLooper())
-                        timeoutHandler.postDelayed({
-                            if (!translationDone) {
-                                translationDone = true
-                                transmitMessage(lastRecognizedText, "en")
-                            }
-                        }, 5_000)
-
-                        translateWithMlKit(lastRecognizedText, "en", selectedLangCode) { translated ->
-                            if (!translationDone) {
-                                translationDone = true
-                                timeoutHandler.removeCallbacksAndMessages(null)
-                                val isReal = translated.isNotBlank() &&
-                                    translated != lastRecognizedText &&
-                                    !translated.startsWith("[en]")
-                                if (isReal) {
-                                    Log.i(TAG, "TX_TRANSLATE en→$selectedLangCode: '$lastRecognizedText' → '$translated'")
-                                    transmitMessage(translated, selectedLangCode)
-                                } else {
-                                    // Model not ready — send as English; receiver TTS will speak in English
-                                    Log.i(TAG, "TX_EN_FALLBACK (model not ready): '$lastRecognizedText'")
-                                    transmitMessage(lastRecognizedText, "en")
-                                }
-                            }
-                        }
-                    }
+                    // Sender transmits in their own STT language.
+                    // Each receiver translates src→localLang independently on their device.
+                    // No pre-translation on sender side — one packet, N receivers, N languages.
+                    transmitMessage(lastRecognizedText, selectedLangCode)
                 }
             }
         }
@@ -1155,11 +1099,10 @@ class MainActivity : AppCompatActivity() {
             speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
             speechRecognizer?.setRecognitionListener(buildRecognitionListener())
 
-            // ALWAYS use English STT — it's the only model guaranteed offline on all Android devices.
-            // For Indic languages, we translate the English STT result to the selected language
-            // before transmitting (in onResults). The receiver handles the second translation.
-            // Using hi-IN/mr-IN/etc. requires Google's offline pack which may not be installed.
-            val sttLang = if (langTag.startsWith("en")) langTag else "en-IN"
+            // Use the sender's selected language for STT.
+            // For languages where offline packs may be missing, PREFER_OFFLINE still works
+            // for English; for Indic, Android will attempt the language and fall back gracefully.
+            val sttLang = langTag  // e.g. "hi-IN", "kn-IN", "te-IN", "en-IN"
             val speechIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, sttLang)
@@ -1305,8 +1248,12 @@ class MainActivity : AppCompatActivity() {
         val packet: ByteArray = correctedText.toByteArray(Charsets.UTF_8)
         Log.i(TAG, "━━ OUTGOING_MSG    lang=$langCode  bytes=${packet.size}  text='$correctedText'")
 
+        // Update beacon so other nodes know our current language
+        transport?.updateBeaconLang(langCode)
+
         try {
-            transport?.sendVoiceMessage(packet, langCode, 1.toByte(), selectedTargetPeer)
+            // Always broadcast — every receiver translates into their own language
+            transport?.sendVoiceMessage(packet, langCode, 1.toByte(), "ALL")
         } catch (e: Throwable) {
             Log.e(TAG, "Transport send error: ${e.message}", e)
             runOnUiThread { statusText.text = "Send error: ${e.message}" }
@@ -2266,70 +2213,49 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Track last-active peer for smart auto-selection
-    @Volatile private var lastActivePeer: String = ""
-
-    private fun updatePeerSpinner(newPeer: String? = null, isActive: Boolean = false) {
-        // Filter out raw-IP entries (PEER_192.168.x.x) — only show real callsigns
-        if (newPeer != null && newPeer.isNotBlank()) {
-            val isRealCallsign = !newPeer.matches(Regex("PEER_\\d+.*")) &&
-                                 !newPeer.matches(Regex("NODE_\\d{1,3}\\.\\d+.*"))
-            if (isRealCallsign && !knownPeersList.contains(newPeer)) {
-                knownPeersList.add(newPeer)
-            }
-            if (isActive && isRealCallsign) {
-                lastActivePeer = newPeer
-            }
-        }
+    /**
+     * Update the roster UI showing all connected node IDs with language + GPS.
+     * Called whenever meshRoster changes or GPS updates.
+     */
+    private fun updateRosterUi() {
         runOnUiThread {
-            val spinner = findViewById<android.widget.Spinner?>(R.id.peerSelectSpinner) ?: return@runOnUiThread
-            // Build entries: broadcast first, then peers sorted with last-active on top
-            val sortedPeers = knownPeersList.sortedWith(compareByDescending { it == lastActivePeer })
-            val entries = mutableListOf("📡 All Nodes (Broadcast)") +
-                sortedPeers.map { peer ->
-                    if (peer == lastActivePeer) "● $peer (active)" else peer
-                }
-            val adapter = android.widget.ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, entries)
-            spinner.adapter = adapter
-            // Auto-select last active peer if user hasn't manually picked one
-            if (selectedTargetPeer == "ALL" && lastActivePeer.isNotBlank()) {
-                val idx = entries.indexOfFirst { it.contains(lastActivePeer) }
-                if (idx >= 0) {
-                    spinner.setSelection(idx)
-                    selectedTargetPeer = lastActivePeer
-                }
-            } else {
-                val idx = entries.indexOfFirst { it.contains(selectedTargetPeer) }
-                if (idx >= 0) spinner.setSelection(idx)
-            }
-            // Update peer chip label
-            val chipLabel = when {
-                knownPeersList.isEmpty() -> "NO PEER"
-                knownPeersList.size == 1 -> knownPeersList[0]
-                else -> "${knownPeersList.size} nodes"
+            val count = meshRoster.size
+            val chipLabel = when (count) {
+                0 -> "NO PEER"
+                1 -> meshRoster.keys.first()
+                else -> "$count nodes"
             }
             findViewById<android.widget.TextView?>(R.id.peerNodeLabel)?.text = chipLabel
-            if (knownPeersList.isNotEmpty()) {
+            if (count > 0) {
                 findViewById<android.view.View?>(R.id.peerDot)?.background = getDrawable(R.drawable.dot_green)
                 findViewById<android.view.View?>(R.id.statusDotHeader)?.background = getDrawable(R.drawable.dot_green)
+            }
+            // Build roster text: "R7K2·en·12.97N,77.59E\nA91C·hi·GPS_UNAVAIL"
+            val rosterLines = meshRoster.entries.joinToString("\n") { (nodeId, info) ->
+                val parts = info.split("|")
+                val lang = parts.getOrElse(0) { "?" }.uppercase()
+                val gps  = parts.getOrElse(1) { "GPS_UNAVAIL" }
+                val gpsShort = if (gps == "GPS_UNAVAIL") "no GPS" else gps.split(",").take(2).joinToString(",")
+                "$nodeId · $lang · $gpsShort"
+            }
+            // Update roster display view if it exists
+            findViewById<android.widget.TextView?>(R.id.rosterText)?.let {
+                it.text = if (rosterLines.isBlank()) "Scanning mesh…" else rosterLines
+                it.visibility = android.view.View.VISIBLE
+            }
+            // Update status dot text
+            findViewById<android.widget.TextView?>(R.id.statusDotText)?.let { tv ->
+                val myPart = "$myCallsign · ${getSelectedLangCode().uppercase()}"
+                tv.text = if (count == 0) "$myPart · scanning…" else "$myPart · $count peer${if (count > 1) "s" else ""}"
+                tv.setTextColor(android.graphics.Color.parseColor(if (count > 0) "#065F46" else "#92400E"))
             }
         }
     }
 
     private var channelLockHandler: Handler? = null
-    private fun showChannelLock(peerName: String) {
-        runOnUiThread {
-            val banner = findViewById<android.widget.LinearLayout?>(R.id.channelLockBanner) ?: return@runOnUiThread
-            val text = findViewById<android.widget.TextView?>(R.id.channelLockText)
-            text?.text = "🎙️ Receiving transmission from $peerName... Channel busy"
-            banner.visibility = android.view.View.VISIBLE
-            channelLockHandler?.removeCallbacksAndMessages(null)
-            channelLockHandler = Handler(Looper.getMainLooper())
-            channelLockHandler?.postDelayed({
-                banner.visibility = android.view.View.GONE
-            }, 4000)
-        }
-    }
+    // showChannelLock is now driven by messageScheduler.onQueueStatus — kept as no-op for compatibility
+    @Suppress("UNUSED_PARAMETER")
+    private fun showChannelLock(peerName: String) { /* handled by MessageScheduler */ }
 
     override fun onDestroy() {
         super.onDestroy()
@@ -2338,6 +2264,8 @@ class MainActivity : AppCompatActivity() {
             speechRecognizer?.destroy()
             indicTTSManager?.shutdown()
             transport?.stop()
+            offlineGps?.stop()
+            if (::messageScheduler.isInitialized) messageScheduler.clear()
             if (multicastLock?.isHeld == true) {
                 multicastLock?.release()
             }

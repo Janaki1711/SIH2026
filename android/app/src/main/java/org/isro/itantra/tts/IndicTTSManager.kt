@@ -58,6 +58,8 @@ class IndicTTSManager(
         }
     }
 
+    var onTtsDone: (() -> Unit)? = null
+
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             isTtsReady = true
@@ -67,9 +69,11 @@ class IndicTTSManager(
                 }
                 override fun onDone(utteranceId: String?) {
                     postStatus("STATE: PLAYBACK COMPLETE (RX READY)")
+                    onTtsDone?.invoke()  // advance MessageScheduler queue
                 }
                 override fun onError(utteranceId: String?) {
                     postStatus("STATE: PLAYBACK COMPLETE")
+                    onTtsDone?.invoke()
                 }
             })
             Log.i(TAG, "Android TTS engine initialized successfully.")

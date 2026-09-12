@@ -18,6 +18,22 @@
         android:textColor="#0F172A" android:textSize="15sp" android:singleLine="true"
         android:paddingHorizontal="14dp" android:layout_marginBottom="16dp"/>
 
+    <!-- Node ID — read-only, generated at login -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical"
+        android:background="@drawable/input_bg" android:paddingHorizontal="14dp"
+        android:layout_marginBottom="16dp">
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Your mesh node ID"
+            android:textColor="#64748B" android:textSize="13sp"/>
+        <TextView android:id="@+id/profileNodeIdText"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="----"
+            android:textColor="#0284C7" android:textSize="16sp" android:textStyle="bold"
+            android:fontFamily="monospace"/>
+    </LinearLayout>
+
     <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
         android:text="Preferred language" android:textSize="13sp" android:textStyle="bold"
         android:textColor="#374151" android:layout_marginBottom="6dp"/>

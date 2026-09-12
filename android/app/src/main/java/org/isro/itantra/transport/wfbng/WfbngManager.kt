@@ -138,6 +138,16 @@ class WfbngManager(
         return udp.getDiagnosticInfo()
     }
 
+    /** Update the GPS string embedded in outgoing beacons (e.g. "12.97,77.59,8m" or "GPS_UNAVAIL") */
+    fun updateBeaconGps(gps: String) {
+        udp.beaconGpsPayload = gps
+    }
+
+    /** Update the language code embedded in outgoing beacons (e.g. "hi", "en", "kn") */
+    fun updateBeaconLang(lang: String) {
+        udp.beaconLang = lang
+    }
+
     fun pingPeer(
         targetIp: String,
         timeoutMs: Long = 1200L,

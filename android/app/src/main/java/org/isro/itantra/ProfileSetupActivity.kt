@@ -27,6 +27,19 @@ class ProfileSetupActivity : AppCompatActivity() {
         val token = prefs.getString(LoginActivity.PREF_TOKEN, "") ?: ""
 
         val nameInput = findViewById<EditText>(R.id.profileNameInput)
+        // Show the generated NODE_ID as read-only
+        val nodeId = prefs.getString(LoginActivity.PREF_NODE_ID, null)
+        if (nodeId != null) {
+            findViewById<android.widget.TextView?>(R.id.profileNodeIdText)?.text = nodeId
+        } else {
+            // offline fallback — generate now if OtpActivity didn't run (direct launch)
+            val userId = prefs.getString(LoginActivity.PREF_USER_ID, "") ?: ""
+            val phone  = prefs.getString(LoginActivity.PREF_PHONE, "") ?: ""
+            val seed = "$userId${phone.takeLast(4)}${(1000..9999).random()}"
+            val generated = LoginActivity.generateNodeId(seed)
+            prefs.edit().putString(LoginActivity.PREF_NODE_ID, generated).apply()
+            findViewById<android.widget.TextView?>(R.id.profileNodeIdText)?.text = generated
+        }
         val langSpinnerSetup = findViewById<Spinner>(R.id.profileLangSpinner)
         val saveBtn = findViewById<Button>(R.id.profileSaveBtn)
         val progressBar = findViewById<ProgressBar>(R.id.profileProgress)

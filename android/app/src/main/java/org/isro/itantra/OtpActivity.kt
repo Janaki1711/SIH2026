@@ -123,11 +123,22 @@ class OtpActivity : AppCompatActivity() {
 
                 if (verified) {
                     // Save token locally
-                    getSharedPreferences(LoginActivity.PREF_FILE, Context.MODE_PRIVATE)
-                        .edit()
+                    // Save token, userId, phone
+                    val prefs = getSharedPreferences(LoginActivity.PREF_FILE, Context.MODE_PRIVATE)
+                    // Generate or reuse NODE_ID — persists for life of install
+                    val existingNodeId = prefs.getString(LoginActivity.PREF_NODE_ID, null)
+                    val nodeId = if (!existingNodeId.isNullOrBlank()) {
+                        existingNodeId
+                    } else {
+                        // Seed: userId + phone tail + random salt so two people on same number differ
+                        val seed = "$userId${phone.takeLast(4)}${(1000..9999).random()}"
+                        LoginActivity.generateNodeId(seed)
+                    }
+                    prefs.edit()
                         .putString(LoginActivity.PREF_TOKEN, token)
                         .putString(LoginActivity.PREF_USER_ID, userId)
                         .putString(LoginActivity.PREF_PHONE, phone)
+                        .putString(LoginActivity.PREF_NODE_ID, nodeId)
                         .apply()
 
                     startActivity(Intent(this, ProfileSetupActivity::class.java).apply {

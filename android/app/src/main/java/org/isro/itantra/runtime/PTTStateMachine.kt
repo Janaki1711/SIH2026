@@ -45,6 +45,21 @@ class PTTStateMachine(
 
             PTTState.RECEIVING -> {
                 when (event) {
+                    // A second packet arrives while already receiving → queue it, stay RECEIVING
+                    PTTEvent.PACKET_RECEIVED -> PTTState.QUEUE_WAITING
+                    PTTEvent.TRANSMISSION_COMPLETE -> PTTState.IDLE_LISTENING
+                    PTTEvent.QUEUE_DRAIN -> PTTState.IDLE_LISTENING
+                    PTTEvent.SOS_TRIGGERED -> PTTState.ALARM_ACTIVE
+                    else -> currentState
+                }
+            }
+
+            PTTState.QUEUE_WAITING -> {
+                when (event) {
+                    // More packets — stay in QUEUE_WAITING
+                    PTTEvent.PACKET_RECEIVED -> PTTState.QUEUE_WAITING
+                    // All items played
+                    PTTEvent.QUEUE_DRAIN -> PTTState.IDLE_LISTENING
                     PTTEvent.TRANSMISSION_COMPLETE -> PTTState.IDLE_LISTENING
                     PTTEvent.SOS_TRIGGERED -> PTTState.ALARM_ACTIVE
                     else -> currentState
@@ -61,7 +76,6 @@ class PTTStateMachine(
 
         _state.value = nextState
 
-        // Record the transition
         logger?.logTransition(
             PTTTransition(
                 timestamp = System.currentTimeMillis(),

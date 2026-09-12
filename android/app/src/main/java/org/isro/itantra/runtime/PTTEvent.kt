@@ -13,6 +13,9 @@ sealed class PTTEvent {
 
     data object PACKET_RECEIVED : PTTEvent()
 
+    /** Fired by MessageScheduler when all queued inbound items have been played. */
+    data object QUEUE_DRAIN : PTTEvent()
+
     data object SOS_TRIGGERED : PTTEvent()
 
     data object ALARM_FINISHED : PTTEvent()

@@ -35,6 +35,11 @@ class UdpTransceiver(
     private var activeWifiNetwork: Network? = null
     private val scope = CoroutineScope(dispatcher + SupervisorJob())
 
+    /** Updated by MainActivity with current GPS string e.g. "12.9716,77.5946,8m" or "GPS_UNAVAIL" */
+    @Volatile var beaconGpsPayload: String = "GPS_UNAVAIL"
+    /** Updated by MainActivity with sender's selected language code e.g. "hi", "en", "kn" */
+    @Volatile var beaconLang: String = "en"
+
     val discoveredPeers = ConcurrentHashMap<String, InetAddress>()
     private val pendingHandshakes = ConcurrentHashMap<String, CompletableDeferred<Pair<String, Long>>>()
     private val seqGenerator = AtomicInteger(100)
@@ -248,12 +253,18 @@ class UdpTransceiver(
                             }
 
                             // 4. Discovery Beacons: BCN
+                            // Format: ITANTRA_BCN:{nodeId}:{lang}:{lat,lon,acc | GPS_UNAVAIL}:{ts}
                             text.startsWith("ITANTRA_BCN:") -> {
-                                val peerCallsign = text.substringAfter("ITANTRA_BCN:").substringBefore(":").trim()
+                                val parts = text.removePrefix("ITANTRA_BCN:").split(":")
+                                val peerCallsign = parts.getOrElse(0) { "" }.trim()
+                                val peerLang = parts.getOrElse(1) { "en" }.trim()
+                                // GPS may contain comma: "12.97,77.59,8m" — take up to ts (last part)
+                                val peerGps = if (parts.size > 3) parts.dropLast(1).drop(2).joinToString(":") else "GPS_UNAVAIL"
                                 if (peerCallsign.isNotEmpty() && peerCallsign != localCallsign && !isLocalAddress(packet.address)) {
                                     discoveredPeers[peerCallsign] = packet.address
                                     if (senderHost.isNotEmpty()) discoveredPeers["PEER_$senderHost"] = packet.address
-                                    onPeerDiscovered?.invoke(peerCallsign, senderHost)
+                                    // Pass lang+gps as extended info in the ip field (format: "ip|lang|gps")
+                                    onPeerDiscovered?.invoke(peerCallsign, "$senderHost|$peerLang|$peerGps")
                                     val ackMsg = "ITANTRA_ACK:$localCallsign:BCN:${System.currentTimeMillis()}"
                                     sendRawDirect(packet.address, packet.port, ackMsg.toByteArray(StandardCharsets.UTF_8))
                                 }
@@ -315,7 +326,11 @@ class UdpTransceiver(
         beaconJob = scope.launch {
             while (isActive) {
                 try {
-                    val bcnMsg = "ITANTRA_BCN:$localCallsign:${System.currentTimeMillis()}".toByteArray(StandardCharsets.UTF_8)
+                    // Beacon format: ITANTRA_BCN:{nodeId}:{lang}:{lat}:{lon}:{ts}
+                    // GPS fields are populated by MainActivity via beaconGps/beaconLang vars
+                    val gps = beaconGpsPayload    // "lat,lon" or "GPS_UNAVAIL"
+                    val lang = beaconLang         // e.g. "hi", "en", "kn"
+                    val bcnMsg = "ITANTRA_BCN:$localCallsign:$lang:$gps:${System.currentTimeMillis()}".toByteArray(StandardCharsets.UTF_8)
                     sendBroadcastDatagram(bcnMsg)
                 } catch (e: Throwable) {}
                 delay(15000)  // 15s — enough for discovery, reduces UI flicker from rapid callbacks

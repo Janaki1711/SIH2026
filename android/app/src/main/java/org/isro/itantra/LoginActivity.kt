@@ -27,7 +27,21 @@ class LoginActivity : AppCompatActivity() {
         const val PREF_LANGUAGE = "preferred_language"
         const val PREF_PHONE = "phone"
         const val PREF_SERVER_URL = "server_url"
+        const val PREF_NODE_ID = "node_id"  // unique mesh callsign e.g. "R7K2", "A91C"
         const val DEFAULT_SERVER = "http://10.0.2.2:8000"
+
+        /** Generate a short 4-char alphanumeric node ID from a seed string (phone tail, userId, etc.) */
+        fun generateNodeId(seed: String): String {
+            val chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  // no confusable 0/O/1/I
+            val hash = seed.hashCode().toLong().and(0xFFFFFFFFL)
+            return buildString {
+                var n = hash
+                repeat(4) {
+                    append(chars[(n % chars.length).toInt()])
+                    n /= chars.length
+                }
+            }
+        }
     }
 
     private var tapCount = 0

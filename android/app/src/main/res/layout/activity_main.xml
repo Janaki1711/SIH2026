@@ -156,48 +156,36 @@
                 </LinearLayout>
             </LinearLayout>
 
-            <!-- Peer Selector Row (replaces IP input) -->
+            <!-- Mesh Roster (auto-populated, no peer picker) -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
+                android:orientation="vertical"
                 android:background="@drawable/card_white_rounded"
-                android:padding="6dp"
+                android:padding="8dp"
                 android:layout_marginBottom="6dp"
                 android:elevation="1dp">
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="SEND TO:"
+                    android:text="MESH NODES"
                     android:textColor="#0284C7"
-                    android:textSize="10sp"
+                    android:textSize="9sp"
                     android:textStyle="bold"
-                    android:layout_marginEnd="6dp" />
+                    android:fontFamily="monospace"
+                    android:layout_marginBottom="2dp" />
 
-                <Spinner
-                    android:id="@+id/peerSelectSpinner"
-                    android:layout_width="0dp"
-                    android:layout_height="36dp"
-                    android:layout_weight="1"
-                    android:layout_marginEnd="6dp" />
+                <TextView
+                    android:id="@+id/rosterText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Scanning mesh…"
+                    android:textColor="#374151"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace" />
 
-                <Button
-                    android:id="@+id/btnRefreshPeers"
-                    android:layout_width="wrap_content"
-                    android:layout_height="36dp"
-                    android:text="⟳ SCAN"
-                    android:textColor="#FFFFFF"
-                    android:textSize="10sp"
-                    android:textStyle="bold"
-                    android:backgroundTint="#0284C7"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
-                    android:paddingStart="10dp"
-                    android:paddingEnd="10dp" />
-
-                <!-- Hidden — kept for diagnostics sheet CONNECT button compatibility -->
+                <!-- Hidden stubs for diagnostics sheet compatibility -->
                 <EditText
                     android:id="@+id/peerIpInput"
                     android:layout_width="1dp"
@@ -630,6 +618,8 @@
         android:orientation="vertical">
 
         <Button android:id="@+id/btnModeWalkieTalkie" android:layout_width="1dp" android:layout_height="1dp" android:text="." />
+        <Spinner android:id="@+id/peerSelectSpinner" android:layout_width="1dp" android:layout_height="1dp" />
+        <Button android:id="@+id/btnRefreshPeers" android:layout_width="1dp" android:layout_height="1dp" android:text="." />
         <Button android:id="@+id/btnModePhone"        android:layout_width="1dp" android:layout_height="1dp" android:text="." />
         <Button android:id="@+id/testButton"          android:layout_width="1dp" android:layout_height="1dp" android:text="." />
         <Button android:id="@+id/stopButton"          android:layout_width="1dp" android:layout_height="1dp" android:text="." />

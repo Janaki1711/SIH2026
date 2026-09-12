@@ -6,5 +6,6 @@ enum class PTTState {
     PTT_CAPTURING,
     TRANSMITTING,
     RECEIVING,
+    QUEUE_WAITING,   // playing current item, more items in queue
     ALARM_ACTIVE
 }
