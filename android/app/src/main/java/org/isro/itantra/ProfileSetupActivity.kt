@@ -56,7 +56,7 @@ class ProfileSetupActivity : AppCompatActivity() {
                     conn.requestMethod = "POST"
                     conn.setRequestProperty("Content-Type", "application/json")
                     conn.doOutput = true
-                    conn.connectTimeout = 10000
+                    conn.connectTimeout = 4000
 
                     val body = JSONObject().apply {
                         put("token", token)
@@ -64,33 +64,24 @@ class ProfileSetupActivity : AppCompatActivity() {
                         put("preferred_language", selectedLang)
                     }.toString()
                     conn.outputStream.use { it.write(body.toByteArray()) }
-
                     val code = conn.responseCode
-                    runOnUiThread {
-                        progressBar.visibility = View.GONE
-                        saveBtn.isEnabled = true
-                        if (code == 200) {
-                            // Save profile locally
-                            prefs.edit()
-                                .putString(LoginActivity.PREF_DISPLAY_NAME, name)
-                                .putString(LoginActivity.PREF_LANGUAGE, selectedLang)
-                                .apply()
-                            startActivity(Intent(this, MainActivity::class.java))
-                            finish()
-                        } else {
-                            errorText.text = "Failed to save profile. Try again."
-                            errorText.visibility = View.VISIBLE
-                        }
-                    }
                 } catch (e: Exception) {
-                    runOnUiThread {
-                        progressBar.visibility = View.GONE
-                        saveBtn.isEnabled = true
-                        errorText.text = "Network error: ${e.message}"
-                        errorText.visibility = View.VISIBLE
-                    }
+                    // Offline / local fallback — proceed with local storage
+                }
+
+                runOnUiThread {
+                    progressBar.visibility = View.GONE
+                    saveBtn.isEnabled = true
+                    // Save profile locally in SharedPreferences
+                    prefs.edit()
+                        .putString(LoginActivity.PREF_DISPLAY_NAME, name)
+                        .putString(LoginActivity.PREF_LANGUAGE, selectedLang)
+                        .apply()
+                    startActivity(Intent(this, MainActivity::class.java))
+                    finish()
                 }
             }.start()
         }
     }
+
 }

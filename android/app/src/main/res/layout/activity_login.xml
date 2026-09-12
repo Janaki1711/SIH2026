@@ -37,13 +37,18 @@
             android:paddingHorizontal="12dp"/>
     </LinearLayout>
 
-    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-        android:text="Backend server URL" android:textSize="11sp"
-        android:textColor="#64748B" android:layout_marginBottom="4dp"/>
-    <EditText android:id="@+id/loginServerInput" android:layout_width="match_parent"
-        android:layout_height="44dp" android:background="@drawable/input_bg"
-        android:textSize="11sp" android:textColor="#0F172A" android:paddingHorizontal="12dp"
-        android:singleLine="true" android:fontFamily="monospace" android:layout_marginBottom="16dp"/>
+    <LinearLayout android:id="@+id/loginServerContainer" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:orientation="vertical"
+        android:visibility="gone" android:layout_marginBottom="12dp">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="Backend server URL (Developer settings)" android:textSize="11sp"
+            android:textColor="#64748B" android:layout_marginBottom="4dp"/>
+        <EditText android:id="@+id/loginServerInput" android:layout_width="match_parent"
+            android:layout_height="44dp" android:background="@drawable/input_bg"
+            android:textSize="11sp" android:textColor="#0F172A" android:paddingHorizontal="12dp"
+            android:singleLine="true" android:fontFamily="monospace"/>
+    </LinearLayout>
+
 
     <TextView android:id="@+id/loginError" android:layout_width="match_parent"
         android:layout_height="wrap_content" android:textColor="#DC2626"

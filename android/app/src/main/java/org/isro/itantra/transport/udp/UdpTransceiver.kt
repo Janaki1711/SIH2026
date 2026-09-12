@@ -318,7 +318,7 @@ class UdpTransceiver(
                     val bcnMsg = "ITANTRA_BCN:$localCallsign:${System.currentTimeMillis()}".toByteArray(StandardCharsets.UTF_8)
                     sendBroadcastDatagram(bcnMsg)
                 } catch (e: Throwable) {}
-                delay(3000)
+                delay(15000)  // 15s — enough for discovery, reduces UI flicker from rapid callbacks
             }
         }
     }

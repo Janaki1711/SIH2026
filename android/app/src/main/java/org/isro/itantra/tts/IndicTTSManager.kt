@@ -99,21 +99,29 @@ class IndicTTSManager(
                     val targetLocale = getLocaleForLang(langCode)
                     val langResult = androidTts?.setLanguage(targetLocale)
 
-                    Log.i(TAG, "TTS setLanguage($targetLocale) = $langResult  " +
-                        "(${if (langResult == TextToSpeech.LANG_AVAILABLE || langResult == TextToSpeech.LANG_COUNTRY_AVAILABLE) "OK" else "MISSING/UNSUPPORTED"})")
+                    Log.i(TAG, "TTS setLanguage($targetLocale) = $langResult")
 
-                    if (langResult == TextToSpeech.LANG_MISSING_DATA) {
-                        // Language pack not installed — trigger install intent
-                        Log.w(TAG, "TTS language pack missing for $langCode — requesting install")
-                        val installIntent = android.content.Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA)
-                        installIntent.setPackage("com.google.android.tts")
-                        installIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                        try { context.startActivity(installIntent) } catch (e: Throwable) {}
-                        // Still speak — TTS will use whatever voice is available
+                    when (langResult) {
+                        TextToSpeech.LANG_MISSING_DATA -> {
+                            Log.w(TAG, "TTS pack missing for $langCode — trying English fallback")
+                            // Try to install the pack in background
+                            try {
+                                val installIntent = android.content.Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA)
+                                installIntent.setPackage("com.google.android.tts")
+                                installIntent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                context.startActivity(installIntent)
+                            } catch (e: Throwable) {}
+                            // Fallback to English — always available
+                            androidTts?.setLanguage(java.util.Locale("en", "IN"))
+                        }
+                        TextToSpeech.LANG_NOT_SUPPORTED -> {
+                            Log.w(TAG, "TTS lang not supported: $langCode — falling back to English")
+                            androidTts?.setLanguage(java.util.Locale("en", "IN"))
+                        }
+                        else -> { /* OK or LANG_AVAILABLE — keep as set */ }
                     }
 
-                    // Speak regardless — if language pack is missing, Android TTS uses
-                    // the closest available voice. The text is still transmitted correctly.
+                    // Always speak — TTS will use best available voice for the set locale
                     androidTts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "iTantra_${System.currentTimeMillis()}")
                 } catch (e: Exception) {
                     Log.e(TAG, "Android TTS speak error", e)
