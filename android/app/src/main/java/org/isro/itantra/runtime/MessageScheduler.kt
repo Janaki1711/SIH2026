@@ -29,8 +29,8 @@ class MessageScheduler(
 
     companion object {
         private const val TAG = "MessageScheduler"
-        /** How long after TTS starts before we allow the next item. Overridden by actual TTS done callback. */
-        private const val FALLBACK_PLAYBACK_MS = 4_000L
+        /** Fallback timeout — if TTS onDone never fires, advance queue after this */
+        private const val FALLBACK_PLAYBACK_MS = 8_000L
     }
 
     data class Item(
@@ -53,8 +53,8 @@ class MessageScheduler(
     @Volatile private var isPlaying = false
     @Volatile private var playbackTimeoutRunnable: Runnable? = null
 
-    /** True while an inbound item is playing — PTT must be blocked during this time. */
-    val isChannelBusy: Boolean get() = isPlaying || queue.isNotEmpty()
+    /** True only while a TTS item is actively playing — PTT is blocked during this time only. */
+    val isChannelBusy: Boolean get() = isPlaying
 
     /**
      * Add an item to the queue.

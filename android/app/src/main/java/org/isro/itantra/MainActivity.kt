@@ -27,18 +27,29 @@ import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
     private val myCallsign: String by lazy {
-        // Use the unique NODE_ID as the mesh identity — never the display name (names collide)
+        // Callsign = "DisplayName_NodeID" e.g. "Janaki_R7K2"
+        // Display name is shown in chat; node ID ensures uniqueness when names collide
         val prefs = getSharedPreferences(LoginActivity.PREF_FILE, android.content.Context.MODE_PRIVATE)
-        val nodeId = prefs.getString(LoginActivity.PREF_NODE_ID, null)
-        if (!nodeId.isNullOrBlank()) {
-            nodeId
-        } else {
-            // Offline fallback: generate and persist
-            val seed = "${prefs.getString(LoginActivity.PREF_USER_ID, "")}${android.os.Build.MODEL.takeLast(4)}${(1000..9999).random()}"
-            val generated = LoginActivity.generateNodeId(seed)
-            prefs.edit().putString(LoginActivity.PREF_NODE_ID, generated).apply()
-            generated
+        val displayName = prefs.getString(LoginActivity.PREF_DISPLAY_NAME, null)
+            ?.trim()?.replace(" ", "_")?.filter { it.isLetterOrDigit() || it == '_' }
+            ?.take(10)
+        val nodeId = run {
+            val existing = prefs.getString(LoginActivity.PREF_NODE_ID, null)
+            if (!existing.isNullOrBlank()) existing
+            else {
+                val seed = "${prefs.getString(LoginActivity.PREF_USER_ID, "")}${android.os.Build.MODEL.takeLast(4)}${(1000..9999).random()}"
+                val generated = LoginActivity.generateNodeId(seed)
+                prefs.edit().putString(LoginActivity.PREF_NODE_ID, generated).apply()
+                generated
+            }
         }
+        if (!displayName.isNullOrBlank()) "${displayName}_${nodeId}" else nodeId
+    }
+
+    /** The short display part of myCallsign (before the underscore+nodeId suffix). */
+    private val myDisplayName: String get() {
+        val prefs = getSharedPreferences(LoginActivity.PREF_FILE, android.content.Context.MODE_PRIVATE)
+        return prefs.getString(LoginActivity.PREF_DISPLAY_NAME, myCallsign) ?: myCallsign
     }
     private var multicastLock: android.net.wifi.WifiManager.MulticastLock? = null
     private var wifiLock: android.net.wifi.WifiManager.WifiLock? = null
@@ -299,8 +310,8 @@ class MainActivity : AppCompatActivity() {
                     // Same language — enqueue directly
                     Log.i(TAG, "━━ RX_SAME_LANG  lang=$targetLang  text='$rawText'")
                     runOnUiThread {
-                        addChatMessageToUi(origin, sourceLang, targetLang, rawText, false, rawText)
-                        statusText.text = "📥 From $origin [$sourceLang]: $rawText"
+                        addChatMessageToUi(displayNameFromCallsign(origin), sourceLang, targetLang, rawText, false, rawText)
+                        statusText.text = "📥 From ${displayNameFromCallsign(origin)} [$sourceLang]: $rawText"
                     }
                     val item = org.isro.itantra.runtime.MessageScheduler.Item(
                         nodeId = origin, lang = effectiveTtsLang(targetLang),
@@ -310,20 +321,26 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     // Different languages — translate first, then enqueue for TTS in localLang ONLY
                     runOnUiThread {
-                        addChatMessageToUi(origin, sourceLang, targetLang, rawText, false, rawText)
-                        statusText.text = "📥 From $origin [$sourceLang→$targetLang]: translating…"
+                        addChatMessageToUi(displayNameFromCallsign(origin), sourceLang, targetLang, rawText, false, rawText)
+                        statusText.text = "📥 From ${displayNameFromCallsign(origin)} [$sourceLang→$targetLang]: translating…"
                     }
                     translateWithMlKit(rawText, sourceLang, targetLang) { translated ->
                         val isReal = translated.isNotBlank() &&
                             translated != rawText && !translated.startsWith("[$sourceLang]")
                         val displayText = if (isReal) translated else rawText
-                        val ttsLang = if (isReal) effectiveTtsLang(targetLang) else effectiveTtsLang(sourceLang)
-                        Log.i(TAG, "━━ RX_TRANSLATED  $sourceLang→$targetLang  '$rawText' → '$displayText'  ttsLang=$ttsLang")
-                        runOnUiThread {
-                            statusText.text = "📥 $origin [$sourceLang→$targetLang]: $displayText"
-                            addChatMessageToUi(origin, sourceLang, targetLang, displayText, false, rawText)
+                        // If translation succeeded → speak in target language
+                        // If model not ready yet → speak original in English TTS (always available)
+                        // This means user hears SOMETHING immediately on all devices
+                        val ttsLang = when {
+                            isReal -> effectiveTtsLang(targetLang)
+                            sourceLang == "en" -> "en"          // original is English — always works
+                            else -> "en"                        // fallback: English TTS reads English text
                         }
-                        // Enqueue for scheduler — speak ONLY in target language
+                        Log.i(TAG, "━━ RX_TRANSLATED  $sourceLang→$targetLang  real=$isReal  ttsLang=$ttsLang  text='$displayText'")
+                        runOnUiThread {
+                            statusText.text = "📥 ${displayNameFromCallsign(origin)} [$sourceLang→$targetLang]: $displayText"
+                            addChatMessageToUi(displayNameFromCallsign(origin), sourceLang, targetLang, displayText, false, rawText)
+                        }
                         val item = org.isro.itantra.runtime.MessageScheduler.Item(
                             nodeId = origin, lang = ttsLang,
                             text = displayText, isSos = isAlert
@@ -738,10 +755,11 @@ class MainActivity : AppCompatActivity() {
         // ── BROADCAST ONLY — no peer targeting ────────────────────────
         // All messages go to "ALL". Roster shows who's on the mesh.
         // Show my own node ID in the header
-        val myNodeId = myCallsign
-        val myDisplayName = getSharedPreferences(LoginActivity.PREF_FILE, Context.MODE_PRIVATE)
-            .getString(LoginActivity.PREF_DISPLAY_NAME, myNodeId) ?: myNodeId
-        findViewById<android.widget.TextView?>(R.id.statusDotText)?.text = "$myNodeId · $myDisplayName"
+        val nodeId = getSharedPreferences(LoginActivity.PREF_FILE, Context.MODE_PRIVATE)
+            .getString(LoginActivity.PREF_NODE_ID, "") ?: ""
+        // Show "DisplayName (NodeID)" in header
+        val headerName = if (myDisplayName != myCallsign) "$myDisplayName ($nodeId)" else myCallsign
+        findViewById<android.widget.TextView?>(R.id.statusDotText)?.text = headerName
         updateRosterUi()
 
         // ── MESSAGE SCHEDULER ─────────────────────────────────────────
@@ -2214,6 +2232,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
+     * Extract the human-readable display name from a callsign.
+     * "Janaki_R7K2" → "Janaki",  "R7K2" → "R7K2" (no underscore → use as-is).
+     */
+    private fun displayNameFromCallsign(callsign: String): String {
+        val idx = callsign.lastIndexOf('_')
+        return if (idx > 0 && idx < callsign.length - 1) callsign.substring(0, idx) else callsign
+    }
+
+    /**
      * Update the roster UI showing all connected node IDs with language + GPS.
      * Called whenever meshRoster changes or GPS updates.
      */
@@ -2230,13 +2257,15 @@ class MainActivity : AppCompatActivity() {
                 findViewById<android.view.View?>(R.id.peerDot)?.background = getDrawable(R.drawable.dot_green)
                 findViewById<android.view.View?>(R.id.statusDotHeader)?.background = getDrawable(R.drawable.dot_green)
             }
-            // Build roster text: "R7K2·en·12.97N,77.59E\nA91C·hi·GPS_UNAVAIL"
-            val rosterLines = meshRoster.entries.joinToString("\n") { (nodeId, info) ->
+            // Build roster text: "Janaki (R7K2) · EN · 12.97,77.59"
+            val rosterLines = meshRoster.entries.joinToString("\n") { (callsign, info) ->
                 val parts = info.split("|")
                 val lang = parts.getOrElse(0) { "?" }.uppercase()
                 val gps  = parts.getOrElse(1) { "GPS_UNAVAIL" }
                 val gpsShort = if (gps == "GPS_UNAVAIL") "no GPS" else gps.split(",").take(2).joinToString(",")
-                "$nodeId · $lang · $gpsShort"
+                val displayName = displayNameFromCallsign(callsign)
+                if (displayName != callsign) "$displayName · $lang · $gpsShort"
+                else "$callsign · $lang · $gpsShort"
             }
             // Update roster display view if it exists
             findViewById<android.widget.TextView?>(R.id.rosterText)?.let {
