@@ -233,25 +233,41 @@ class IndicTTSManager(
     }
 
     fun playEmergencyAlert(text: String, langCode: String) {
-        postStatus("🚨 EMERGENCY ALERT: Playing tone, then voice message...")
-        nativeBridge.setVolume(0.30f) // 30% alert tone volume
+        postStatus("🚨 EMERGENCY ALERT: Playing at MAX volume — non-interruptible")
+
+        // Force ALARM stream to maximum volume (non-interruptible by media/ringer)
+        try {
+            val maxAlarm = audioManager.getStreamMaxVolume(AudioManager.STREAM_ALARM)
+            audioManager.setStreamVolume(AudioManager.STREAM_ALARM, maxAlarm, 0)
+            val maxMusic = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, maxMusic, 0)
+        } catch (e: Throwable) {
+            Log.w(TAG, "Volume set error: ${e.message}")
+        }
+
+        // Stop any current playback immediately (QUEUE_FLUSH)
+        androidTts?.stop()
+        nativeBridge.setVolume(1.0f)  // native bridge at full
 
         audioExecutor.execute {
             try {
-                // 1. First: Short, clear alert tone (0.7s)
-                val sirenPcm = nativeBridge.generateSiren(0.7f)
+                val sirenPcm = nativeBridge.generateSiren(0.8f)
                 if (sirenPcm.isNotEmpty()) {
                     playPcmStreaming(sirenPcm, isAlarm = true)
                 }
-                // Short pause after tone before speech
-                Thread.sleep(200)
+                Thread.sleep(150)
             } catch (e: Throwable) {
                 Log.w(TAG, "Alert tone error: ${e.message}")
             }
-
-            // 2. Second: Speak the emergency message in the selected language
             mainHandler.post {
-                speak(text, langCode)
+                // Use QUEUE_FLUSH so it interrupts any ongoing TTS
+                if (isTtsReady && androidTts != null) {
+                    val targetLocale = getLocaleForLang(langCode)
+                    androidTts?.setLanguage(targetLocale)
+                    androidTts?.speak(text, TextToSpeech.QUEUE_FLUSH, null,
+                        "ALERT_${System.currentTimeMillis()}")
+                    Log.i(TAG, "EMERGENCY_TTS lang=$langCode text='$text'")
+                }
             }
         }
     }
