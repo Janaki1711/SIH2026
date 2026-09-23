@@ -90,10 +90,18 @@ std::vector<std::vector<uint8_t>> PacketFramer::framePayload(
     uint16_t cid16 = callsignToId(callsign);
 
     size_t prosodyBytes = hasProsody ? std::min<size_t>(prosodyVector.size(), 16) : 0;
-    size_t unfragmentedTotalSize = 1 + 1 + 2 + 2 + 1 + payload.size() + prosodyBytes + 2;
+    // The <=38B budget applies to the compact frame itself (hdr+payload+CRC);
+    // the 16-byte prosody vector rides alongside as a telemetry appendage —
+    // mirroring the Python demo, whose full packets reach 57B for an 18B
+    // semantic payload (the 4-38B spec governs SEMANTIC payload tiers).
+    // Budgeting prosody INTO the 38B pushed tier2+prosody frames
+    // (7+18+16+2=44) into Case 2, which drops prosody entirely and broke the
+    // encode/decode roundtrip (test5).
+    size_t unfragmentedFrameSize = 1 + 1 + 2 + 2 + 1 + payload.size() + 2;
+    size_t unfragmentedTotalSize = unfragmentedFrameSize + prosodyBytes;
 
-    // Case 1: Unfragmented single frame (<= 38 bytes)
-    if (unfragmentedTotalSize <= MAX_FRAME_SIZE) {
+    // Case 1: Unfragmented single frame (frame <= 38 bytes, + optional 16B prosody)
+    if (unfragmentedFrameSize <= MAX_FRAME_SIZE) {
         uint8_t flags = static_cast<uint8_t>((prio << 5) | (hasProsody ? 0x10 : 0x00) | (langCode & 0x0F));
         uint8_t payloadLen = static_cast<uint8_t>(payload.size());
 
@@ -118,7 +126,7 @@ std::vector<std::vector<uint8_t>> PacketFramer::framePayload(
         frame[offset]     = static_cast<uint8_t>((crc >> 8) & 0xFF);
         frame[offset + 1] = static_cast<uint8_t>(crc & 0xFF);
 
-        assert(frame.size() <= MAX_FRAME_SIZE);
+        assert(frame.size() <= MAX_FRAME_SIZE + 16); // +16B prosody appendage
         return { frame };
     }
 
@@ -172,7 +180,17 @@ std::vector<uint8_t> PacketFramer::framePacket(
     const std::vector<uint8_t>& prosodyVector
 ) {
     auto frames = framePayload(compressedPayload, sourceLanguage, callsign, sequence, priority, prosodyVector);
-    return frames.empty() ? std::vector<uint8_t>() : frames[0];
+    if (frames.empty()) return {};
+    // Return every frame concatenated: UTF-8 Indic payloads fragment quickly
+    // (hdr+payload+CRC > 38B), and returning only frames[0] silently dropped
+    // everything past the first chunk — Hindi/Marathi roundtrips decoded as
+    // truncations. parseAndValidateFrame walks the frames back apart.
+    std::vector<uint8_t> wire;
+    size_t totalSize = 0;
+    for (const auto& f : frames) totalSize += f.size();
+    wire.reserve(totalSize);
+    for (const auto& f : frames) wire.insert(wire.end(), f.begin(), f.end());
+    return wire;
 }
 
 VoicePacket PacketFramer::parseAndValidateFrame(const std::vector<uint8_t>& wireBytes) {
@@ -180,62 +198,90 @@ VoicePacket PacketFramer::parseAndValidateFrame(const std::vector<uint8_t>& wire
         throw std::invalid_argument("PacketFramer::parseAndValidateFrame — received empty byte buffer");
     }
 
-    // Mode 1: Ultra-Compact Binary Frame (Magic 0x53)
+    // Mode 1: Ultra-Compact Binary Frame (Magic 0x53).
+    // The buffer may hold ONE frame or SEVERAL concatenated <=38B frames
+    // (fragmentation starts as soon as hdr+payload+CRC exceeds 38B, which
+    // UTF-8 Indic text reaches quickly). Each frame carries its own CRC16, so
+    // walk frame-by-frame, validate every CRC, and reassemble the payload
+    // stream — the old single CRC over n-2 + frames[0]-only decode silently
+    // truncated multi-frame buffers (Hindi/Marathi roundtrip mismatches).
     if (wireBytes[0] == COMPACT_MAGIC && wireBytes.size() >= 9) {
         size_t n = wireBytes.size();
-        uint16_t receivedCRC = (static_cast<uint16_t>(wireBytes[n - 2]) << 8) | static_cast<uint16_t>(wireBytes[n - 1]);
-        uint16_t expectedCRC = calculateCRC16(wireBytes.data(), n - 2);
-
-        if (receivedCRC != expectedCRC) {
-            throw std::runtime_error("PacketFramer::parseAndValidateFrame — CRC16 checksum mismatch (corrupted frame rejected)");
-        }
-
-        uint8_t flags = wireBytes[1];
-        bool isFragmented = (flags & FLAG_FRAGMENTED) != 0;
-        uint8_t prio = (flags >> 5) & 0x03;
-        bool hasProsody = !isFragmented && ((flags & 0x10) != 0);
-        uint8_t langCode = flags & 0x0F;
-
-        uint16_t seq = (static_cast<uint16_t>(wireBytes[2]) << 8) | static_cast<uint16_t>(wireBytes[3]);
-        uint16_t cid = (static_cast<uint16_t>(wireBytes[4]) << 8) | static_cast<uint16_t>(wireBytes[5]);
-
         VoicePacket packet;
-        packet.set_magic_header(MAGIC_HEADER);
-        packet.set_sequence_number(seq);
-        packet.set_priority(static_cast<PriorityLevel>(prio));
-        packet.set_source_language(codeToLanguage(langCode));
-        packet.set_source_callsign(idToCallsign(cid));
-        packet.set_crc16_checksum(receivedCRC);
+        std::string payloadStream;
+        std::string prosodyStr;
+        uint16_t firstCRC = 0;
+        bool haveMeta = false;
+        size_t pos = 0;
 
-        if (isFragmented) {
-            if (wireBytes.size() < 11) {
-                throw std::runtime_error("PacketFramer::parseAndValidateFrame — Fragmented frame too short");
+        while (pos < n) {
+            if (n - pos < UNFRAGMENTED_HEADER_SIZE || wireBytes[pos] != COMPACT_MAGIC) {
+                throw std::runtime_error("PacketFramer::parseAndValidateFrame — Malformed frame in buffer");
             }
-            uint8_t fragIdx = wireBytes[6];
-            uint8_t totalFrags = wireBytes[7];
-            uint8_t payloadLen = wireBytes[8];
-            if (9 + payloadLen > n - 2) {
-                throw std::runtime_error("PacketFramer::parseAndValidateFrame — Invalid fragment payload length");
+            uint8_t flags = wireBytes[pos + 1];
+            bool isFragmented = (flags & FLAG_FRAGMENTED) != 0;
+            bool hasProsody = !isFragmented && ((flags & 0x10) != 0);
+            size_t hdr = isFragmented ? FRAGMENTED_HEADER_SIZE : UNFRAGMENTED_HEADER_SIZE;
+            if (n - pos < hdr) {
+                throw std::runtime_error("PacketFramer::parseAndValidateFrame — Frame too short");
             }
-            std::string payloadStr(reinterpret_cast<const char*>(&wireBytes[9]), payloadLen);
-            packet.set_compressed_payload(payloadStr);
-        } else {
-            uint8_t payloadLen = wireBytes[6];
-            if (7 + payloadLen > n - 2) {
-                throw std::runtime_error("PacketFramer::parseAndValidateFrame — Invalid payload length");
-            }
-            std::string payloadStr(reinterpret_cast<const char*>(&wireBytes[7]), payloadLen);
-            packet.set_compressed_payload(payloadStr);
+            // payload length lives in the last header byte: [8] fragmented, [6] plain
+            uint8_t payloadLen = wireBytes[pos + hdr - 1];
 
-            size_t prosodyOffset = 7 + payloadLen;
-            size_t prosodyLen = (n - 2 > prosodyOffset) ? (n - 2 - prosodyOffset) : 0;
-            if (hasProsody && prosodyLen > 0) {
-                std::string pVec(reinterpret_cast<const char*>(&wireBytes[prosodyOffset]), prosodyLen);
-                if (pVec.size() < 16) pVec.resize(16, 0);
-                packet.set_prosody_vector(pVec);
+            size_t bodyLen;
+            size_t crcPos;
+            if (hasProsody) {
+                // Inline prosody fills everything between payload and CRC;
+                // the encoder only emits such frames as a single buffer.
+                if (pos != 0) {
+                    throw std::runtime_error("PacketFramer::parseAndValidateFrame — Prosody frame must lead the buffer");
+                }
+                crcPos = n - 2;
+                bodyLen = crcPos - pos - hdr;
+                if (bodyLen < payloadLen) {
+                    throw std::runtime_error("PacketFramer::parseAndValidateFrame — Invalid payload length");
+                }
+            } else {
+                bodyLen = payloadLen;
+                crcPos = pos + hdr + bodyLen;
+                if (crcPos + CRC_SIZE > n) {
+                    throw std::runtime_error("PacketFramer::parseAndValidateFrame — Truncated frame");
+                }
             }
+
+            uint16_t receivedCRC = (static_cast<uint16_t>(wireBytes[crcPos]) << 8) | static_cast<uint16_t>(wireBytes[crcPos + 1]);
+            uint16_t expectedCRC = calculateCRC16(&wireBytes[pos], hdr + bodyLen);
+            if (receivedCRC != expectedCRC) {
+                throw std::runtime_error("PacketFramer::parseAndValidateFrame — CRC16 checksum mismatch (corrupted frame rejected)");
+            }
+
+            if (!haveMeta) {
+                haveMeta = true;
+                firstCRC = receivedCRC;
+                uint8_t prio = (flags >> 5) & 0x03;
+                uint8_t langCode = flags & 0x0F;
+                packet.set_magic_header(MAGIC_HEADER);
+                packet.set_sequence_number((static_cast<uint16_t>(wireBytes[pos + 2]) << 8) | static_cast<uint16_t>(wireBytes[pos + 3]));
+                packet.set_priority(static_cast<PriorityLevel>(prio));
+                packet.set_source_language(codeToLanguage(langCode));
+                packet.set_source_callsign(idToCallsign((static_cast<uint16_t>(wireBytes[pos + 4]) << 8) | static_cast<uint16_t>(wireBytes[pos + 5])));
+            }
+
+            size_t payloadPos = pos + hdr;
+            payloadStream.append(reinterpret_cast<const char*>(&wireBytes[payloadPos]), payloadLen);
+            if (hasProsody) {
+                prosodyStr.assign(reinterpret_cast<const char*>(&wireBytes[payloadPos + payloadLen]), bodyLen - payloadLen);
+                if (prosodyStr.size() < 16) prosodyStr.resize(16, '\0');
+            }
+
+            pos = crcPos + CRC_SIZE;
         }
 
+        packet.set_compressed_payload(payloadStream);
+        if (!prosodyStr.empty()) {
+            packet.set_prosody_vector(prosodyStr);
+        }
+        packet.set_crc16_checksum(firstCRC);
         return packet;
     }
 

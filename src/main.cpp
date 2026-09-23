@@ -29,6 +29,7 @@
 #include <stdexcept>
 #include <cassert>
 #include <algorithm>
+#include <string_view>
 
 #include "PacketEncoder.hpp"
 #include "PacketDecoder.hpp"
@@ -61,8 +62,12 @@ std::string priorityName(itantra::protocol::PriorityLevel p) {
 }
 
 /// Print a divider line.
-void divider(char ch = '─', int width = 56) {
-    std::cout << std::string(width, ch) << "\n";
+// std::string_view, not char: box-drawing glyphs are multi-byte UTF-8, and
+// std::string(width, ch) with a char would truncate them to one byte (and
+// GCC -Wpedantic -Werror rejects multi-byte char literals outright).
+void divider(std::string_view ch = "─", int width = 56) {
+    for (int i = 0; i < width; ++i) std::cout << ch;
+    std::cout << "\n";
 }
 
 // ── Single Test Runner ────────────────────────────────────────────────────────
@@ -87,9 +92,9 @@ bool runTest(
     uint32_t priority
 ) {
     std::cout << "\n";
-    divider('═');
+    divider("═");
     std::cout << "  TEST " << testNum << " — " << label << "\n";
-    divider('═');
+    divider("═");
 
     PacketEncoder encoder;
     PacketDecoder decoder;
@@ -257,9 +262,9 @@ int main() {
     // ── Test 4: Empty input (expected rejection) ──────────────────────────────
     ++total;
     std::cout << "\n";
-    divider('═');
+    divider("═");
     std::cout << "  TEST 4 — Empty input (expected rejection)\n";
-    divider('═');
+    divider("═");
     std::cout << "\n  Attempting to encode an empty string...\n";
     bool t4_rejected = false;
     try {

@@ -64,6 +64,22 @@ message(STATUS "Protobuf version  : ${Protobuf_VERSION}")
 message(STATUS "Protobuf includes : ${Protobuf_INCLUDE_DIRS}")
 message(STATUS "protoc            : ${Protobuf_PROTOC_EXECUTABLE}")
 
+# System libprotobuf (v36) is built against abseil-cpp, and generated code can
+# reference absl symbols directly — ld then requires the absl DSOs explicitly
+# ("DSO missing from command line"), which FindProtobuf's protobuf::libprotobuf
+# INTERFACE does not carry. Pull the full list from protobuf.pc when PkgConfig
+# is available (vcpkg/config-mode protobuf exports its own transitive deps, so
+# the extra entry is harmless there).
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(ITANTRA_PROTOBUF QUIET protobuf IMPORTED_TARGET)
+endif()
+
+set(ITANTRA_PROTOBUF_LIBS protobuf::libprotobuf)
+if(TARGET PkgConfig::ITANTRA_PROTOBUF)
+    list(APPEND ITANTRA_PROTOBUF_LIBS PkgConfig::ITANTRA_PROTOBUF)
+endif()
+
 # ── Proto Compilation ─────────────────────────────────────────────────────────
 # protobuf_generate_cpp() calls protoc at build time.
 # It produces:
@@ -96,11 +112,12 @@ set(ITANTRA_CORE_SRCS
 )
 
 # ── Main Executable ──────────────────────────────────────────────────────────
+# Needs the full core (PacketFramer, SemanticCompressor, …): PacketEncoder /
+# PacketDecoder reference them, so listing only main+Encoder+Decoder left the
+# link with undefined references.
 add_executable(itantra_phase1
     src/main.cpp
-    src/PacketEncoder.cpp
-    src/PacketDecoder.cpp
-    ${PROTO_SRCS}
+    ${ITANTRA_CORE_SRCS}
 )
 
 # Include paths:
@@ -114,7 +131,7 @@ target_include_directories(itantra_phase1 PRIVATE
 )
 
 target_link_libraries(itantra_phase1 PRIVATE
-    protobuf::libprotobuf
+    ${ITANTRA_PROTOBUF_LIBS}
 )
 
 # ── Member 3 C++ Unit Tests ──────────────────────────────────────────────────
@@ -130,7 +147,14 @@ target_include_directories(itantra_m3_tests PRIVATE
 )
 
 target_link_libraries(itantra_m3_tests PRIVATE
-    protobuf::libprotobuf
+    ${ITANTRA_PROTOBUF_LIBS}
+)
+
+# Keep assert() active in the test binary even in Release: -DNDEBUG would
+# compile every verification away (the suite would print PASS while checking
+# nothing) and turn flagged-but-only-inside-assert variables into -Werror.
+target_compile_options(itantra_m3_tests PRIVATE
+    $<$<CONFIG:Release,RelWithDebInfo>:-UNDEBUG>
 )
 
 # ── Android NDK / JNI Shared Library (libitantra_core.so) ────────────────────
@@ -163,7 +187,7 @@ else()
             ${JNI_INCLUDE_DIRS}
         )
         target_link_libraries(itantra_core PRIVATE
-            protobuf::libprotobuf
+            ${ITANTRA_PROTOBUF_LIBS}
         )
     endif()
 endif()

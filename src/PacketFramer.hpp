@@ -46,7 +46,8 @@ public:
         const std::vector<uint8_t>& prosodyVector = {}
     );
 
-    /// Frame a semantic payload into an ultra-compact binary byte buffer (<=38 bytes).
+    /// Frame a semantic payload into an ultra-compact binary byte buffer
+    /// (frame <= 38 bytes; an attached 16-byte prosody vector may append beyond it).
     static std::vector<uint8_t> framePacket(
         const std::vector<uint8_t>& compressedPayload,
         const std::string& sourceLanguage,

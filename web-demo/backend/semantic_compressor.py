@@ -67,7 +67,13 @@ def compress_tier2(res: SemanticResult) -> bytes:
     l1 = ord(lang[1]) if len(lang) > 1 else ord('n')
 
     sub_flags = (1 if res.is_negated else 0) | ((len(res.extracted_entities) & 0x7FFF) << 1)
-    ctx_flags = 0
+    # Reserved context slot: low byte = semantic ENTITY code, high byte =
+    # CONDITION code (semantic_schema.Entity / .Condition). SemanticResult has
+    # no native fields for either, but the target-language realizers need both
+    # to pick the correct noun ("rescue team" / "மீட்புக் குழுவை" / …) and to
+    # append condition phrases ("trapped" / …).
+    ctx_flags = (int(getattr(res, "entity_code", 0)) & 0xFF) \
+        | ((int(getattr(res, "condition_code", 0)) & 0xFF) << 8)
 
     return struct.pack("!BBBBBHHBBBHI", b0, b1, b2, b3, b4, count16, gid, conf_byte, l0, l1, sub_flags, ctx_flags)
 
@@ -86,7 +92,7 @@ def decompress_tier2(data: bytes) -> SemanticResult:
     from semantic_codebook import GEOID_TO_CANONICAL
     canonical = GEOID_TO_CANONICAL.get(gid, "Unknown Location")
 
-    return SemanticResult(
+    res = SemanticResult(
         original_text="",
         detected_language=lang,
         intent=intent,
@@ -99,6 +105,23 @@ def decompress_tier2(data: bytes) -> SemanticResult:
         confidence=conf_byte / 100.0,
         is_negated=is_negated
     )
+    # Entity + condition rode in the reserved ctx_flags slot — restore both so
+    # the target-language realizer can pick the right noun and append condition
+    # phrases (see compress_tier2).
+    res.entity_code = ctx_flags & 0xFF
+    res.condition_code = (ctx_flags >> 8) & 0xFF
+    try:
+        from semantic_schema import Entity as _Ent, Condition as _Cond
+        res.entity = (_Ent(res.entity_code).name
+                      if res.entity_code != 0 and res.entity_code in _Ent._value2member_map_
+                      else "")
+        res.condition = (_Cond(res.condition_code).name
+                         if res.condition_code != 0 and res.condition_code in _Cond._value2member_map_
+                         else "")
+    except Exception:
+        res.entity = ""
+        res.condition = ""
+    return res
 
 def compress_tier3(res: SemanticResult) -> bytes:
     """Tier 3: Dynamic bounded payload (3 + len <= 27 bytes)."""

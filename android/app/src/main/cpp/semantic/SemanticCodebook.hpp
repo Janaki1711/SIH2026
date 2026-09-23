@@ -68,6 +68,8 @@ namespace GeoID {
     constexpr uint16_t UNKNOWN                 = 0x0000;
     constexpr uint16_t TOLANKERE               = 0x4F2A;
     constexpr uint16_t HUBBLI                  = 0x4F2B;
+    constexpr uint16_t KOLHAPUR                = 0x4F2C;
+    constexpr uint16_t BENGALURU               = 0x4F2D;
     constexpr uint16_t BASE                    = 0x4F01;
     constexpr uint16_t SECTOR_1                = 0x4E01;
     constexpr uint16_t SECTOR_2                = 0x4E02;

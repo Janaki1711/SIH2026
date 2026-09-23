@@ -46,6 +46,183 @@ def _extract_field_val(field_obj: Any) -> str:
         return str(field_obj.value).upper()
     return str(field_obj).upper()
 
+
+# ==============================================================================
+#  SENTINEL GUARD + LANGUAGE-NEUTRAL (ENGLISH-PIVOT) LEXICONS
+# ==============================================================================
+# Internal enum placeholders that must NEVER surface in user-visible output.
+_SENTINELS = {"UNKNOWN", "UNDEFINED", "NONE", "NULL", "N/A", "PROPER_LOCATION"}
+
+# Source-language hazard keyword → language-neutral key (the English pivot).
+_HAZARD_CANON: Dict[str, str] = {
+    # English
+    "fire": "fire", "flood": "flood", "earthquake": "earthquake",
+    "landslide": "landslide", "explosion": "explosion", "gas leak": "gas leak",
+    "chemical spill": "chemical spill", "tsunami": "tsunami",
+    "cyclone": "cyclone", "collapse": "collapse",
+    "building collapsed": "collapse", "structure failed": "collapse",
+    "roof fallen": "collapse",
+    # Hindi / Marathi (shared Devanagari)
+    "आग": "fire", "अग्निकांड": "fire", "बाढ़": "flood", "भूकंप": "earthquake",
+    "भूस्खलन": "landslide", "विस्फोट": "explosion", "गैस रिसाव": "gas leak",
+    "सुनामी": "tsunami", "चक्रवात": "cyclone",
+    # Gujarati
+    "આગ": "fire", "પૂર": "flood", "ભૂકંપ": "earthquake",
+    "વિસ્ફોટ": "explosion",
+    # Tamil
+    "தீ": "fire", "வெள்ளம்": "flood", "விபத்து": "collapse",
+    # Telugu
+    "అగ్ని": "fire", "వరదలు": "flood",
+    # Kannada
+    "ಬೆಂಕಿ": "fire", "ಪ್ರವಾಹ": "flood",
+    # Malayalam
+    "തീപിടിത്തം": "fire", "പ്രളയം": "flood", "ഭൂകമ്പം": "earthquake",
+    "ഉരുൾപൊട്ടൽ": "landslide", "വിസ്ഫോടനം": "explosion",
+    "സുനാമി": "tsunami",
+    # Odia
+    "ଅଗ୍ନିକାଣ୍ଡ": "fire", "ବନ୍ୟା": "flood", "ଭୂକମ୍ପ": "earthquake",
+    "ଭୂସ୍ଖଳନ": "landslide", "ବିସ୍ଫୋରଣ": "explosion", "ବାତ୍ୟା": "cyclone",
+    # Bengali
+    "অগ্নিকাণ্ড": "fire", "বন্যা": "flood", "ভূমিকম্প": "earthquake",
+    "ভূস্খলন": "landslide", "বিস্ফোরণ": "explosion", "ঘূর্ণিঝড়": "cyclone",
+}
+
+
+def _canonical_hazard(hazard_str: str) -> str:
+    """Map a source-language hazard keyword to its language-neutral key."""
+    if not hazard_str:
+        return ""
+    for part in str(hazard_str).split(","):
+        key = _HAZARD_CANON.get(part.strip().lower())
+        if key:
+            return key
+    return ""
+
+
+# Language-neutral hazard key → target-language word (per supported language).
+_HAZARD_OUT: Dict[str, Dict[str, str]] = {
+    "en": {"fire": "fire", "flood": "flood", "earthquake": "earthquake",
+           "landslide": "landslide", "explosion": "explosion",
+           "gas leak": "gas leak", "chemical spill": "chemical spill",
+           "tsunami": "tsunami", "cyclone": "cyclone",
+           "collapse": "building collapse"},
+    "hi": {"fire": "आग", "flood": "बाढ़", "earthquake": "भूकंप",
+           "landslide": "भूस्खलन", "explosion": "विस्फोट",
+           "gas leak": "गैस रिसाव", "chemical spill": "रासायनिक रिसाव",
+           "tsunami": "सुनामी", "cyclone": "चक्रवात",
+           "collapse": "इमारत गिरना"},
+    "gu": {"fire": "આગ", "flood": "પૂર", "earthquake": "ભૂકંપ",
+           "landslide": "ભૂસ્ખલન", "explosion": "વિસ્ફોટ",
+           "gas leak": "ગેસ ચુસ્કી", "chemical spill": "રાસાયણિક ચુસ્કી",
+           "tsunami": "સુનામી", "cyclone": "વાવાઝોડું",
+           "collapse": "ઇમારત ધરાશાયી"},
+    "mr": {"fire": "आग", "flood": "पूर", "earthquake": "भूकंप",
+           "landslide": "भूस्खलन", "explosion": "विस्फोट",
+           "gas leak": "गॅस गळती", "chemical spill": "रासायनिक गळती",
+           "tsunami": "सुनामी", "cyclone": "चक्रीवादळ",
+           "collapse": "इमारत पडणे"},
+    "kn": {"fire": "ಬೆಂಕಿ", "flood": "ಪ್ರವಾಹ", "earthquake": "ಭೂಕಂಪ",
+           "landslide": "ಭೂಕುಸಿತ", "explosion": "ಸ್ಫೋಟ",
+           "gas leak": "ಅನಿಲ ಸೋರಿಕೆ", "chemical spill": "ರಾಸಾಯನಿಕ ಸೋರಿಕೆ",
+           "tsunami": "ಸುನಾಮಿ", "cyclone": "ಚಂಡಮಾರುತ",
+           "collapse": "ಕಟ್ಟಡ ಕುಸಿತ"},
+    "ml": {"fire": "തീപിടിത്തം", "flood": "പ്രളയം", "earthquake": "ഭൂകമ്പം",
+           "landslide": "ഉരുൾപൊട്ടൽ", "explosion": "വിസ്ഫോടനം",
+           "gas leak": "വാതകചോർച്ച", "chemical spill": "രാസവസ്തു ചോർച്ച",
+           "tsunami": "സുനാമി", "cyclone": "ചുഴലിക്കാറ്റ്",
+           "collapse": "കെട്ടിടം തകർന്നു"},
+    "ta": {"fire": "தீ", "flood": "வெள்ளம்", "earthquake": "நிலநடுக்கம்",
+           "landslide": "நிலச்சரிவு", "explosion": "குண்டுவெடிப்பு",
+           "gas leak": "எரிவாயு கசிவு", "chemical spill": "ரசாயனக் கசிவு",
+           "tsunami": "சுனாமி", "cyclone": "புயல்",
+           "collapse": "கட்டிடம் இடிந்தது"},
+    "te": {"fire": "అగ్ని", "flood": "వరద", "earthquake": "భూకంపం",
+           "landslide": "భూస్ఖలనం", "explosion": "పేలుడు",
+           "gas leak": "వాయు లీక్", "chemical spill": "రసాయన లీక్",
+           "tsunami": "సునామి", "cyclone": "తుఫాను",
+           "collapse": "భవనం కుప్పకూలింది"},
+    "or": {"fire": "ଅଗ୍ନିକାଣ୍ଡ", "flood": "ବନ୍ୟା", "earthquake": "ଭୂକମ୍ପ",
+           "landslide": "ଭୂସ୍ଖଳନ", "explosion": "ବିସ୍ଫୋରଣ",
+           "gas leak": "ଗ୍ୟାସ ଚୋରା", "chemical spill": "ରାସାୟନିକ ଚୋରା",
+           "tsunami": "ସୁନାମୀ", "cyclone": "ବାତ୍ୟା",
+           "collapse": "ଘର ଭାଙ୍ଗିଛି"},
+    "bn": {"fire": "আগ", "flood": "বন্যা", "earthquake": "ভূমিকম্প",
+           "landslide": "ভূস্খলন", "explosion": "বিস্ফোরণ",
+           "gas leak": "গ্যাস লিক", "chemical spill": "রাসায়নিক লিক",
+           "tsunami": "সুনামি", "cyclone": "ঘূর্ণিঝড়",
+           "collapse": "ভবন ভেঙে পড়েছে"},
+}
+
+# Parsed Condition enum → short target-language phrase (same pivot idea).
+_COND_PHRASES: Dict[str, Dict[str, str]] = {
+    "en": {"TRAPPED": "people are trapped", "INJURED": "people are injured",
+           "UNCONSCIOUS": "people are unconscious", "MISSING": "people are missing",
+           "CRITICAL": "the condition is critical", "SAFE": "people are safe",
+           "EVACUATED": "the area has been evacuated",
+           "EXPOSED": "people are exposed to the weather"},
+    "hi": {"TRAPPED": "लोग फंसे हुए हैं", "INJURED": "लोग घायल हैं",
+           "UNCONSCIOUS": "लोग बेहोश हैं", "MISSING": "लोग लापता हैं",
+           "CRITICAL": "स्थिति गंभीर है", "SAFE": "लोग सुरक्षित हैं",
+           "EVACUATED": "इलाका खाली कर दिया गया है",
+           "EXPOSED": "लोग खुले में हैं"},
+    "gu": {"TRAPPED": "લોકો ફસાયેલા છે", "INJURED": "લોકો ઘાયલ છે",
+           "UNCONSCIOUS": "લોકો બેહોશ છે", "MISSING": "લોકો ગુમ થયા છે",
+           "CRITICAL": "સ્થિતિ ગંભીર છે", "SAFE": "લોકો સુરક્ષિત છે",
+           "EVACUATED": "વિસ્તાર ખાલી કરવામાં આવ્યો છે",
+           "EXPOSED": "લોકો ખુલ્લામાં છે"},
+    "mr": {"TRAPPED": "लोक अडकले आहेत", "INJURED": "लोक जखमी आहेत",
+           "UNCONSCIOUS": "लोक बेशुद्ध आहेत", "MISSING": "लोक गायब आहेत",
+           "CRITICAL": "स्थिती गंभीर आहे", "SAFE": "लोक सुरक्षित आहेत",
+           "EVACUATED": "परिसर रिकामा केला आहे",
+           "EXPOSED": "लोक उघड्यावर आहेत"},
+    "kn": {"TRAPPED": "ಜನರು ಸಿಕ್ಕಿಹಿಡಿದಿದ್ದಾರೆ", "INJURED": "ಜನರು ಗಾಯಗೊಂಡಿದ್ದಾರೆ",
+           "UNCONSCIOUS": "ಜನರು ಪ್ರಜ್ಞೆ ತಪ್ಪಿದ್ದಾರೆ", "MISSING": "ಜನರು ಕಾಣೆಯಾಗಿದ್ದಾರೆ",
+           "CRITICAL": "ಸ್ಥಿತಿ ಗಂಭೀರವಾಗಿದೆ", "SAFE": "ಜನರು ಸುರಕ್ಷಿತರಾಗಿದ್ದಾರೆ",
+           "EVACUATED": "ಪ್ರದೇಶವನ್ನು ಖಾಲಿ ಮಾಡಲಾಗಿದೆ",
+           "EXPOSED": "ಜನರು ಮುಕ್ತ ಸ್ಥಳದಲ್ಲಿದ್ದಾರೆ"},
+    "ml": {"TRAPPED": "ആളുകൾ കുടുങ്ങിയിട്ടുണ്ട്", "INJURED": "ആളുകൾക്ക് പരിക്പറ്റിയിട്ടുണ്ട്",
+           "UNCONSCIOUS": "ആളുകൾ ബോധരഹിതരാണ്", "MISSING": "ആളുകൾ കാണാതായി",
+           "CRITICAL": "അവസ്ഥ ഗുരുതരമാണ്", "SAFE": "ആളുകൾ സുരക്ഷിതരാണ്",
+           "EVACUATED": "പ്രദേശം ഒഴിപ്പിച്ചു",
+           "EXPOSED": "ആളുകൾക്ക് അഭയമില്ല"},
+    "ta": {"TRAPPED": "மக்கள் சிக்கியுள்ளனர்", "INJURED": "மக்கள் காயமடைந்துள்ளனர்",
+           "UNCONSCIOUS": "மக்கள் மயக்கத்தில் உள்ளனர்", "MISSING": "மக்கள் காணாமல் போயுள்ளனர்",
+           "CRITICAL": "நிலைமை மிகவும் கவலைக்கிடமாக உள்ளது", "SAFE": "மக்கள் பாதுகாப்பாக உள்ளனர்",
+           "EVACUATED": "பகுதி காலியாக்கப்பட்டது",
+           "EXPOSED": "மக்கள் திறந்த வெளியில் உள்ளனர்"},
+    "te": {"TRAPPED": "ప్రజలు చిక్కుకున్నారు", "INJURED": "ప్రజలు గాయపడ్డారు",
+           "UNCONSCIOUS": "ప్రజలు స్పృహ లేనివారు", "MISSING": "ప్రజలు తప్పిపోయారు",
+           "CRITICAL": "పరిస్థితి విషమం", "SAFE": "ప్రజలు సురక్షితంగా ఉన్నారు",
+           "EVACUATED": "ప్రాంతాన్ని ఖాళీ చేశారు",
+           "EXPOSED": "ప్రజలు బయట ఉన్నారు"},
+    "or": {"TRAPPED": "ଲୋକେ ଫସିଯାଇଛନ୍ତି", "INJURED": "ଲୋକେ ଆହତ ହୋଇଛନ୍ତି",
+           "UNCONSCIOUS": "ଲୋକେ ବେହୋସ ଅଛନ୍ତି", "MISSING": "ଲୋକେ ହଜିଯାଇଛନ୍ତି",
+           "CRITICAL": "ସ୍ଥିତି ଗୁରୁତର", "SAFE": "ଲୋକେ ସୁରକ୍ଷିତ ଅଛନ୍ତି",
+           "EVACUATED": "ଅଞ୍ଚଳ ଖାଲି ହୋଇଛି",
+           "EXPOSED": "ଲୋକେ ଖୋଲା ସ୍ଥାନରେ ଅଛନ୍ତି"},
+    "bn": {"TRAPPED": "মানুষ আটকে পড়েছে", "INJURED": "মানুষ আহত",
+           "UNCONSCIOUS": "মানুষ অচেতন", "MISSING": "মানুষ নিখোঁজ",
+           "CRITICAL": "অবস্থা গুরুতর", "SAFE": "মানুষ নিরাপদ",
+           "EVACUATED": "এলাকা খালি করা হয়েছে",
+           "EXPOSED": "মানুষ খোলায় আছে"},
+}
+
+# Sentence templates for the condition / hazard appendices.
+_COND_FMT: Dict[str, str] = {
+    "en": "Status: {c}.", "hi": "स्थिति: {c}।", "gu": "સ્થિતિ: {c}.",
+    "mr": "स्थिती: {c}.", "kn": "ಸ್ಥಿತಿ: {c}.", "ml": "അവസ്ഥ: {c}.",
+    "ta": "நிலை: {c}.", "te": "పరిస్థితి: {c}.", "or": "ସ୍ଥିତି: {c}.",
+    "bn": "অবস্থা: {c}।",
+}
+
+_DANGER_FMT: Dict[str, str] = {
+    "en": "Danger: {h}.", "hi": "खतरा: {h}।", "gu": "જોખમ: {h}.",
+    "mr": "धोका: {h}.", "kn": "ಅಪಾಯ: {h}.", "ml": "അപകടം: {h}.",
+    "ta": "ஆபத்து: {h}.", "te": "ప్రమాదం: {h}.", "or": "ବିପଦ: {h}.",
+    "bn": "বিপদ: {h}।",
+}
+
+
 def realize(msg_or_result: Any, target_language: str) -> str:
     """
     Main entry point: Realizes a semantic object into the target language.
@@ -102,6 +279,27 @@ def realize(msg_or_result: Any, target_language: str) -> str:
 
     is_negated = getattr(msg_or_result, 'is_negated', False)
 
+    # Condition is carried through so status-only messages keep their meaning.
+    condition = _extract_field_val(getattr(msg_or_result, 'condition', ''))
+
+    # ── NEVER emit internal sentinels (UNKNOWN / PROPER_LOCATION / …) ───────
+    def _scrub(v: Any) -> str:
+        if not v:
+            return ""
+        s = str(v).strip()
+        return "" if s.upper() in _SENTINELS else s
+
+    action = _scrub(action)
+    entity = _scrub(entity)
+    target = _scrub(target)
+    loc_text = _scrub(loc_text)
+    condition = _scrub(condition)
+    hazard_str = _scrub(hazard_str)
+
+    # Hazard: source-language keyword → language-neutral key → target word.
+    hazard_key = _canonical_hazard(hazard_str)
+    hazard_out = _HAZARD_OUT.get(lang, {}).get(hazard_key, "") if hazard_key else ""
+
     # Dispatch to language-specific realizer
     realizers = {
         "en": _realize_en, "hi": _realize_hi, "gu": _realize_gu,
@@ -109,7 +307,19 @@ def realize(msg_or_result: Any, target_language: str) -> str:
         "ta": _realize_ta, "te": _realize_te, "or": _realize_or,
         "bn": _realize_bn
     }
-    return realizers[lang](action, entity, target, loc_text, hazard_str, qty_str, is_negated)
+    base = realizers[lang](action, entity, target, loc_text, hazard_out, qty_str, is_negated)
+
+    # ── Append semantics the fixed sentence templates don't carry ───────────
+    extras = []
+    if condition:
+        phrase = _COND_PHRASES.get(lang, {}).get(condition)
+        if phrase:
+            extras.append(_COND_FMT[lang].format(c=phrase))
+    if hazard_out and "ALERT" not in action:
+        extras.append(_DANGER_FMT[lang].format(h=hazard_out))
+    if extras:
+        return f"{base} {' '.join(extras)}"
+    return base
 
 
 # ==============================================================================
@@ -389,16 +599,58 @@ def _realize_bn(action, entity, target, loc_text, hazard, qty, is_negated=False)
         return f"{l_str or 'এলাকাটি'} অবিলম্বে খালি করুন।"
     elif "ALERT" in action:
         return f"সতর্কতা: {l_str} {hazard or 'বিপদ'}।"
-    return f"{l_str or 'এলাকার'} পরিস্থিতি रिपोर्ट।"
+    return f"{l_str or 'এলাকারের'}পরিস্থিতির প্রতিবেদন।"
 
 
 # ==============================================================================
 # PUBLIC TRANSLATION HELPER
 # ==============================================================================
-def translate(source_language: str, target_language: str, text: str) -> str:
+def translate(arg1: str, arg2: str, arg3: str) -> str:
     """Translate text from source to target language via canonical semantic representation.
     Pipeline: text → parse(source_lang) → SemanticMessage → realize(target_lang)
-    All 90 source×target combinations supported."""
+    Supports both (source_lang, target_lang, text) and (text, source_lang, target_lang) orderings.
+    All 100 source×target combinations supported.
+
+    Honest-output rules (English-as-median: the semantic IR is the pivot):
+      • src == tgt → identity (never rewrite text into itself)
+      • weak/fallback parse → passthrough of the original (never fabricate)
+      • nothing translatable (no action/condition/hazard) → passthrough
+      • internal sentinels (UNKNOWN…) never reach user-visible output
+    """
+    arg1_s, arg2_s, arg3_s = str(arg1), str(arg2), str(arg3)
+    if arg1_s.lower() in SUPPORTED_LANGUAGES and arg2_s.lower() in SUPPORTED_LANGUAGES:
+        source_language, target_language, text = arg1_s.lower(), arg2_s.lower(), arg3_s
+    elif arg2_s.lower() in SUPPORTED_LANGUAGES and arg3_s.lower() in SUPPORTED_LANGUAGES:
+        text, source_language, target_language = arg1_s, arg2_s.lower(), arg3_s.lower()
+    else:
+        source_language, target_language, text = arg1_s.lower(), arg2_s.lower(), arg3_s
+
+    # Same language → identity.
+    if source_language == target_language:
+        return text
+
     import semantic_parser
     msg = semantic_parser.parse(text, source_language)
-    return realize(msg, target_language)
+
+    # Weak parse → honest passthrough (never fabricate a "translation").
+    if getattr(msg, "is_fallback", False):
+        return text
+
+    # Nothing we can faithfully realize (status/emotion/quantity-only) → passthrough.
+    has_translatable = (
+        getattr(getattr(msg, "action", None), "code", 0) != 0
+        or getattr(getattr(msg, "condition", None), "code", 0) != 0
+        or bool(getattr(msg, "hazard_text", ""))
+    )
+    if not has_translatable:
+        return text
+
+    out = realize(msg, target_language)
+
+    # Belt-and-braces: never leak an internal sentinel into user-visible text.
+    if not out or not out.strip():
+        return text
+    if "unknown" in out.lower() and "unknown" not in text.lower():
+        return text
+    return out
+

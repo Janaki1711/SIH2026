@@ -90,6 +90,10 @@ ACTION_MAP = [
         "broken out", "outbreak", "alert", "warn", "warning", "beware",
         "danger ahead", "has broken", "broke out",
         "चेतावनी", "इशारा",
+        "ચેતવણી",
+        "മുന്നറിയിപ്പ്",
+        "ଚେତାବନୀ",
+        "সতর্কতা",
         "எச்சரிக்கை",
         "హెచ్చరించు",
         "ಎಚ್ಚರಿಕೆ",
@@ -97,7 +101,9 @@ ACTION_MAP = [
     (Action.SEARCH, [
         "search", "find", "locate", "look for", "sweep",
         "खोजो", "ढूंढो",
-        "शोधा",
+        "शोधा", "શોધો",
+        "അന്വേഷിക്കുക",
+        "ଖୋଜନ୍ତୁ", "খোঁজো",
         "தேடு",
         "వెతుకు",
         "ಹುಡುಕಿ",
@@ -105,14 +111,20 @@ ACTION_MAP = [
     (Action.MOVE, [
         "moving", "advance", "proceeding", "heading", "going to", "towards",
         "आगे बढ़", "चल रहा", "जा रहा",
-        "जात आहे",
+        "जात आहे", "पुढे जा",
+        "આગળ વધો",
+        "മുന്നേറുന്നു",
+        "ଏଗିରନ୍ତୁ", "এগিয়ে যাচ্ছে",
         "நகர்கிறது",
         "కదులుతున్నాడు",
         "ಚಲಿಸುತ್ತಿದ್ದಾರೆ",
     ]),
     (Action.REPORT, [
         "report", "status update", "inform", "notify", "update",
-        "रिपोर्ट", "सूचना",
+        "रिपोर्ट", "सूचना", "अहवाल",
+        "અહેવાલ",
+        "റിപ്പോർട്ട്",
+        "ରିପୋର୍ଟ", "রিপোর্ট",
         "அறிக்கை",
         "నివేదించు",
         "ವರದಿ",
@@ -120,11 +132,17 @@ ACTION_MAP = [
     (Action.HOLD, [
         "hold", "stop", "halt", "wait", "stand by",
         "रुको", "थांबा",
+        "થંભો",
+        "നിൽക്കൂ", "നിർത്തുക",
+        "ଅଟକନ୍ତୁ", "ରୁହନ୍ତୁ", "থামুন",
         "நிறுத்து", "ఆగు", "ನಿಲ್ಲಿಸಿ",
     ]),
     (Action.SECURE, [
         "secure", "lock down", "seal", "contain",
         "सुरक्षित करो", "सुरक्षित करा",
+        "સુરક્ષિત કરો",
+        "സുരക്ഷിതമാക്കുക",
+        "ସୁରକ୍ଷିତ କରନ୍ତୁ", "নিরাপদ করুন",
         "பாதுகாக்க", "భద్రపరచు", "ಸುರಕ್ಷಿತಗೊಳಿಸಿ",
     ]),
 ]
@@ -134,37 +152,69 @@ ENTITY_MAP = [
     (Entity.FIRE_TEAM, [
         "fire team", "fire brigade", "fire fighter", "fireman", "fire department",
         "अग्निशमन", "फायर ब्रिगेड",
+        "અગ્નિશમન દળ",
+        "അഗ്നിശമന സേന",
+        "ଅଗ୍ନିଶମ ଦଳ", "দমকল দল",
         "தீயணைப்பு", "అగ్నిమాపక", "ಅಗ್ನಿಶಾಮಕ",
     ]),
     (Entity.AMBULANCE, [
-        "ambulance", "एम्बुलेंस", "ஆம்புலன்ஸ்", "అంబులెన్స్", "ಆಂಬ್ಯುಲೆನ್ಸ್",
+        "ambulance", "एम्बुलेंस", "रुग्णवाहिका",
+        "એમ્બ્યુલન્સ",
+        "ആംബുലൻസ്",
+        "ଆମ୍ବୁଲାନ୍ସ", "অ্যাম্বুলেন্স",
+        "ஆம்புலன்ஸ்", "అంబులెన్స్", "ಆಂಬ್ಯುಲೆನ್ಸ್",
     ]),
     (Entity.MEDICAL, [
         "medical", "doctor", "nurse", "paramedic", "medic", "health team",
-        "चिकित्सा", "डॉक्टर", "वैद्य", "மருத்துவம்", "மருத்துவ", "వైద్యం", "ವೈದ್ಯ",
+        "चिकित्सा", "डॉक्टर", "वैद्य",
+        "તબીબ",
+        "വൈദ്യൻ",
+        "ଡାକ୍ତର", "ডাক্তার",
+        "மருத்துவம்", "மருத்துவ", "వైద్యం", "ವೈದ್ಯ",
     ]),
     (Entity.RESCUE, [
         "rescue", "rescue team", "save", "बचाव", "बचाव दल",
-        "बचाव पथक", "மீட்பு", "రక్షణ", "ರಕ್ಷಣಾ",
+        "बचाव पथक",
+        "બચાવ",
+        "രക്ഷാസംഘം", "രക്ഷ",
+        "ଉଦ୍ଧାର", "উদ্ধার",
+        "மீட்பு", "రక్షణ", "ರಕ್ಷಣಾ",
     ]),
     (Entity.POLICE, [
         "police", "law enforcement", "cops", "officer",
-        "पुलिस", "पोलिस", "காவல்துறை", "పోలీసు", "ಪೊಲೀಸ್",
+        "पुलिस", "पोलिस",
+        "પોલીસ",
+        "പോലീസ്",
+        "ପୋଲିସ", "পুলিশ",
+        "காவல்துறை", "పోలీసు", "ಪೊಲೀಸ್",
     ]),
     (Entity.HELICOPTER, [
         "helicopter", "chopper", "helo", "heli", "हेलिकॉप्टर",
+        "હેલિકોપ્ટર",
+        "ഹെലികോപ്ടർ",
+        "ହେଲିକପ୍ଟର", "হেলিকপ্টার",
         "ஹெலிகாப்டர்", "హెలికాప్టర్", "ಹೆಲಿಕಾಪ್ಟರ್",
     ]),
     (Entity.ENGINEER, ["engineer", "engineering team", "sapper", "tech team"]),
     (Entity.SUPPLY, [
         "supply", "supplies", "ration", "relief",
-        "आपूर्ति", "रसद", "आपूर्ती", "సరఫరా", "ಸರಬರಾಜು",
+        "आपूर्ति", "रसद", "आपूर्ती",
+        "સામાન",
+        "സാമഗ്രി",
+        "ସାମଗ୍ରୀ", "সরবরাহ",
+        "సరఫరా", "ಸರಬರಾಜು",
     ]),
     (Entity.TROOP, [
         "troop", "troops", "soldier", "soldiers", "military", "army",
-        "सेना", "जवान", "படை", "సైనికులు", "ಸೈನಿಕ",
+        "सेना", "जवान",
+        "સૈન્ય",
+        "സൈന്യം",
+        "ସୈନ୍ୟ", "সেনা",
+        "படை", "సైనికులు", "ಸೈನಿಕ",
     ]),
-    (Entity.DISASTER, ["disaster", "relief team", "disaster team", "आपदा"]),
+    (Entity.DISASTER, ["disaster", "relief team", "disaster team", "आपदा",
+                       "આપત્તિ", "വിപത്ത്", "ବିପର୍ଯ୍ୟାୟ", "দুর্যোগ",
+                       "பேரிடர்", "విపత్తు", "ವಿಪತ್ತು"]),
     # FIRE last — only match standalone "fire" when not part of "fire team/brigade"
     (Entity.FIRE, [
         "fire", "blaze", "flames", "burning",
@@ -219,6 +269,10 @@ URGENCY_MAP = [
     (Urgency.CRITICAL, [
         "immediately", "immediate", "urgent", "urgently", "critical", "sos",
         "asap", "right now", "right away", "now", "emergency", "at once", "straight away",
+        "તાત્કાલિક", "અત્યાવશ્યક",
+        "ഉടൻ", "അടിയന്തരം",
+        "ତୁରନ୍ତ", "ଜରୁରୀ",
+        "জরুরি", "দ্রুত",
         "तुरंत", "फौरन", "अभी", "जरूरी", "आपातकाल",
         "ताबडतोब", "तात्काळ",
         "உடனடியாக", "இப்போதே",
@@ -227,6 +281,10 @@ URGENCY_MAP = [
     ]),
     (Urgency.HIGH, [
         "fast", "quickly", "quick", "hurry", "soon", "rapidly",
+        "જલ્દી",
+        "വേഗം", "ശീଘ്രം",
+        "ଶୀଘ୍ର",
+        "তাড়াতাড়ি",
         "जल्दी", "शीघ्र", "लवकर", "விரைவாக", "త్వరగా", "ಬೇಗ",
     ]),
     (Urgency.MEDIUM, ["when possible", "moderate", "जब संभव हो"]),
@@ -237,40 +295,75 @@ URGENCY_MAP = [
 CONDITION_MAP = [
     (Condition.TRAPPED,     [
         "trapped", "stuck", "pinned", "buried", "caught", "cannot escape",
+        "ફસાયેલા", "અટકેલા",
+        "अडकले",
+        "കുടുങ്ങി",
+        "ଫସି",
+        "আটকে",
         "फंसे", "फंसा", "फँसलेले", "சிக்கியிருக்கிறார்கள்",
         "చిక్కుకున్నారు", "ಸಿಕ್ಕಿಕೊಂಡಿದ್ದಾರೆ",
     ]),
     (Condition.INJURED,     [
         "injured", "hurt", "wound", "wounded", "bleeding", "fracture",
+        "ઘાયલ",
+        "പരിക്പറ്റി",
+        "ଆହତ",
+        "আহত",
         "घायल", "जख्मी", "चोट", "जखमी",
         "காயமடைந்தவர்கள்", "గాయపడిన", "ಗಾಯಗೊಂಡ",
     ]),
     (Condition.UNCONSCIOUS, [
         "unconscious", "unresponsive", "passed out", "fainted", "coma",
+        "બેહોશ",
+        "ബോധരഹിത",
+        "ବେହୋସ",
+        "অচেতন",
         "बेहोश", "अचेत", "बेशुद्ध",
         "மயக்கமடைந்தவர்கள்", "స్పృహ లేని", "ಅಪ್ರಜ್ಞಾವಸ್ಥೆ",
     ]),
     (Condition.MISSING,     [
         "missing", "lost", "not found", "disappeared", "unaccounted",
+        "ગુમ થયા",
+        "കാണാതായ",
+        "ହଜି",
+        "নিখোঁজ",
         "लापता", "गायब", "खोया", "बेपत्ता",
         "காணாமல்போனவர்கள்", "తప్పిపోయిన", "ಕಾಣೆಯಾಗಿದ್ದಾರೆ",
     ]),
     (Condition.CRITICAL,    [
         "critical condition", "life threatening", "very serious", "in danger",
+        "ગંભીર",
+        "ഗુરુતર",
+        "ଗୁରୁତର",
+        "গুরুতর",
         "गंभीर", "गंभीर अवस्था", "ஆபத்தான நிலை",
         "ప్రాణాపాయ స్థితి", "ಅಪಾಯಕರ ಸ್ಥಿತಿ",
     ]),
     (Condition.SAFE,        [
         "safe", "all clear", "rescued", "recovered",
+        "सुरक्षित आहे",
+        "સુરક્ષિત",
+        "സുരക്ഷിത",
+        "ସୁରକ୍ଷିତ",
+        "নিরাপদ",
         "सुरक्षित है", "सुरक्षित हैं",
         "பாதுகாப்பாக", "సురక్షితంగா", "ಸುರಕ್ಷಿತ",
     ]),
     (Condition.EVACUATED,   [
         "evacuated", "cleared", "out of danger zone",
+        "रिकामा केला",
+        "ખાલી કરાયો",
+        "ഒഴിപ്പിച്ച",
+        "ଖାଲି ହୋଇଛି",
+        "খালি করা হয়েছে",
         "निकाला गया", "बाहेर काढले",
     ]),
     (Condition.EXPOSED,     [
         "exposed", "stranded", "in the open", "no shelter",
+        "ખુલ્લામાં",
+        "അഭയമില്ല",
+        "ଖୋଲା ସ୍ଥାନ",
+        "খোলায়",
         "खुले में", "उघड्यावर",
     ]),
 ]
@@ -280,12 +373,22 @@ EMOTION_MAP = [
     (Emotion.PANIC, [
         "panic", "panicking", "panicked", "terrified", "terror", "petrified",
         "frantic", "hysterical", "out of control",
+        "આતંકિત",
+        "आतंकित",
+        "ഭയചഞ്ചിത",
+        "ଆତଙ୍କିତ",
+        "আতঙ্কিত",
         "घबराना", "घबराए", "डर के मारे", "घाबरलेले", "भयभीत",
         "பீதியடைந்தவர்கள்", "భయాందోళనకు", "ಭಯಭೀತ",
     ]),
     (Emotion.DISTRESS, [
         "distress", "distressed", "desperate", "anguish", "in distress",
         "suffering", "agony", "helpless", "crying for help",
+        "ત્રાસમાં",
+        "त्रासात",
+        "കഷ്ടത്തിൽ",
+        "ଯନ୍ତ୍ରଣାରେ",
+        "কষ্টে",
         "तकलीफ", "परेशान", "दुखी", "त्रास",
         "அவதிப்படுகிறார்கள்", "కష்టాల్లో", "ಸಂಕಷ್ಟದಲ್ಲಿ",
     ]),
@@ -293,16 +396,24 @@ EMOTION_MAP = [
         "fear", "fearful", "afraid", "frightened", "scared",
         "people are terrified", "everyone is terrified",
         "people are scared", "everyone is scared",
+        "ડરથી",
+        "भीती",
+        "ഭയം",
+        "ଭୟ",
+        "ভয়",
         "डर", "भय", "घबराहट",
     ]),
     (Emotion.CONFUSION, [
         "confused", "disoriented", "chaos", "chaotic", "भ्रम", "अव्यवस्था",
+        "ગૂંચવણ", "गोंधळ", "ആശയക്കുഴപ്പം", "ବିଭ୍ରାନ୍ତି", "বিভ্রান্তি",
     ]),
     (Emotion.CALM, [
         "calm", "stable", "controlled", "under control",
+        "શાંત", "शांत", "ശാന്ത", "ଶାନ୍ତ", "শান্ত",
         "शांत", "அமைதியாக", "శాంతంగా", "ಶಾಂತ",
     ]),
-    (Emotion.RELIEF, ["relieved", "safe now", "situation improved", "राहत", "दिलासा"]),
+    (Emotion.RELIEF, ["relieved", "safe now", "situation improved", "राहत", "दिलासा",
+                      "રાહત", "ആശ്വാസ", "ଆଶ୍ଵାସ", "আশ্বাস"]),
 ]
 
 # HAZARD keywords
@@ -315,12 +426,22 @@ HAZARD_KEYWORDS = [
     "தீ", "வெள்ளம்", "விபத்து",
     "అగ్ని", "వరదలు",
     "ಬೆಂಕಿ", "ಪ್ರವಾಹ",
+    "આગ", "પૂર", "ભૂકંપ", "વિસ્ફોટ",
+    "अग्निकांड", "भूस्खलन", "गैस रिसाव", "सुनामी", "चक्रवात",
+    "തീപിടിത്തം", "പ്രളയം", "ഭൂകമ്പം", "ഉരുൾപൊട്ടൽ", "വിസ്ഫോടനം", "സുനാമി",
+    "ଅଗ୍ନିକାଣ୍ଡ", "ବନ୍ୟା", "ଭୂକମ୍ପ", "ଭୂସ୍ଖଳନ", "ବିସ୍ଫୋରଣ", "ବାତ୍ୟା",
+    "অগ্নিকাণ্ড", "বন্যা", "ভূমিকম্প", "ভূস্খলন", "বিস্ফোরণ", "ঘূর্ণিঝড়",
 ]
 
 # RESOURCE keywords
 RESOURCE_KEYWORDS = [
     "food", "water", "medicine", "blanket", "shelter", "tent",
     "oxygen", "blood", "equipment", "generator", "pump",
+    "ખોરાક", "પાણી", "દવા", "મદદ",
+    "अन्न", "औषध",
+    "വിഭവം", "വെള്ളം", "മരുന്ന്",
+    "ଖାଦ୍ୟ", "ପାଣି", "ଔଷଧ",
+    "খাবার", "পানি", "ওষুধ",
     "help", "support", "assistance",
     "खाना", "पानी", "दवाई", "मदद", "सहायता",
     "அன்னம்", "தண்ணீர்", "உதவி", "மருத்துவ உதவி",
@@ -340,6 +461,14 @@ STATUS_KEYWORDS = [
 NUMBER_WORDS = {
     "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
     "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+    # Gujarati
+    "એક": 1, "બે": 2, "ત્રણ": 3, "ચાર": 4, "પાંચ": 5,
+    # Malayalam
+    "ഒന്ന്": 1, "രണ്ട്": 2, "മൂന്ന്": 3, "നാല്": 4, "അഞ്ച്": 5,
+    # Odia
+    "ଏକ": 1, "ଦୁଇ": 2, "ତିନି": 3, "ଚାରି": 4, "ପାଞ୍ଚ": 5,
+    # Bengali
+    "এক": 1, "দুই": 2, "তিন": 3, "চার": 4, "পাঁচ": 5,
     # Hindi/Marathi
     "एक": 1, "दो": 2, "दोन": 2, "तीन": 3, "चार": 4, "पांच": 5, "पाच": 5, "पाँच": 5,
     "छह": 6, "सात": 7, "आठ": 8, "नौ": 9, "दस": 10,
@@ -540,13 +669,18 @@ def _meaningful_field_count(msg: SemanticMessage) -> int:
 #  CORE PARSE LOGIC
 # ─────────────────────────────────────────────
 
-def _parse_core(text: str) -> SemanticMessage:
+def _parse_core(text: str, language: str = "en") -> SemanticMessage:
     """
-    Language-agnostic hybrid parsing.
+    Language-agnostic hybrid parsing (English-as-median: every keyword maps to
+    the same canonical enum regardless of the source language).
     Extracts ALL applicable semantic fields from a sentence.
+    `language` records the source language on the message for downstream
+    consumers (hybrid TinyML, diagnostics); keyword matching itself uses the
+    unified multilingual codebook so all 10 languages parse identically.
     """
     text_lower = text.lower()
     msg = SemanticMessage()
+    msg.source_language = language
     matched = []
 
     # ── ACTION ──────────────────────────────
@@ -680,7 +814,7 @@ def parse_english(text: str) -> SemanticMessage:
     return _parse_core(text)
 
 def parse_hindi(text: str) -> SemanticMessage:
-    return _parse_core(text)
+    return _parse_core(text, "hi")
 
 def parse(text: str, language: str) -> SemanticMessage:
     """Parse text into a SemanticMessage using Hybrid Rule + TinyML parsing."""
@@ -689,7 +823,7 @@ def parse(text: str, language: str) -> SemanticMessage:
         return hybrid_engine.parse(text, language)
     except Exception as e:
         # Graceful fallback to pure rule-based parse if TinyML fails to load
-        msg = _parse_core(text)
+        msg = _parse_core(text, language)
         failed = []
         if msg.action.code == 0:
             failed.append("ACTION")

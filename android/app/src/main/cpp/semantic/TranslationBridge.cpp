@@ -18,6 +18,8 @@ std::string TranslationBridge::getTargetLocationName(uint16_t geoId, const std::
         switch (geoId) {
             case semantic::GeoID::TOLANKERE: return "तोलनकेरे";
             case semantic::GeoID::HUBBLI:    return "हब्बली";
+            case semantic::GeoID::KOLHAPUR:  return "कोल्हापुर";
+            case semantic::GeoID::BENGALURU: return "बेंगलुरु";
             case semantic::GeoID::BASE:      return "बेस कैंप";
             case semantic::GeoID::SECTOR_1:  return "सेक्टर 1";
             case semantic::GeoID::SECTOR_2:  return "सेक्टर 2";
@@ -45,6 +47,8 @@ std::string TranslationBridge::getTargetLocationName(uint16_t geoId, const std::
         switch (geoId) {
             case semantic::GeoID::TOLANKERE: return "તોલનકેરે";
             case semantic::GeoID::HUBBLI:    return "હુબલી";
+            case semantic::GeoID::KOLHAPUR:  return "કોલ્હાપુર";
+            case semantic::GeoID::BENGALURU: return "બેંગલુરુ";
             case semantic::GeoID::BASE:      return "બેઝ કેમ્પ";
             case semantic::GeoID::SECTOR_4:  return "સેક્ટર 4";
             case semantic::GeoID::BRIDGE:    return "પુલ";
@@ -66,6 +70,8 @@ std::string TranslationBridge::getTargetLocationName(uint16_t geoId, const std::
         switch (geoId) {
             case semantic::GeoID::TOLANKERE: return "தோலன்கெரே";
             case semantic::GeoID::HUBBLI:    return "ஹூப்ளி";
+            case semantic::GeoID::KOLHAPUR:  return "கோல்ஹாப்பூர்";
+            case semantic::GeoID::BENGALURU: return "பெங்களூர்";
             case semantic::GeoID::BASE:      return "முகாம்";
             case semantic::GeoID::SECTOR_4:  return "செக்டர் 4";
             case semantic::GeoID::BRIDGE:    return "பாலம்";
@@ -88,6 +94,8 @@ std::string TranslationBridge::getTargetLocationName(uint16_t geoId, const std::
         switch (geoId) {
             case semantic::GeoID::TOLANKERE: return "ತೊಳನಕೆರೆ";
             case semantic::GeoID::HUBBLI:    return "ಹುಬ್ಬಳ್ಳಿ";
+            case semantic::GeoID::KOLHAPUR:  return "ಕೊಲ್ಹಾಪುರ";
+            case semantic::GeoID::BENGALURU: return "ಬೆಂಗಳೂರು";
             case semantic::GeoID::BASE:      return "ಬೇಸ್ ಕ್ಯಾಂಪ್";
             case semantic::GeoID::SECTOR_4:  return "ಸೆಕ್ಟರ್ 4";
             case semantic::GeoID::BRIDGE:    return "ಸೇತುವೆ";
@@ -109,6 +117,8 @@ std::string TranslationBridge::getTargetLocationName(uint16_t geoId, const std::
         switch (geoId) {
             case semantic::GeoID::TOLANKERE: return "తోలంకెరె";
             case semantic::GeoID::HUBBLI:    return "హుబ్లి";
+            case semantic::GeoID::KOLHAPUR:  return "కోల్హాపూర్";
+            case semantic::GeoID::BENGALURU: return "బెంగళూరు";
             case semantic::GeoID::BASE:      return "బేస్ క్యాంప్";
             case semantic::GeoID::SECTOR_4:  return "సెక్టర్ 4";
             case semantic::GeoID::BRIDGE:    return "వంతెన";
@@ -130,6 +140,8 @@ std::string TranslationBridge::getTargetLocationName(uint16_t geoId, const std::
         switch (geoId) {
             case semantic::GeoID::TOLANKERE: return "തോലൻകെരെ";
             case semantic::GeoID::HUBBLI:    return "ഹുബ്ലി";
+            case semantic::GeoID::KOLHAPUR:  return "കോളാപ്പൂർ";
+            case semantic::GeoID::BENGALURU: return "ബംഗളൂരു";
             case semantic::GeoID::BASE:      return "ബേസ് ക്യാമ്പ്";
             case semantic::GeoID::SECTOR_4:  return "സെക്ടർ 4";
             case semantic::GeoID::BRIDGE:    return "പാലം";
@@ -152,6 +164,8 @@ std::string TranslationBridge::getTargetLocationName(uint16_t geoId, const std::
         switch (geoId) {
             case semantic::GeoID::TOLANKERE: return "ତୋଲନକେରେ";
             case semantic::GeoID::HUBBLI:    return "ହୁବଳି";
+            case semantic::GeoID::KOLHAPUR:  return "କୋଲ୍ହାପୁର";
+            case semantic::GeoID::BENGALURU: return "ବେଙ୍ଗାଲୁରୁ";
             case semantic::GeoID::BASE:      return "ବେସ୍ କ୍ୟାମ୍ପ";
             case semantic::GeoID::SECTOR_4:  return "ସେକ୍ଟର 4";
             case semantic::GeoID::BRIDGE:    return "ପୋଲ";
@@ -172,6 +186,8 @@ std::string TranslationBridge::getTargetLocationName(uint16_t geoId, const std::
         switch (geoId) {
             case semantic::GeoID::TOLANKERE: return "তোলনকেরে";
             case semantic::GeoID::HUBBLI:    return "হুব্বলি";
+            case semantic::GeoID::KOLHAPUR:  return "কোল্হাপুর";
+            case semantic::GeoID::BENGALURU: return "বেঙ্গালুরু";
             case semantic::GeoID::BASE:      return "বেস ক্যাম্প";
             case semantic::GeoID::SECTOR_4:  return "সেক্টর 4";
             case semantic::GeoID::BRIDGE:    return "ব্রিজ";
@@ -546,6 +562,23 @@ std::string TranslationBridge::realizeGujarati(const semantic::SemanticResult& r
         return oss.str();
     }
 
+    if (res.intent == semantic::ActionCode::LOCATION_REPORT) {
+        if (!loc.empty()) oss << "સ્થાનની જાણકારી: " << loc << ".";
+        else oss << "સ્થાનની જાણકારી મળી.";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::GO_TO) {
+        if (!loc.empty()) oss << loc << " તરફ જાઓ.";
+        else oss << "મુકામ તરફ જાઓ.";
+        return oss.str();
+    }
+
+    if (!loc.empty()) {
+        oss << "સ્થાન: " << loc << ".";
+        return oss.str();
+    }
+
     return realizeHindi(res);
 }
 
@@ -623,6 +656,23 @@ std::string TranslationBridge::realizeMarathi(const semantic::SemanticResult& re
         else if (res.hazard == semantic::HazardCode::FLOOD) oss << "पुराचा इशारा!";
         else oss << "इशारा जारी!";
         if (!loc.empty()) oss << " (" << loc << ")";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::LOCATION_REPORT) {
+        if (!loc.empty()) oss << "ठिकाणाची माहिती: " << loc << ".";
+        else oss << "ठिकाणाची माहिती मिळाली.";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::GO_TO) {
+        if (!loc.empty()) oss << loc << " वर जा.";
+        else oss << "ध्येयस्थानावर जा.";
+        return oss.str();
+    }
+
+    if (!loc.empty()) {
+        oss << "ठिकाण: " << loc << ".";
         return oss.str();
     }
 
@@ -706,6 +756,23 @@ std::string TranslationBridge::realizeKannada(const semantic::SemanticResult& re
         return oss.str();
     }
 
+    if (res.intent == semantic::ActionCode::LOCATION_REPORT) {
+        if (!loc.empty()) oss << "ಸ್ಥಳ ವರದಿ: " << loc << ".";
+        else oss << "ಸ್ಥಳ ಮಾಹಿತಿ ಬಂದಿದೆ.";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::GO_TO) {
+        if (!loc.empty()) oss << loc << " ಕಡೆಗೆ ಹೋಗಿ.";
+        else oss << "ಗಮ್ಯಸ್ಥಾನಕ್ಕೆ ಹೋಗಿ.";
+        return oss.str();
+    }
+
+    if (!loc.empty()) {
+        oss << "ಸ್ಥಳ: " << loc << ".";
+        return oss.str();
+    }
+
     return realizeEnglish(res);
 }
 
@@ -783,6 +850,23 @@ std::string TranslationBridge::realizeMalayalam(const semantic::SemanticResult& 
         else if (res.hazard == semantic::HazardCode::FLOOD) oss << "വെള്ളപ്പൊക്ക മുന്നറിയിപ്പ്!";
         else oss << "ജാഗ്രതാ മുന്നറിയിപ്പ്!";
         if (!loc.empty()) oss << " (" << loc << ")";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::LOCATION_REPORT) {
+        if (!loc.empty()) oss << "സ്ഥാന റിപ്പോർട്ട്: " << loc << ".";
+        else oss << "സ്ഥാന വിവരം ലഭിച്ചു.";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::GO_TO) {
+        if (!loc.empty()) oss << loc << " ലേക്ക് പോകുക.";
+        else oss << "ലക്ഷ്യസ്ഥാനത്തേക്ക് പോകുക.";
+        return oss.str();
+    }
+
+    if (!loc.empty()) {
+        oss << "സ്ഥാനം: " << loc << ".";
         return oss.str();
     }
 
@@ -866,6 +950,23 @@ std::string TranslationBridge::realizeTamil(const semantic::SemanticResult& res)
         return oss.str();
     }
 
+    if (res.intent == semantic::ActionCode::LOCATION_REPORT) {
+        if (!loc.empty()) oss << "இடத் தகவல்: " << loc << ".";
+        else oss << "இடத் தகவல் கிடைத்தது.";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::GO_TO) {
+        if (!loc.empty()) oss << loc << " நோக்கி செல்லவும்.";
+        else oss << "இலக்கிற்குச் செல்லவும்.";
+        return oss.str();
+    }
+
+    if (!loc.empty()) {
+        oss << "இடம்: " << loc << ".";
+        return oss.str();
+    }
+
     return realizeEnglish(res);
 }
 
@@ -943,6 +1044,23 @@ std::string TranslationBridge::realizeTelugu(const semantic::SemanticResult& res
         else if (res.hazard == semantic::HazardCode::FLOOD) oss << "వరద హెచ్చరిక!";
         else oss << "హెచ్చరిక!";
         if (!loc.empty()) oss << " (" << loc << ")";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::LOCATION_REPORT) {
+        if (!loc.empty()) oss << "స్థాన సమాచారం: " << loc << ".";
+        else oss << "స్థాన సమాచారం వచ్చింది.";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::GO_TO) {
+        if (!loc.empty()) oss << loc << " వైపు వెళ్లండి.";
+        else oss << "గమ్యస్థానానికి వెళ్లండి.";
+        return oss.str();
+    }
+
+    if (!loc.empty()) {
+        oss << "స్థానం: " << loc << ".";
         return oss.str();
     }
 
@@ -1026,6 +1144,23 @@ std::string TranslationBridge::realizeOdia(const semantic::SemanticResult& res) 
         return oss.str();
     }
 
+    if (res.intent == semantic::ActionCode::LOCATION_REPORT) {
+        if (!loc.empty()) oss << "ସ୍ଥାନ ସୂଚନା: " << loc << ".";
+        else oss << "ସ୍ଥାନ ସୂଚନା ମିଳିଛି।";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::GO_TO) {
+        if (!loc.empty()) oss << loc << " କୁ ଯାଆନ୍ତୁ।";
+        else oss << "ଲକ୍ଷ୍ୟସ୍ଥାନକୁ ଯାଆନ୍ତୁ।";
+        return oss.str();
+    }
+
+    if (!loc.empty()) {
+        oss << "ସ୍ଥାନ: " << loc << ".";
+        return oss.str();
+    }
+
     return realizeHindi(res);
 }
 
@@ -1106,7 +1241,123 @@ std::string TranslationBridge::realizeBengali(const semantic::SemanticResult& re
         return oss.str();
     }
 
+    if (res.intent == semantic::ActionCode::LOCATION_REPORT) {
+        if (!loc.empty()) oss << "স্থানের খবর: " << loc << ".";
+        else oss << "স্থানের তথ্য পেয়েছি।";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::GO_TO) {
+        if (!loc.empty()) oss << loc << " এ যান।";
+        else oss << "গন্তব্যে যান।";
+        return oss.str();
+    }
+
+    if (!loc.empty()) {
+        oss << "স্থান: " << loc << ".";
+        return oss.str();
+    }
+
     return realizeHindi(res);
+}
+
+std::string TranslationBridge::realizePunjabi(const semantic::SemanticResult& res) {
+    if (res.isFallback) return res.originalText.empty() ? "[ਆਪਤਕਾਲੀਨ ਸੰਦੇਸ਼]" : res.originalText;
+
+    // No "pa" branch in getTargetLocationName — proper nouns fall through to
+    // geoIdToString (Latin script), which Punjabi readers handle fine.
+    std::string loc = getTargetLocationName(res.location.geoId, "pa");
+    std::ostringstream oss;
+
+    if (res.isNegated) {
+        if (res.intent == semantic::ActionCode::EVACUATE) {
+            if (!loc.empty()) oss << loc << " ਖਾਲੀ ਨਾ ਕਰੋ.";
+            else oss << "ਇਲਾਕਾ ਖਾਲੀ ਨਾ ਕਰੋ.";
+            return oss.str();
+        }
+        if (res.intent == semantic::ActionCode::MEDICAL) {
+            if (!loc.empty()) oss << loc << " ਵਿੱਚ ਐਂਬੂਲੈਂਸ / ਮੈਡੀਕਲ ਮਦਦ ਦੀ ਲੋੜ ਨਹੀਂ.";
+            else oss << "ਮੈਡੀਕਲ ਮਦਦ ਦੀ ਲੋੜ ਨਹੀਂ.";
+            return oss.str();
+        }
+        if (res.intent == semantic::ActionCode::RESCUE_REQUEST || res.intent == semantic::ActionCode::REQUEST_HELP) {
+            if (!loc.empty()) oss << loc << " ਵਿੱਚ ਬਚਾਅ ਮਦਦ ਦੀ ਲੋੜ ਨਹੀਂ.";
+            else oss << "ਬਚਾਅ ਮਦਦ ਦੀ ਲੋੜ ਨਹੀਂ.";
+            return oss.str();
+        }
+        if (!loc.empty()) oss << loc << " ਵਿੱਚ ਮਦਦ ਦੀ ਲੋੜ ਨਹੀਂ.";
+        else oss << "ਕਿਸੇ ਮਦਦ ਦੀ ਲੋੜ ਨਹੀਂ.";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::RESCUE_REQUEST || res.intent == semantic::ActionCode::REQUEST_HELP) {
+        if (res.personCount > 0 && !loc.empty()) {
+            oss << loc << " ਕੋਲ " << res.personCount << " ਲੋਕ ਫਸੇ ਹਨ. ਤੁਰੰਤ ਬਚਾਅ ਟੀਮ ਭੇਜੋ.";
+        } else if (res.hazard == semantic::HazardCode::FLOOD) {
+            oss << "ਮਦਦ ਕਰੋ, ਬਾੜੀ ਆ ਗਈ ਹੈ";
+            if (!loc.empty()) oss << " " << loc;
+            oss << ". ਤੁਰੰਤ ਬਚਾਅ ਟੀਮ ਭੇਜੋ.";
+        } else if (res.hazard == semantic::HazardCode::FIRE) {
+            oss << "ਅੱਗ ਲੱਗੀ ਹੈ";
+            if (!loc.empty()) oss << " " << loc;
+            oss << ". ਤੁਰੰਤ ਫਾਇਰ ਬ੍ਰਿਗੇਡ ਭੇਜੋ.";
+        } else {
+            if (!loc.empty()) oss << loc << " ਵਿੱਚ ਤੁਰੰਤ ਬਚਾਅ ਮਦਦ ਭੇਜੋ.";
+            else oss << "ਤੁਰੰਤ ਬਚਾਅ ਮਦਦ ਭੇਜੋ.";
+        }
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::EVACUATE) {
+        if (!loc.empty()) oss << loc << " ਤੁਰੰਤ ਖਾਲੀ ਕਰੋ.";
+        else oss << "ਇਲਾਕਾ ਤੁਰੰਤ ਖਾਲੀ ਕਰੋ.";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::SUPPLIES) {
+        if (!loc.empty()) oss << loc << " ਨੂੰ ਪਾਣੀ ਅਤੇ ਰਾਸ਼ਨ ਭੇਜੋ.";
+        else oss << "ਪਾਣੀ ਅਤੇ ਰਾਸ਼ਨ ਦੀ ਲੋੜ ਹੈ.";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::MEDICAL) {
+        if (!loc.empty()) oss << loc << " ਲਈ ਡਾਕਟਰੀ ਮਦਦ / ਐਂਬੂਲੈਂਸ ਭੇਜੋ.";
+        else oss << "ਡਾਕਟਰੀ ਮਦਦ ਭੇਜੋ.";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::SEND_TEAM) {
+        if (!loc.empty()) oss << "ਸਾਡੀ ਟੀਮ ਤਿਆਰ ਹੈ ਅਤੇ " << loc << " ਵੱਲ ਵਧ ਰਹੀ ਹੈ.";
+        else oss << "ਸਾਡੀ ਟੀਮ ਤਿਆਰ ਹੈ.";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::ALERT) {
+        if (res.hazard == semantic::HazardCode::FIRE) oss << "ਅੱਗ ਦੀ ਚੇਤਾਵਨੀ!";
+        else if (res.hazard == semantic::HazardCode::FLOOD) oss << "ਬਾੜੀ ਦੀ ਚੇਤਾਵਨੀ!";
+        else oss << "ਚੇਤਾਵਨੀ ਜਾਰੀ!";
+        if (!loc.empty()) oss << " (" << loc << ")";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::LOCATION_REPORT) {
+        if (!loc.empty()) oss << "ਸਥਾਨ ਦੀ ਜਾਣਕਾਰੀ: " << loc << ".";
+        else oss << "ਸਥਾਨ ਦੀ ਜਾਣਕਾਰੀ ਮਿਲੀ.";
+        return oss.str();
+    }
+
+    if (res.intent == semantic::ActionCode::GO_TO) {
+        if (!loc.empty()) oss << loc << " ਤੇ ਜਾਓ.";
+        else oss << "ਮੰਜ਼ਿਲ ਤੇ ਜਾਓ.";
+        return oss.str();
+    }
+
+    if (!loc.empty()) {
+        oss << "ਸਥਾਨ: " << loc << ".";
+        return oss.str();
+    }
+
+    return res.originalText.empty() ? "[ਆਪਤਕਾਲੀਨ ਸੰਦੇਸ਼]" : res.originalText;
 }
 
 std::string TranslationBridge::realize(const semantic::SemanticResult& result, const std::string& targetLanguage) {
@@ -1119,6 +1370,7 @@ std::string TranslationBridge::realize(const semantic::SemanticResult& result, c
     if (targetLanguage == "te") return realizeTelugu(result);
     if (targetLanguage == "or") return realizeOdia(result);
     if (targetLanguage == "bn") return realizeBengali(result);
+    if (targetLanguage == "pa") return realizePunjabi(result);
     return realizeEnglish(result);
 }
 

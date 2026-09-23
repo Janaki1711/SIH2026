@@ -15,6 +15,7 @@ from database import (
     get_user_by_phone,
     get_user_by_id,
     update_user_language,
+    update_user_profile,
     get_or_create_direct_conversation,
     save_chat_message,
     get_conversation_messages,
@@ -155,7 +156,12 @@ def update_me(body: UpdateMeRequest, profile=Depends(get_user_from_token)):
         if body.preferred_language not in SUPPORTED_LANGUAGES:
             raise HTTPException(status_code=400, detail=f"Unsupported language: {body.preferred_language}")
         profile.preferred_language = body.preferred_language
-        update_user_language(profile.id, body.preferred_language)
+    # Mirror both fields so search results / previews show current values
+    update_user_profile(
+        profile.id,
+        profile.display_name or "",
+        profile.preferred_language or "en",
+    )
     return {"success": True, "profile": profile.to_dict()}
 
 
@@ -201,6 +207,33 @@ def list_conversations(profile=Depends(get_user_from_token)):
     """List all conversations for the current user with last message preview."""
     _ensure_user_in_db(profile)
     convs = get_user_conversations(profile.id)
+    # Enrich: the chat UI needs conv.members[] (id/display_name/preferred_language/
+    # phone) to render the other party, and a nested last_message object —
+    # the raw rows only carry flattened last_message_* columns.
+    for conv in convs:
+        member_ids = get_conversation_members(conv["id"])
+        members = []
+        for mid in member_ids:
+            u = get_user_by_id(mid)
+            if u:
+                members.append({
+                    "id": u["id"],
+                    "display_name": u["display_name"],
+                    "preferred_language": u["preferred_language"],
+                    "phone": u["phone"],
+                })
+        conv["members"] = members
+        if conv.get("last_message_text"):
+            conv["last_message"] = {
+                "original_text": conv.pop("last_message_text"),
+                "timestamp": conv.pop("last_message_ts"),
+                "sender_id": conv.pop("last_message_sender"),
+            }
+        else:
+            conv.pop("last_message_text", None)
+            conv.pop("last_message_ts", None)
+            conv.pop("last_message_sender", None)
+            conv["last_message"] = None
     return {"success": True, "conversations": convs}
 
 

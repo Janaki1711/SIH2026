@@ -27,7 +27,61 @@ interface SemanticPanelProps {
   side: 'sender' | 'receiver';
 }
 
-export default function SemanticPanel({ semanticData, originalText, semanticBinaryHex, metrics, side }: SemanticPanelProps) {
+/**
+ * The panel renders `semanticData.fields` (shape of
+ * semantic_parser.SemanticMessage.to_dict()). The receiver-side
+ * SEMANTIC_DECODING stage instead sends SemanticResult.to_dict(), which is a
+ * FLAT dict with no `fields`/`matched_fields` — rendering it directly crashed
+ * at `fields.map(...)` and React unmounted the whole dashboard. Normalize the
+ * flat shape into field rows so both sides render.
+ */
+function normalizeSemantic(d: any): SemanticData {
+  const guard = (s: any): string[] => (Array.isArray(s) ? s : []);
+  if (Array.isArray(d?.fields)) {
+    return {
+      fields: d.fields,
+      is_fallback: !!d.is_fallback,
+      fallback_text: d.fallback_text ?? '',
+      fallback_reason: d.fallback_reason ?? '',
+      matched_fields: guard(d.matched_fields),
+      failed_fields: guard(d.failed_fields),
+    };
+  }
+  const rows: SemanticFieldData[] = [];
+  const put = (field: string, value: any) => {
+    if (value === undefined || value === null || value === '' || value === 0 || value === false) return;
+    rows.push({
+      field,
+      value: typeof value === 'object' ? (value.canonical_name ?? JSON.stringify(value)) : value,
+      code: 0,
+      source_phrase: '',
+      encoded_value: '',
+    });
+  };
+  const known = (v: any, empty: string) => (v && v !== empty ? v : '');
+  put('ACTION', known(d?.action, 'UNKNOWN'));
+  put('INTENT', known(d?.intent, 'UNKNOWN'));
+  put('ENTITY', known(d?.entity, 'UNKNOWN'));
+  put('CONDITION', known(d?.condition, 'UNKNOWN'));
+  put('HAZARD', known(d?.hazard, 'NONE'));
+  put('URGENCY', known(d?.urgency, ''));
+  put('LOCATION', d?.location?.canonical_name ?? (typeof d?.location === 'string' ? d.location : ''));
+  put('PERSON_COUNT', d?.person_count);
+  put('TIER', d?.tier_name);
+  put('CONFIDENCE', typeof d?.confidence === 'number' ? d.confidence.toFixed(2) : '');
+  put('NEGATED', d?.is_negated ? 'YES' : '');
+  return {
+    fields: rows,
+    is_fallback: !!d?.is_fallback,
+    fallback_text: d?.original_text ?? '',
+    fallback_reason: d?.fallback_reason ?? '',
+    matched_fields: [],
+    failed_fields: [],
+  };
+}
+
+export default function SemanticPanel({ semanticData: rawSemanticData, originalText, semanticBinaryHex, metrics, side }: SemanticPanelProps) {
+  const semanticData = rawSemanticData ? normalizeSemantic(rawSemanticData) : null;
   const [expandedField, setExpandedField] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(true);
 

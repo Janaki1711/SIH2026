@@ -226,7 +226,10 @@ bool test7_PayloadSizeBoundaries() {
 
     // Tier 3
     SemanticResult t3;
-    t3.originalText = "Arbitrary unparsed sentence";
+    // >= 32 chars so the capped Tier 3 payload lands in the 35-38B band.
+    // (The Python twin suite uses this same 40-char sentence; a 27-char
+    // filler yields only 30B and misses the band the assertion describes.)
+    t3.originalText = "Arbitrary fallback text that is unparsed";
     t3.isFallback = true;
     t3.compressionTier = CompressionTier::TIER_3_FALLBACK;
     auto b3 = SemanticCompressor::compress(t3);

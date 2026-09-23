@@ -115,10 +115,24 @@ class WfbngManager(
             val language = String(langBytes, StandardCharsets.UTF_8).trimEnd('\u0000')
             val priority = plaintext[2]
             val voicePayload = plaintext.copyOfRange(3, plaintext.size)
-            
-            onVoicePayloadDelivered?.invoke(origin, language, priority, voicePayload)
+
+            // AEAD success yields genuine data; the engine's raw-unwrap fallback
+            // (all modes failed) returns UNAUTHENTICATED bytes. Validate the
+            // [lang][pri][text] envelope so a corrupt payload can never enter
+            // the translation cascade masquerading as a language tag.
+            val envelopeOk = language.isNotEmpty()
+                && language.all { it in 'a'..'z' || it in 'A'..'Z' }
+                && priority <= 3
+            if (envelopeOk) {
+                onVoicePayloadDelivered?.invoke(origin, language, priority, voicePayload)
+            } else {
+                android.util.Log.w("WfbngManager", "Dropping corrupt envelope from $origin (lang='$language' pri=$priority ${voicePayload.size}B)")
+            }
         } else if (encryptedPayload.isNotEmpty()) {
-            onVoicePayloadDelivered?.invoke(origin, "en", 0.toByte(), encryptedPayload)
+            // Authenticated decryption failed — corrupt payload (partial FEC
+            // reconstruction / bit rot / foreign packet). Delivering it as "en"
+            // used to inject garbage into the translation cascade; drop instead.
+            android.util.Log.w("WfbngManager", "Dropping undecryptable payload from $origin (${encryptedPayload.size}B)")
         }
     }
 

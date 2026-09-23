@@ -22,6 +22,18 @@ void GeoResolver::initializeDefaultLandmarks() {
         "હબ્બલી", "ഹുബ്ലി", "ହୁବ୍ଲି", "হুবলি"
     });
 
+    registerLandmark("Kolhapur", GeoID::KOLHAPUR, {
+        "kolhapur", "kolhapoor", "kolhapur city", "kolhapur district", "kolhapur maharashtra",
+        "कोल्हापुर", "કોલ્હાપુર", "கோல்ஹாப்பூர்", "కోల్హాపూర్", "ಕೊಲ್ಹಾಪುರ",
+        "കോളാപ്പൂർ", "କୋଲ୍ହାପୁର", "কোল্হাপুর"
+    });
+
+    registerLandmark("Bengaluru", GeoID::BENGALURU, {
+        "bengaluru", "bangalore", "bengalooru", "bangaluru", "bengaluru city",
+        "बेंगलुरु", "બેંગલુરુ", "பெங்களூர்", "బెంగళూరు", "ಬೆಂಗಳೂರು",
+        "ബംഗളൂരു", "ବେଙ୍ଗାଲୁରୁ", "বেঙ্গালুরু"
+    });
+
     registerLandmark("Base Camp", GeoID::BASE, {
         "base camp", "base", "hq", "headquarters", "command base",
         "बेस", "आधार", "मुख्यालय", "બેઝ", "முகாம்", "బేస్", "ಬೇಸ್", "ബേസ്", "ବେସ୍", "বেস"

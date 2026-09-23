@@ -651,7 +651,7 @@ function connectWS() {
   if (state.ws) { try { state.ws.close(); } catch(_){} }
   if (state.wsReconnectTimer) clearTimeout(state.wsReconnectTimer);
 
-  const wsUrl = `ws://${location.host}/ws/chat/${state.token}`;
+  const wsUrl = `ws://${location.host}/api/chat/${state.token}`;
   const ws = new WebSocket(wsUrl);
   state.ws = ws;
 
@@ -708,14 +708,14 @@ function getOtherMember(conv) {
 
 function renderConvList() {
   const container = document.getElementById('conv-list');
-  const empty = document.getElementById('conv-empty');
+  let empty = document.getElementById('conv-empty');
   const convs = Object.values(state.conversations);
 
   if (convs.length === 0) {
-    empty.style.display = 'flex';
+    if (empty) empty.style.display = 'flex';
     return;
   }
-  empty.style.display = 'none';
+  if (empty) empty.style.display = 'none';
 
   // Sort by last_message timestamp desc
   convs.sort((a,b) => {
@@ -725,6 +725,9 @@ function renderConvList() {
   });
 
   container.innerHTML = '';
+  // #conv-empty is a child of #conv-list — the innerHTML clear above
+  // destroys it, so re-attach the saved node for future renders.
+  if (empty) container.appendChild(empty);
   convs.forEach(conv => {
     const other = getOtherMember(conv);
     const name = other?.display_name || 'Unknown';
@@ -805,7 +808,8 @@ async function openConversation(convId) {
 
   // Load messages if not cached
   if (!state.messages[convId]) {
-    document.getElementById('msgs-loading').style.display = 'block';
+    const loadingEl = document.getElementById('msgs-loading');
+    if (loadingEl) loadingEl.style.display = 'block';
     try {
       const res = await api('GET', `/api/conversations/${convId}/messages?limit=50`, null, state.token);
       state.messages[convId] = res.messages || [];
@@ -842,7 +846,9 @@ function closeConv() {
 function renderMessages(convId) {
   const area = document.getElementById('messages-area');
   const loading = document.getElementById('msgs-loading');
-  loading.style.display = 'none';
+  // msgs-loading lives INSIDE messages-area and is destroyed by the
+  // innerHTML clear below — guard so 2nd+ renders don't crash on null.
+  if (loading) loading.style.display = 'none';
 
   const msgs = state.messages[convId] || [];
   area.innerHTML = '';

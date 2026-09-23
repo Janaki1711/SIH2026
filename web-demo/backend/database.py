@@ -20,9 +20,63 @@ def _get_conn() -> sqlite3.Connection:
     return conn
 
 
+def _migrate_legacy_messages(conn: sqlite3.Connection) -> None:
+    """Resolve the legacy `messages` table name collision.
+
+    Early versions of the demo pipeline stored wire-packet history in a
+    table called `messages` (columns: sender_location, receiver_location,
+    …). The multi-user chat now owns that table name with a completely
+    different schema (conversation_id, sender_id, …). A database created
+    before the chat existed still has the legacy table, which makes
+    `CREATE TABLE IF NOT EXISTS messages (chat schema)` a no-op and every
+    subsequent chat query fail.
+
+    Migration (runs on every startup, idempotent, lossless):
+      1. `messages` absent, or already the chat schema → nothing to do.
+      2. Legacy `messages` found and `demo_messages` missing → rename it
+         to `demo_messages` (the table the legacy code now writes to).
+      3. Legacy `messages` found and `demo_messages` exists → copy any
+         rows not already there (NULL-safe match on timestamp + text),
+         then rename the old table to `messages_legacy` so the name is
+         free for the chat schema. No rows are ever dropped.
+    """
+    row = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='messages'"
+    ).fetchone()
+    if not row:
+        return
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(messages)")]
+    if "conversation_id" in cols:
+        return  # already the chat schema
+
+    demo_exists = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='demo_messages'"
+    ).fetchone()
+    if not demo_exists:
+        conn.execute("ALTER TABLE messages RENAME TO demo_messages")
+        print("[DB] Migrated legacy 'messages' table → 'demo_messages'")
+        return
+
+    # Both legacy-shaped tables exist: preserve rows, then free the name.
+    conn.execute("""
+        INSERT INTO demo_messages
+        SELECT * FROM messages
+        WHERE NOT EXISTS (
+            SELECT 1 FROM demo_messages d
+            WHERE d.timestamp IS messages.timestamp
+              AND d.original_text IS messages.original_text
+        )
+    """)
+    conn.execute("ALTER TABLE messages RENAME TO messages_legacy")
+    print("[DB] Moved legacy 'messages' rows into 'demo_messages'; "
+          "old table kept as 'messages_legacy'")
+
+
 def init_db():
     """Create tables if they don't exist."""
     with _get_conn() as conn:
+        _migrate_legacy_messages(conn)
+
         # ── Legacy demo tables ─────────────────────────────────────────────
         conn.execute("""
             CREATE TABLE IF NOT EXISTS demo_messages (
@@ -117,7 +171,7 @@ def init_db():
         """)
 
         # ── Indexes ────────────────────────────────────────────────────────
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_messages_conv_id ON messages(conversation_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_messages_ts ON messages(timestamp)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_conv_members_user ON conversation_members(user_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone)")
@@ -243,18 +297,24 @@ def clear_history():
 # ─────────────────────────────────────────────────────────────────────────────
 
 def create_user(user_id: str, phone: str, display_name: str, preferred_language: str = 'en') -> None:
-    """Insert a new user row. Silently ignores duplicate phone (UNIQUE constraint)."""
+    """Insert a new user row or update existing by phone."""
     now = time.time()
     try:
         with _get_conn() as conn:
             conn.execute(
-                """INSERT OR IGNORE INTO users (id, phone, display_name, preferred_language, created_at, last_seen)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
+                """INSERT INTO users (id, phone, display_name, preferred_language, created_at, last_seen)
+                   VALUES (?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(phone) DO UPDATE SET
+                       id=excluded.id,
+                       display_name=excluded.display_name,
+                       preferred_language=excluded.preferred_language,
+                       last_seen=excluded.last_seen""",
                 (user_id, phone, display_name, preferred_language, now, now)
             )
             conn.commit()
     except Exception as e:
         print(f"[DB] create_user error: {e}")
+
 
 
 def get_user_by_phone(phone: str) -> dict | None:
@@ -290,6 +350,19 @@ def update_user_language(user_id: str, language: str) -> None:
             conn.commit()
     except Exception as e:
         print(f"[DB] update_user_language error: {e}")
+
+
+def update_user_profile(user_id: str, display_name: str, preferred_language: str) -> None:
+    """Mirror both profile fields into the users row (re-login / PATCH /me)."""
+    try:
+        with _get_conn() as conn:
+            conn.execute(
+                "UPDATE users SET display_name = ?, preferred_language = ?, last_seen = ? WHERE id = ?",
+                (display_name, preferred_language, time.time(), user_id)
+            )
+            conn.commit()
+    except Exception as e:
+        print(f"[DB] update_user_profile error: {e}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

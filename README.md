@@ -37,7 +37,7 @@ cd web-demo\frontend
 npm run dev
 ```
 
-*(Alternatively, you can run `.\web-demo\start_demo.ps1` to launch both automatically).*
+*(Alternatively, you can run `./web-demo/start_demo.sh` on Linux/macOS — or `.\web-demo\start_demo.ps1` on Windows — to launch both automatically).*
 
 3. Access the tactical dashboard at: [http://localhost:5173/hubbli](http://localhost:5173/hubbli) and [http://localhost:5173/tolankere](http://localhost:5173/tolankere)
 
@@ -238,6 +238,7 @@ itantra-m3/
 ├── web-demo/
 │   ├── backend/
 │   ├── frontend/
+│   ├── start_demo.sh
 │   └── start_demo.ps1
 │
 ├── demo.py
@@ -305,13 +306,19 @@ Install:
 
 From the project root:
 
-```powershell
+```bash
 cd web-demo
 ```
 
 Start the demonstration using:
 
+```bash
+# Linux / macOS
+./start_demo.sh
+```
+
 ```powershell
+# Windows
 .\start_demo.ps1
 ```
 

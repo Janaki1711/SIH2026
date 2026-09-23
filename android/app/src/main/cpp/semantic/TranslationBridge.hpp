@@ -48,6 +48,7 @@ private:
     std::string realizeTelugu(const semantic::SemanticResult& res);
     std::string realizeOdia(const semantic::SemanticResult& res);
     std::string realizeBengali(const semantic::SemanticResult& res);
+    std::string realizePunjabi(const semantic::SemanticResult& res);
 
     static std::string getTargetLocationName(uint16_t geoId, const std::string& lang);
 };

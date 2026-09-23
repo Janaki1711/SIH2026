@@ -121,6 +121,12 @@ bool TinyMLAgent::extractNegation(const std::string& text) {
 uint32_t TinyMLAgent::extractPersonCount(const std::string& text) {
     // 1. Scrub landmark/location digit patterns to avoid classifying "Sector 4" or "Block 7" as casualty count
     std::string scrubbed = text;
+    // Lowercase before the case-sensitive word search below — otherwise
+    // "Five people…" misses {"five", 5} (extractHazard already lowercases).
+    // Byte-wise tolower is safe for UTF-8: Indic bytes are >= 0x80 and stay put.
+    for (char& c : scrubbed) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
     
     // Landmark prefix regexes in English and Indic scripts
     static const std::vector<std::regex> landmarkRegexes = {
@@ -262,6 +268,12 @@ ActionCode TinyMLAgent::extractActionAndIntent(const std::string& text, ActionCo
     // 1. Rescue / Help Request / Trapped (en, hi, mr, gu, ta, te, kn, ml, or, bn)
     if (lower.find("rescue") != std::string::npos || lower.find("help") != std::string::npos ||
         lower.find("trapped") != std::string::npos || lower.find("stuck") != std::string::npos ||
+        lower.find("struck") != std::string::npos ||
+        // Field-demo phrasings that previously fell through as free-form text:
+        lower.find("get me out") != std::string::npos ||
+        lower.find("take me out") != std::string::npos ||
+        lower.find("let me out") != std::string::npos ||
+        lower.find("out of here") != std::string::npos ||
         lower.find("मदद") != std::string::npos || lower.find("बचाओ") != std::string::npos ||
         lower.find("फंसे") != std::string::npos || lower.find("मदत") != std::string::npos ||
         lower.find("वाचवा") != std::string::npos || lower.find("अडकले") != std::string::npos ||
@@ -419,7 +431,7 @@ ActionCode TinyMLAgent::extractActionAndIntent(const std::string& text, ActionCo
         lower.find("અહેવાલ") != std::string::npos || lower.find("அறிக்கை") != std::string::npos ||
         lower.find("నివేదిక") != std::string::npos || lower.find("ವರದಿ") != std::string::npos ||
         lower.find("റിപ്പോർട്ട്") != std::string::npos || lower.find("ରିପୋର୍ଟ") != std::string::npos ||
-        lower.find("রিপোর্ট") != std::string::npos) {
+        lower.find("ರಿಪೋರ್ಟ") != std::string::npos || lower.find("রিপোর্ট") != std::string::npos) {
         outAction = ActionCode::REPORT;
         return ActionCode::REPORT;
     }
@@ -427,6 +439,8 @@ ActionCode TinyMLAgent::extractActionAndIntent(const std::string& text, ActionCo
     // FIX 3: 10. LOCATION_REPORT — "I am at X", "meet me at X", "near X", "at X"
     // These phrases report the speaker's location without an explicit movement command
     if (lower.find("i am at") != std::string::npos || lower.find("i am near") != std::string::npos ||
+        lower.find("i am in") != std::string::npos || lower.find("i'm in") != std::string::npos ||
+        lower.find("im in") != std::string::npos || lower.find("we are in") != std::string::npos ||
         lower.find("meet me at") != std::string::npos || lower.find("meet me near") != std::string::npos ||
         lower.find("we are at") != std::string::npos || lower.find("located at") != std::string::npos ||
         lower.find("standing at") != std::string::npos || lower.find("waiting at") != std::string::npos ||
@@ -550,6 +564,16 @@ SemanticResult TinyMLAgent::runDeterministicFallback(const std::string& text,
 
     // 1. Location Entity Resolution
     res.location = geoResolver_.resolveLocation(text);
+    // Only high-confidence direct-alias matches count: fuzzy/soundex
+    // candidates (conf <= ~0.95) produced phantom locations such as
+    // "School" for "I'm stuck in flood" — in disaster traffic a wrong
+    // location is more dangerous than none.
+    if (res.location.geoId != GeoID::UNKNOWN && res.location.confidence < 0.95f) {
+        res.location.geoId = GeoID::UNKNOWN;
+        res.location.canonicalName.clear();
+        res.location.matchedToken.clear();
+        res.location.confidence = 0.0f;
+    }
     if (res.location.geoId != GeoID::UNKNOWN) {
         res.extractedEntities.push_back({"LOCATION", res.location.canonicalName, res.location.confidence});
     }
@@ -583,7 +607,16 @@ SemanticResult TinyMLAgent::runDeterministicFallback(const std::string& text,
 
     // 7. Confidence & Tier Selection Logic
     // If no meaningful semantic concept was recognized, or general negated statement with unknown intent
-    if (res.intent == ActionCode::UNKNOWN && res.hazard == HazardCode::NONE && res.location.geoId == GeoID::UNKNOWN) {
+    // A LOCATION_REPORT that yielded NO location, hazard or person count
+    // ("I am in trouble") carries no semantics — treat it as free-form
+    // instead of emitting a hollow "Location update received."
+    bool vacuousLocationReport =
+        res.intent == ActionCode::LOCATION_REPORT &&
+        res.hazard == HazardCode::NONE &&
+        res.location.geoId == GeoID::UNKNOWN &&
+        res.personCount == 0;
+    if ((res.intent == ActionCode::UNKNOWN || vacuousLocationReport) &&
+        res.hazard == HazardCode::NONE && res.location.geoId == GeoID::UNKNOWN) {
         res.isFallback = true;
         res.fallbackReason = "Unrecognized semantic intent / natural conversational statement";
         res.confidence = 0.85f;

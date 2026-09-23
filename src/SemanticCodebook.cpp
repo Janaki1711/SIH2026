@@ -102,6 +102,8 @@ std::string geoIdToString(uint16_t geoId) {
     switch (geoId) {
         case GeoID::TOLANKERE:      return "Tolankere";
         case GeoID::HUBBLI:         return "Hubbli";
+        case GeoID::KOLHAPUR:       return "Kolhapur";
+        case GeoID::BENGALURU:      return "Bengaluru";
         case GeoID::BASE:           return "Base Camp";
         case GeoID::SECTOR_1:       return "Sector 1";
         case GeoID::SECTOR_2:       return "Sector 2";
@@ -129,6 +131,8 @@ std::string geoIdToString(uint16_t geoId) {
 uint16_t stringToGeoId(std::string_view name) {
     if (name == "Tolankere" || name == "tolankere") return GeoID::TOLANKERE;
     if (name == "Hubbli" || name == "hubbli" || name == "hubli") return GeoID::HUBBLI;
+    if (name == "Kolhapur" || name == "kolhapur") return GeoID::KOLHAPUR;
+    if (name == "Bengaluru" || name == "Bangalore" || name == "bengaluru" || name == "bangalore") return GeoID::BENGALURU;
     if (name == "Base Camp" || name == "Base" || name == "base") return GeoID::BASE;
     if (name == "Sector 1" || name == "sector 1") return GeoID::SECTOR_1;
     if (name == "Sector 2" || name == "sector 2") return GeoID::SECTOR_2;

@@ -23,6 +23,7 @@ import semantic_compressor
 import semantic_schema
 import crypto
 import auth
+from tinyml_agent import SemanticResult
 from chat_router import router as chat_router
 
 logger = logging.getLogger("itantra")
@@ -57,6 +58,12 @@ app.mount("/static", StaticFiles(directory=_STATIC_DIR, html=True), name="static
 @app.get("/codebook")
 def codebook():
     return semantic_schema.get_codebook()
+
+
+@app.get("/health")
+def health():
+    """Liveness probe for demo tooling / orchestrators."""
+    return {"status": "ok", "service": "itantra-m3-demo", "time": time.time()}
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -250,8 +257,8 @@ def api_setup_profile(body: SetupProfileRequest):
             preferred_language=body.preferred_language,
         )
     else:
-        from database import update_user_language
-        update_user_language(profile.id, body.preferred_language)
+        from database import update_user_profile
+        update_user_profile(profile.id, body.display_name, body.preferred_language)
     return {"success": True, "profile": updated.to_dict()}
 
 
@@ -358,6 +365,108 @@ async def dispatch(location: str, msg: dict, ws: WebSocket):
             }
         })
 
+def _msg_to_tiered_result(msg, text: str, source_lang: str) -> SemanticResult:
+    """semantic_parser.SemanticMessage → tiered SemanticResult for compress().
+
+    compress() consumes a SemanticResult (typed enums + a selected
+    compression_tier); semantic_parser.parse() returns a SemanticMessage
+    (SemanticField values). This maps the parser's richer, multilingual-fixed
+    extraction — the same data the SEMANTIC panel displays — onto the wire,
+    using the same tier logic as TinyMLAgent:
+
+      TIER_3  parser fell back (free-form)  → original text rides the packet
+      TIER_2  anything known (action/entity/condition/location/count/hazard)
+      TIER_1  nothing known                 → minimal generic payload
+
+    ENTITY and CONDITION ride in tier2's reserved ctx_flags slot (see
+    semantic_compressor.compress_tier2) because SemanticResult has no native
+    fields for them, yet the target-language realizers need both.
+    """
+    from semantic_codebook import ActionCode, UrgencyCode, HazardCode, CompressionTier
+    from semantic_schema import Entity as EntityCode, Condition as ConditionCode
+    from geo_resolver import GeoResolver
+
+    def _val(field, default=""):
+        return str(getattr(field, "value", default) or default).upper()
+
+    # action: parser vocab → ActionCode wire enum (aliases for renamed codes)
+    action_val = _val(msg.action, "UNKNOWN")
+    _ACTION_ALIAS = {"RESCUE": "RESCUE_REQUEST", "SUPPLY": "SUPPLIES"}
+    try:
+        action = ActionCode[_ACTION_ALIAS.get(action_val, action_val)]
+    except KeyError:
+        action = ActionCode.UNKNOWN
+
+    # entity / condition: semantic_schema codes packed into tier2 ctx_flags
+    entity_val = _val(msg.entity, "UNKNOWN")
+    try:
+        entity_code = int(EntityCode[entity_val])
+    except KeyError:
+        entity_code = 0
+    cond_val = _val(msg.condition, "UNKNOWN")
+    try:
+        condition_code = int(ConditionCode[cond_val])
+    except KeyError:
+        condition_code = 0
+
+    # urgency: parser vocab → UrgencyCode
+    urg_val = _val(msg.urgency, "ROUTINE")
+    _URG_ALIAS = {"LOW": "TACTICAL", "MEDIUM": "TACTICAL",
+                  "HIGH": "TACTICAL", "CRITICAL": "CRITICAL_SOS"}
+    try:
+        urgency = UrgencyCode[_URG_ALIAS.get(urg_val, urg_val)]
+    except KeyError:
+        urgency = UrgencyCode.ROUTINE
+
+    # hazard: free text → HazardCode ("building collapse" → BUILDING_COLLAPSE)
+    hz = str(getattr(msg, "hazard_text", "") or "").strip().upper().replace(" ", "_")
+    try:
+        hazard = HazardCode[hz]
+    except KeyError:
+        hazard = HazardCode.NONE
+
+    # location: prefer the canonical Target (ASCII, GeoResolver-registered)
+    # over proper-noun text; fall back to the raw message.
+    target_val = _val(msg.target, "UNKNOWN")
+    loc_query = (target_val if target_val not in ("UNKNOWN", "PROPER_LOCATION")
+                 else (getattr(msg, "location_text", "") or text))
+    loc = GeoResolver.get_instance().resolve_location(loc_query)
+
+    try:
+        person_count = max(int(getattr(msg.quantity, "value", 0) or 0), 0)
+    except (TypeError, ValueError):
+        person_count = 0
+
+    is_fallback = bool(getattr(msg, "is_fallback", False))
+    if is_fallback:
+        tier = CompressionTier.TIER_3_FALLBACK
+    elif (action != ActionCode.UNKNOWN or entity_code or condition_code
+          or loc.geo_id != 0 or person_count > 0 or hazard != HazardCode.NONE):
+        tier = CompressionTier.TIER_2_STRUCTURED
+    else:
+        tier = CompressionTier.TIER_1_MACRO
+
+    res = SemanticResult(
+        original_text=text,           # TIER_3 passthrough payload
+        detected_language=source_lang,
+        intent=ActionCode.UNKNOWN,    # reserved; entity/condition use ctx_flags
+        action=action,
+        hazard=hazard,
+        location=loc,
+        person_count=person_count,
+        urgency=urgency,
+        confidence=0.90,
+        compression_tier=tier,
+        is_fallback=is_fallback,
+        fallback_reason=str(getattr(msg, "fallback_reason", "") or ""),
+    )
+    res.entity = entity_val if entity_code else ""
+    res.entity_code = entity_code
+    res.condition = cond_val if condition_code else ""
+    res.condition_code = condition_code
+    return res
+
+
 async def process_send(location: str, msg: dict, sender_ws: WebSocket, is_sos: bool = False):
     partner = partner_of(location)
     receiver_ws = connections.get(partner)
@@ -396,8 +505,15 @@ async def process_send(location: str, msg: dict, sender_ws: WebSocket, is_sos: b
     await asyncio.sleep(0.02)
 
     # SENDER: Semantic Compression
+    # compress() consumes a SemanticResult with a selected compression_tier;
+    # feeding it the SemanticMessage from semantic_parser.parse() raised
+    # AttributeError ('SemanticMessage' has no compression_tier) and tore the
+    # WebSocket down mid-pipeline. _msg_to_tiered_result maps the parser's
+    # extraction onto the wire so the RX side realizes the same semantics the
+    # SEMANTIC panel shows.
     t2 = time.perf_counter()
-    semantic_bytes = semantic_compressor.compress(semantic_msg)
+    tiered_semantic = _msg_to_tiered_result(semantic_msg, text, source_lang)
+    semantic_bytes = semantic_compressor.compress(tiered_semantic)
     comp_ms = (time.perf_counter() - t2) * 1000
     await send_stage(sender_ws, "sender", "SEMANTIC_COMPRESSION", "SUCCESS", comp_ms, len(text_bytes), len(semantic_bytes), {
         "output_bytes": len(semantic_bytes),
@@ -514,13 +630,26 @@ async def process_send(location: str, msg: dict, sender_ws: WebSocket, is_sos: b
     except: return
     sem_dec_ms = (time.perf_counter() - t9) * 1000
     await send_stage(receiver_ws, "receiver", "SEMANTIC_DECODING", "SUCCESS", sem_dec_ms, len(decoded_packet['compressed_payload']), 0, {
-        "semantic_data": decoded_semantic.to_dict()
+        # entity/condition are dynamic attrs set by decompress_tier2 and are
+        # NOT part of SemanticResult.to_dict() — merge them in so the
+        # dashboard's SEMANTIC panel shows the same field rows as the sender.
+        "semantic_data": {
+            **decoded_semantic.to_dict(),
+            "entity": getattr(decoded_semantic, "entity", ""),
+            "condition": getattr(decoded_semantic, "condition", ""),
+        }
     })
     await asyncio.sleep(0.02)
 
     # RECEIVER: Target Language Realization
     t10 = time.perf_counter()
     translated_text = translation_engine.realize(decoded_semantic, target_lang)
+    if getattr(decoded_semantic, "is_fallback", False):
+        # Tier 3 is a bounded (~27B) wire fallback, so the decompressed text may
+        # be cut at the byte limit. Free-form content is passthrough anyway
+        # (same contract as translate()) and the full original is in-band in
+        # this delivery payload — show it whole, not as a cut fragment.
+        translated_text = text
     trans_ms = (time.perf_counter() - t10) * 1000
     await send_stage(receiver_ws, "receiver", "LANGUAGE_REALIZATION", "SUCCESS", trans_ms, 0, len(translated_text.encode('utf-8')), {
         "translated_text": translated_text, "mode": "MEASURED - Target Realization"

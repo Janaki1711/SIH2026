@@ -22,6 +22,18 @@ void GeoResolver::initializeDefaultLandmarks() {
         "હબ્બલી", "ഹുബ്ലി", "ହୁବ୍ଲି", "হুবলি"
     });
 
+    registerLandmark("Kolhapur", GeoID::KOLHAPUR, {
+        "kolhapur", "kolhapoor", "kolhapur city", "kolhapur district", "kolhapur maharashtra",
+        "कोल्हापुर", "કોલ્હાપુર", "கோல்ஹாப்பூர்", "కోల్హాపూర్", "ಕೊಲ್ಹಾಪುರ",
+        "കോളാപ്പൂർ", "କୋଲ୍ହାପୁର", "কোল্হাপুর"
+    });
+
+    registerLandmark("Bengaluru", GeoID::BENGALURU, {
+        "bengaluru", "bangalore", "bengalooru", "bangaluru", "bengaluru city",
+        "बेंगलुरु", "બેંગલુરુ", "பெங்களூர்", "బెంగళూరు", "ಬೆಂಗಳೂರು",
+        "ബംഗളൂരു", "ବେଙ୍ଗାଲୁରୁ", "বেঙ্গালুরু"
+    });
+
     registerLandmark("Base Camp", GeoID::BASE, {
         "base camp", "base", "hq", "headquarters", "command base",
         "बेस", "आधार", "मुख्यालय", "બેઝ", "முகாம்", "బేస్", "ಬೇಸ್", "ബേസ്", "ବେସ୍", "বেস"
@@ -64,7 +76,7 @@ void GeoResolver::initializeDefaultLandmarks() {
     });
 
     registerLandmark("School", GeoID::SCHOOL, {
-        "school", "college", "campus",
+        "school", "college", "campus", "university", "institute", "institution",
         "स्कूल", "विद्यालय", "शाळा", "શાળા", "பள்ளி", "பாடசாலை", "పాఠశాల", "ಶಾಲೆ", "സ്കൂൾ", "ବିଦ୍ୟାଳୟ", "স্কুল"
     });
 
@@ -128,7 +140,7 @@ void GeoResolver::initializeDefaultLandmarks() {
     registerLandmark("Market", GeoID::MARKET, {
         "market", "bazaar", "bazar", "marketplace", "sabzi mandi", "mandi",
         "बाजार", "मार्केट", "मंडी",
-        "બजાર", "বাজার",
+        "બજાર", "বাজার",
         "சந்தை", "பஜார்",
         "మార్కెట్", "బజార్",
         "ಮಾರ್ಕೆಟ್", "ಬಜಾರ್",
@@ -139,7 +151,7 @@ void GeoResolver::initializeDefaultLandmarks() {
     registerLandmark("Temple", GeoID::TEMPLE, {
         "temple", "mandir", "devalaya", "kovil",
         "मंदिर", "देवालय", "मंदिर",
-        "મંदિર", "মন্দির",
+        "મંદિર", "মন্দির",
         "கோயில்", "கோவில்",
         "మందిరం", "దేవాలయం",
         "ದೇವಾಲಯ", "ಮಂದಿರ",

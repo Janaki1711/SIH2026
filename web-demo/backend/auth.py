@@ -105,7 +105,15 @@ def _send_otp_to_email(email: str, otp: str) -> None:
 
 
 def _get_or_create_profile(identifier: str, method: str) -> "UserProfile":
-    """Return existing profile or create a new one for this identifier."""
+    """Return existing profile or create a new one for this identifier.
+
+    Identity must be stable across backend restarts: `_user_store` is
+    in-memory only, so a phone that already has a persisted `users` row
+    (created by a previous process) must re-adopt that row's id — a fresh
+    random id would make `get_user_by_id(profile.id)` miss, breaking
+    conversation lookup, profile updates and message delivery for every
+    returning user.
+    """
     if identifier in _user_store:
         return _user_store[identifier]
     user_id = secrets.token_urlsafe(12)
@@ -114,6 +122,15 @@ def _get_or_create_profile(identifier: str, method: str) -> "UserProfile":
         phone=identifier if method == "phone" else None,
         email=identifier if method == "email" else None,
     )
+    try:
+        import database
+        persisted = database.get_user_by_phone(identifier)
+    except Exception:
+        persisted = None
+    if persisted:
+        profile.id = persisted.get("id") or user_id
+        profile.display_name = persisted.get("display_name") or ""
+        profile.preferred_language = persisted.get("preferred_language") or "en"
     _user_store[identifier] = profile
     return profile
 
@@ -233,6 +250,7 @@ def verify_otp(identifier: str, otp_input: str) -> dict:
         "success": True,
         "error": None,
         "profile": profile,
+        "user_id": profile.id,
         "session_token": session_token,
     }
 
@@ -266,3 +284,12 @@ def update_profile(
         if preferred_language in SUPPORTED_LANGUAGES:
             profile.preferred_language = preferred_language
     return profile
+
+
+def reset_stores() -> None:
+    """Clear all in-memory auth stores (for testing isolation)."""
+    _otp_store.clear()
+    _rate_store.clear()
+    _user_store.clear()
+    _session_store.clear()
+

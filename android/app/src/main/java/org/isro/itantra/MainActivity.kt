@@ -115,6 +115,10 @@ class MainActivity : AppCompatActivity() {
     private var lastRecognizedText: String = ""
     @Volatile private var isRecording = false
     @Volatile private var isTransmitted = false
+    // true only when the native ONNX engine (libaudio_stt_core + all four
+    // model assets) initialized successfully — gates native capture and the
+    // protection of native sessions against Google-recognizer failures
+    @Volatile private var nativeSttReady = false
     @Volatile private var sttStartTimeMs = 0L          // when startRecording() called
     @Volatile private var lastSttLatencyMs = 0L         // ms from mic tap to onResults
     @Volatile private var isWalkieTalkieMode = true
@@ -322,13 +326,13 @@ class MainActivity : AppCompatActivity() {
                     messageScheduler.enqueue(item)
                 } else {
                     // Different languages — translate first, then enqueue for TTS in localLang ONLY
+                    // (no bubble yet: the translated bubble is added once, in the callback below,
+                    //  to avoid a duplicate raw-then-translated pair)
                     runOnUiThread {
-                        addChatMessageToUi(displayNameFromCallsign(origin), sourceLang, targetLang, rawText, false, rawText)
                         statusText.text = "📥 From ${displayNameFromCallsign(origin)} [$sourceLang→$targetLang]: translating…"
                     }
                     translateWithMlKit(rawText, sourceLang, targetLang) { translated ->
-                        val isReal = translated.isNotBlank() &&
-                            translated != rawText && !translated.startsWith("[$sourceLang]")
+                        val isReal = isRealTranslation(translated, rawText, sourceLang)
                         val displayText = if (isReal) translated else rawText
                         // If translation succeeded → speak in target language
                         // If model not ready yet → speak original in English TTS (always available)
@@ -341,7 +345,10 @@ class MainActivity : AppCompatActivity() {
                         Log.i(TAG, "━━ RX_TRANSLATED  $sourceLang→$targetLang  real=$isReal  ttsLang=$ttsLang  text='$displayText'")
                         runOnUiThread {
                             statusText.text = "📥 ${displayNameFromCallsign(origin)} [$sourceLang→$targetLang]: $displayText"
-                            addChatMessageToUi(displayNameFromCallsign(origin), sourceLang, targetLang, displayText, false, rawText)
+                            // Honest label: when translation failed the bubble shows the
+                            // SOURCE language only — never claim SRC→DST for raw passthrough.
+                            addChatMessageToUi(displayNameFromCallsign(origin), sourceLang,
+                                if (isReal) targetLang else sourceLang, displayText, false, rawText)
                         }
                         val item = org.isro.itantra.runtime.MessageScheduler.Item(
                             nodeId = origin, lang = ttsLang,
@@ -354,22 +361,32 @@ class MainActivity : AppCompatActivity() {
 
 
             transport?.onPeerDiscovered = { peerCallsign, peerInfo ->
-                // peerInfo format from new beacon: "ip|lang|gps"  (old format: just "ip")
+                // Beacon format: "ip|lang|gps"   Handshake discovery: bare "ip"
                 if (peerCallsign != myCallsign && peerCallsign.isNotBlank()) {
                     val parts = peerInfo.split("|")
-                    val peerIp  = parts.getOrElse(0) { "" }
-                    val peerLang = parts.getOrElse(1) { "en" }
-                    val peerGps  = parts.getOrElse(2) { "GPS_UNAVAIL" }
-                    // Store roster entry: "lang|gps|ip"
-                    val rosterEntry = "$peerLang|$peerGps|$peerIp"
-                    val isNew = meshRoster[peerCallsign] == null
-                    meshRoster[peerCallsign] = rosterEntry
-                    if (isNew) {
-                        runOnUiThread { updateRosterUi() }
-                        Log.i(TAG, "PEER_DISCOVERED: $peerCallsign lang=$peerLang gps=$peerGps @ $peerIp")
+                    val peerIp = parts.getOrElse(0) { "" }
+                    if (parts.size < 2) {
+                        // Handshake-style discovery carries NO lang/gps. Never
+                        // overwrite a roster entry learned from a beacon with
+                        // fake "en"/"GPS_UNAVAIL" defaults — only seed an entry
+                        // for a peer we have never seen before.
+                        if (meshRoster[peerCallsign] == null) {
+                            meshRoster[peerCallsign] = "en|GPS_UNAVAIL|$peerIp"
+                            runOnUiThread { updateRosterUi() }
+                            Log.i(TAG, "PEER_DISCOVERED (handshake): $peerCallsign @ $peerIp — lang pending beacon")
+                        }
                     } else {
-                        // Silently refresh GPS/lang on repeated beacons
+                        val peerLang = parts[1]
+                        val peerGps = parts.getOrElse(2) { "GPS_UNAVAIL" }
+                        // Store roster entry: "lang|gps|ip"
+                        val rosterEntry = "$peerLang|$peerGps|$peerIp"
+                        val isNew = meshRoster[peerCallsign] == null
+                        meshRoster[peerCallsign] = rosterEntry
                         runOnUiThread { updateRosterUi() }
+                        if (isNew) {
+                            Log.i(TAG, "PEER_DISCOVERED: $peerCallsign lang=$peerLang gps=$peerGps @ $peerIp")
+                        }
+                        // Repeated beacons silently refresh GPS/lang above
                     }
                 }
             }
@@ -769,6 +786,10 @@ class MainActivity : AppCompatActivity() {
             override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
                 val selectedLangName = languagesList[position]
                 val langCode = languageMap[selectedLangName]?.substringBefore("-") ?: "hi"
+                // Persist the spinner choice so it survives an app restart
+                // (restored from PREF_LANGUAGE during startup)
+                getSharedPreferences(LoginActivity.PREF_FILE, Context.MODE_PRIVATE)
+                    .edit().putString(LoginActivity.PREF_LANGUAGE, langCode).apply()
                 spellCorrector?.switchLanguageAsync(langCode)
                 // Update beacon so other nodes know our language changed
                 transport?.updateBeaconLang(langCode)
@@ -872,7 +893,7 @@ class MainActivity : AppCompatActivity() {
                 "or" -> "ତୁରନ୍ତ ୫ଟି ଆମ୍ବୁଲାନ୍ସ ଆବଶ୍ୟକ"
                 else -> "Need 5 ambulances immediately at Sector 4"
             }
-            transmitMessage(msg, langCode)
+            transmitMessage(msg, langCode, 1 /* SOS priority */)
         }
 
         btnSosFlood?.setOnClickListener {
@@ -889,7 +910,7 @@ class MainActivity : AppCompatActivity() {
                 "or" -> "ବନ୍ୟା ଚେତାବନୀ: ତୁରନ୍ତ ସ୍ଥାନ ଖାଲି କରନ୍ତୁ"
                 else -> "Flood alert: Evacuate sector immediately"
             }
-            transmitMessage(msg, langCode)
+            transmitMessage(msg, langCode, 1 /* SOS priority */)
         }
 
         btnSosFire?.setOnClickListener {
@@ -906,7 +927,7 @@ class MainActivity : AppCompatActivity() {
                 "or" -> "ଅଗ୍ନି ବିପଦ: ଜରୁରୀକାଳୀନ ଦଳ ପଠାନ୍ତୁ"
                 else -> "Fire hazard: Deploy emergency units"
             }
-            transmitMessage(msg, langCode)
+            transmitMessage(msg, langCode, 1 /* SOS priority */)
         }
 
         btnSosUrgent?.setOnClickListener {
@@ -923,7 +944,7 @@ class MainActivity : AppCompatActivity() {
                 "or" -> "ଅତି ଜରୁରୀ ସାହାଯ୍ୟ ଆବଶ୍ୟକ"
                 else -> "Urgent assistance required"
             }
-            transmitMessage(msg, langCode)
+            transmitMessage(msg, langCode, 1 /* SOS priority */)
         }
 
         btnSendCustom.setOnClickListener {
@@ -1012,13 +1033,27 @@ class MainActivity : AppCompatActivity() {
             val langCode = langTag.substringBefore("-")
             val isIndic  = langCode != "en"
 
+            // The native ONNX engine owns Indic sessions. Google cannot do
+            // these languages on this device (errors 11/12: no offline pack,
+            // speech service unavailable), and the handlers below reset the
+            // PTT state — which used to kill native capture mid-speech and
+            // force repeated re-taps. Ignore the Google failure and let the
+            // native transcript arrive at stop time.
+            if (isIndic && nativeSttReady) {
+                Log.i(TAG, "[STT] Google leg error $error ignored — native ONNX continues (lang=$langCode, transmitted=$isTransmitted)")
+                return
+            }
+
             when (error) {
                 SpeechRecognizer.ERROR_NO_MATCH -> {
                     if (lastRecognizedText.isNotBlank() && !isTransmitted) {
                         isTransmitted = true
                         transmitMessage(lastRecognizedText, langCode)
-                    } else if (isIndic && !isTransmitted) {
-                        // Indic STT no match — retry with en-IN (always available offline)
+                    } else if (isIndic && !isTransmitted && !nativeSttReady) {
+                        // Google had no match. Only fall back to en-IN when the
+                        // native engine is unavailable — when it is ready it
+                        // owns Indic input (en-IN listening cannot hear Telugu
+                        // speech and used to swallow the message).
                         retryWithEnglishSTT(langCode)
                     } else {
                         runOnUiThread { statusText.text = "No speech detected. Tap 🎙️ and speak clearly." }
@@ -1029,7 +1064,7 @@ class MainActivity : AppCompatActivity() {
                     if (lastRecognizedText.isNotBlank() && !isTransmitted) {
                         isTransmitted = true
                         transmitMessage(lastRecognizedText, langCode)
-                    } else if (isIndic && !isTransmitted) {
+                    } else if (isIndic && !isTransmitted && !nativeSttReady) {
                         retryWithEnglishSTT(langCode)
                     } else {
                         runOnUiThread { statusText.text = "Speak right after tapping 🎙️" }
@@ -1040,7 +1075,10 @@ class MainActivity : AppCompatActivity() {
                     // Network/offline pack error — for Indic, retry with en-IN
                     if (!isTransmitted) {
                         if (isIndic) {
-                            retryWithEnglishSTT(langCode)
+                            // Native engine (if ready) owns Indic — it needs no
+                            // network, so a network error only affects the Google
+                            // leg; the native transcript arrives at stop time.
+                            if (!nativeSttReady) retryWithEnglishSTT(langCode)
                         } else if (lastRecognizedText.isNotBlank()) {
                             isTransmitted = true
                             transmitMessage(lastRecognizedText, "en")
@@ -1160,7 +1198,9 @@ class MainActivity : AppCompatActivity() {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "en-IN")
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-                putExtra("android.speech.extra.PREFER_OFFLINE", true)
+                // No PREFER_OFFLINE here: this retry runs precisely because the
+                // language-specific attempt failed (usually offline pack missing),
+                // so forcing offline again would fail the same way.
             }
             speechRecognizer?.startListening(intent)
             Log.i(TAG, "[STT] retryWithEnglishSTT targetLang=$targetLangCode")
@@ -1211,6 +1251,14 @@ class MainActivity : AppCompatActivity() {
         statusText.text = "Listening ($selectedLangName)... Speak now!"
         Log.i(TAG, "[STT] Starting: $selectedLangName  langTag=$langTag")
 
+        // Native offline ONNX STT (AI4Bharat) — the primary path for Indic.
+        // Google has no guaranteed offline pack for these languages, so the
+        // native engine (all 11 mission languages, no download) captures the
+        // transcript while the Google recognizer below runs as a parallel
+        // source. Whichever yields a valid result first transmits (guarded by
+        // isTransmitted).
+        if (langCode != "en" && nativeSttReady) startNativeIndicSTT(langCode)
+
         // Destroy + recreate + startListening all in sequence on the current (UI) thread
         // No runOnUiThread needed — we ARE on the UI thread already
         try {
@@ -1228,7 +1276,10 @@ class MainActivity : AppCompatActivity() {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, sttLang)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-                putExtra("android.speech.extra.PREFER_OFFLINE", true)
+                // Force offline ONLY for English, whose offline pack is always
+                // present. Forcing it for Indic (pack may not exist) made Google
+                // STT error out instantly — the broken non-English voice input.
+                if (langCode == "en") putExtra("android.speech.extra.PREFER_OFFLINE", true)
             }
 
             speechRecognizer?.startListening(speechIntent)
@@ -1315,6 +1366,11 @@ class MainActivity : AppCompatActivity() {
             try { recordingThread?.join(300) } catch (e: Throwable) {}
             try { audioRecord?.stop(); audioRecord?.release(); audioRecord = null } catch (e: Throwable) {}
         }.start()
+
+        // Native transcript for Indic — runs the ONNX inference over the
+        // captured buffer and transmits if Google hasn't already (race-guarded
+        // by isTransmitted). English uses the Google path only.
+        if (langCode != "en" && nativeSttReady) tryNativeSTTResult(langCode)
     }
 
     /** Get transcription result from ONNX native STT engine and transmit if not already done */
@@ -1335,7 +1391,8 @@ class MainActivity : AppCompatActivity() {
                         && !processedMsg.contains("Init Error")
                         && !processedMsg.contains("Encoder load")
                         && !processedMsg.contains("failed")
-                        && !processedMsg.contains("Invalid fd") -> processedMsg
+                        && !processedMsg.contains("Invalid fd")
+                        && !processedMsg.startsWith("VAD Active") -> processedMsg
                     // Don't transmit ONNX error messages — SpeechRecognizer result should be used instead
                     else -> ""
                 }
@@ -1352,11 +1409,88 @@ class MainActivity : AppCompatActivity() {
             }
         }.start()
     }
-    private fun transmitMessage(rawText: String, langCode: String) {
+    /**
+     * Script family of each app language (11 codes). The wire TX tag must
+     * describe the script actually sent — receivers use it to choose their
+     * translation direction and their TTS voice.
+     */
+    private fun scriptFamilyOf(lang: String): String = when (lang) {
+        "en" -> "latin"
+        "hi", "mr" -> "devanagari"
+        "bn" -> "bengali"
+        "pa" -> "gurmukhi"
+        "gu" -> "gujarati"
+        "or" -> "oriya"
+        "ta" -> "tamil"
+        "te" -> "telugu"
+        "kn" -> "kannada"
+        "ml" -> "malayalam"
+        else -> ""
+    }
+
+    /** Default representative language for a script family (see scriptFamilyOf). */
+    private fun defaultLangForScript(family: String): String = when (family) {
+        "latin" -> "en"
+        "devanagari" -> "hi"
+        "bengali" -> "bn"
+        "gurmukhi" -> "pa"
+        "gujarati" -> "gu"
+        "oriya" -> "or"
+        "tamil" -> "ta"
+        "telugu" -> "te"
+        "kannada" -> "kn"
+        "malayalam" -> "ml"
+        else -> ""
+    }
+
+    /**
+     * Return the language that honestly describes the script of [text].
+     * Keeps [claimed] whenever the dominant script belongs to it (Devanagari
+     * covers both hi and mr), otherwise retags to the language that owns the
+     * dominant script (Latin → en, Tamil → ta, …). Text with no letters
+     * (numbers/punctuation only) keeps the claimed tag. This fixes e.g. STT
+     * returning English while the spinner says "ml": the message now goes
+     * out tagged "en", so receivers actually translate it and TTS speaks the
+     * right voice instead of English text read in a Malayalam locale.
+     */
+    private fun txLangForScript(text: String, claimed: String): String {
+        val counts = HashMap<String, Int>()
+        for (ch in text) {
+            val family = when {
+                // Danda (U+0964/U+0965) is shared Indic punctuation, not a script signal
+                ch == '\u0964' || ch == '\u0965' -> null
+                ch in 'A'..'Z' || ch in 'a'..'z' -> "latin"
+                ch in '\u0900'..'\u097F' -> "devanagari"
+                ch in '\u0980'..'\u09FF' -> "bengali"
+                ch in '\u0A00'..'\u0A7F' -> "gurmukhi"
+                ch in '\u0A80'..'\u0AFF' -> "gujarati"
+                ch in '\u0B00'..'\u0B7F' -> "oriya"
+                ch in '\u0B80'..'\u0BFF' -> "tamil"
+                ch in '\u0C00'..'\u0C7F' -> "telugu"
+                ch in '\u0C80'..'\u0CFF' -> "kannada"
+                ch in '\u0D00'..'\u0D7F' -> "malayalam"
+                else -> null
+            }
+            if (family != null) counts[family] = (counts[family] ?: 0) + 1
+        }
+        val dominant = counts.maxByOrNull { it.value }?.key ?: return claimed
+        if (dominant == scriptFamilyOf(claimed)) return claimed
+        val honest = defaultLangForScript(dominant)
+        return if (honest.isEmpty()) claimed else honest
+    }
+
+    private fun transmitMessage(rawText: String, langCode: String, priority: Byte = 0) {
         val correctedText = autoCorrectAndFormatText(rawText, langCode)
         if (correctedText.isBlank()) return
 
         Log.i(TAG, "━━ STT_TRANSCRIPT  lang=$langCode  text='$correctedText'")
+
+        // Honest wire tag: the TX language must match the script of the text
+        // actually being sent (see txLangForScript).
+        val txLang = txLangForScript(correctedText, langCode)
+        if (txLang != langCode) {
+            Log.i(TAG, "━━ TX_LANG_TAG script mismatch: claimed=$langCode → tagged=$txLang")
+        }
 
         // Extract prosody from PCM captured during recording (pitch + energy)
         val prosodyBytes = extractProsodyBytes()
@@ -1365,14 +1499,15 @@ class MainActivity : AppCompatActivity() {
         // SEND IMMEDIATELY — do not wait for async language detection
         // Language detection runs in parallel for logging only
         val packet: ByteArray = correctedText.toByteArray(Charsets.UTF_8)
-        Log.i(TAG, "━━ OUTGOING_MSG    lang=$langCode  bytes=${packet.size}  text='$correctedText'")
+        Log.i(TAG, "━━ OUTGOING_MSG    lang=$txLang  bytes=${packet.size}  text='$correctedText'")
 
         // Update beacon so other nodes know our current language
         transport?.updateBeaconLang(langCode)
 
         try {
-            // Always broadcast — every receiver translates into their own language
-            transport?.sendVoiceMessage(packet, langCode, 1.toByte(), "ALL")
+            // Always broadcast — every receiver translates into their own language.
+            // priority: 0 = normal traffic, 1 = SOS (buttons pass 1 explicitly).
+            transport?.sendVoiceMessage(packet, txLang, priority, "ALL")
         } catch (e: Throwable) {
             Log.e(TAG, "Transport send error: ${e.message}", e)
             runOnUiThread { statusText.text = "Send error: ${e.message}" }
@@ -1380,10 +1515,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         runOnUiThread {
-            statusText.text = "✅ Sent [$langCode]: $correctedText"
+            statusText.text = "✅ Sent [$txLang]: $correctedText"
             val prefs = getSharedPreferences(LoginActivity.PREF_FILE, Context.MODE_PRIVATE)
             val senderName = prefs.getString(LoginActivity.PREF_DISPLAY_NAME, "You") ?: "You"
-            addChatMessageToUi(senderName, langCode, langCode, correctedText, true)
+            addChatMessageToUi(senderName, txLang, txLang, correctedText, true)
             // Reset PTT button to idle state
             if (!isRecording) {
                 Handler(Looper.getMainLooper()).postDelayed({
@@ -1483,12 +1618,13 @@ class MainActivity : AppCompatActivity() {
     private val translationCache = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     /**
-     * Map our 2-letter codes to MLKit TranslateLanguage constants.
-     * MLKit supports: en, hi, ta, te, mr, bn, kn, gu
-     * ml (Malayalam) and pa (Punjabi) are NOT supported by MLKit.
-     * For translation: we proxy ml→ta (Dravidian family) and pa→hi (Indo-Aryan).
-     * For TTS output: we use the same proxy script — Android TTS reads Tamil/Hindi
-     * text correctly and both are understood by ml/pa speakers in practice.
+     * Map our 2-letter codes to ML Kit TranslateLanguage constants.
+     * ML Kit supports 8 of our 11 languages: en, hi, ta, te, mr, bn, kn, gu.
+     * ml (Malayalam), or (Odia) and pa (Punjabi) have NO ML Kit model —
+     * they honestly return null so the caller can route those pairs through
+     * the English pivot + offline PivotTranslator gloss. They are NEVER
+     * proxied to Tamil/Hindi: that produced wrong-language text that looked
+     * like a real translation.
      */
     private fun mlkitLanguageCode(lang: String): String? {
         return when (lang) {
@@ -1500,42 +1636,49 @@ class MainActivity : AppCompatActivity() {
             "kn" -> com.google.mlkit.nl.translate.TranslateLanguage.KANNADA
             "gu" -> com.google.mlkit.nl.translate.TranslateLanguage.GUJARATI
             "en" -> com.google.mlkit.nl.translate.TranslateLanguage.ENGLISH
-            "ml" -> com.google.mlkit.nl.translate.TranslateLanguage.TAMIL    // proxy: Dravidian family
-            "or" -> com.google.mlkit.nl.translate.TranslateLanguage.HINDI    // proxy: Indo-Aryan
-            "pa" -> com.google.mlkit.nl.translate.TranslateLanguage.HINDI    // proxy: Indo-Aryan
-            else -> null
+            else -> null   // ml / or / pa: no ML Kit model (see PivotTranslator)
         }
     }
 
     /**
-     * Returns the effective language code to use for TTS playback.
-     * For ml/pa which aren't in MLKit, translated text is in Tamil/Hindi script
-     * so we must speak it in the matching locale for correct pronunciation.
-     * ml text (Tamil script) → speak as "ta"
-     * pa text (Hindi/Gurmukhi) → speak as "pa" (Android TTS handles Gurmukhi if pack installed,
-     *   falls back to "hi" which is close enough)
-     * or text (Hindi script) → speak as "hi"
-     */
-    /**
-     * Returns the TTS locale that matches the script of the translated text.
-     * When MLKit proxies ml→ta and or/pa→hi, the translated text is in Tamil/Hindi
-     * script, so TTS must use the matching locale.
-     * When translation failed (model not downloaded), fall back to "en" — English
-     * TTS always works on every Android device without any extra packs.
+     * Returns the TTS locale that matches the text being spoken.
+     * Translation now only ever *produces* the language actually requested
+     * (the old ml→Tamil / or,pa→Hindi proxies are gone), so the requested
+     * locale is the correct one. When translation was unavailable the callers
+     * fall back to "en" explicitly before invoking TTS.
      */
     private fun effectiveTtsLang(requestedLang: String, translatedFrom: String = ""): String {
-        return when (requestedLang) {
-            "ml" -> "ta"   // MLKit outputs Tamil script for Malayalam — use Tamil TTS
-            "or" -> "hi"   // MLKit outputs Hindi script for Odia — use Hindi TTS
-            "pa" -> "hi"   // MLKit outputs Hindi script for Punjabi — use Hindi TTS
-            else -> requestedLang
-        }
+        return requestedLang
     }
 
     /**
-     * Async translation via MLKit. Invokes onResult on a background thread.
-     * Model is downloaded on first use (Wi-Fi only, ~20MB per language pair).
-     * All subsequent calls use the on-device model — fully offline.
+     * True only for a genuine translation: non-blank, different from the
+     * original, and not the honest "[lang] original" passthrough label.
+     * Anything else (model download failure, unsupported pair, gloss miss)
+     * must never be cached or spoken as if it were a translation.
+     */
+    private fun isRealTranslation(result: String, original: String, sourceLang: String): Boolean {
+        return result.isNotBlank() && result != original && !result.startsWith("[$sourceLang]")
+    }
+
+    /**
+     * Async translation with English as the pivot/median language.
+     * Cascade (first matching branch wins):
+     *   1. Neither side has an ML Kit model (ml/or/pa ↔ ml/or/pa)
+     *      → offline PivotTranslator concept gloss directly.
+     *   2. Source has no model (e.g. ml→hi)
+     *      → offline gloss source→English, then ML Kit English→target.
+     *   3. Target has no model (e.g. hi→ml, en→ml)
+     *      → ML Kit source→English, then offline gloss English→target.
+     *   4. Both supported + one side English
+     *      → single direct ML Kit hop.
+     *   5. Both supported, neither English
+     *      → ML Kit pivot src→English→tgt.
+     * Every failure path returns the original text with an honest
+     * "[sourceLang]" label — never a fake translation. Only genuine
+     * translations are cached, so one failed attempt can no longer poison
+     * the cache for every later message on this language pair.
+     * Models download on first use; after that everything is on-device.
      */
     private fun translateWithMlKit(
         text: String,
@@ -1550,78 +1693,112 @@ class MainActivity : AppCompatActivity() {
 
         val srcCode = mlkitLanguageCode(sourceLang)
         val tgtCode = mlkitLanguageCode(targetLang)
-        if (srcCode == null || tgtCode == null) {
-            // Unsupported language pair — return text as-is, TTS will speak in source lang
-            onResult(text); return
-        }
-
         val enCode = mlkitLanguageCode("en")!!
         val conditions = com.google.mlkit.common.model.DownloadConditions.Builder().build()
-        val needsPivot = sourceLang != "en" && targetLang != "en"
 
-        // Wrap all MLKit calls with a guaranteed fallback:
-        // If models aren't downloaded OR translation fails for any reason,
-        // onResult fires immediately with the original text.
-        // This ensures TTS always plays something.
+        // Honest failure: original text wearing the source-language label.
+        fun honestFallback(): String = "[$sourceLang] $text"
 
-        fun doDirectTranslation() {
-            val key = "$sourceLang|$targetLang"
-            val translator = mlkitTranslatorCache.getOrPut(key) {
+        // Deliver: cache only genuine translations (cache-poisoning guard).
+        fun finish(result: String) {
+            val real = isRealTranslation(result, text, sourceLang)
+            if (real) translationCache[cacheKey] = result
+            Log.i(TAG, "TRANSLATE [$sourceLang→$targetLang] real=$real: '$text' → '$result'")
+            onResult(result)
+        }
+
+        // One ML Kit hop between two supported language codes, with a
+        // guaranteed fallback: if the model isn't downloaded or the call
+        // fails, `input` passes through untouched.
+        fun mlKitHop(src: String, tgt: String, input: String, done: (String) -> Unit) {
+            val translator = mlkitTranslatorCache.getOrPut("$src|$tgt") {
                 com.google.mlkit.nl.translate.Translation.getClient(
                     com.google.mlkit.nl.translate.TranslatorOptions.Builder()
-                        .setSourceLanguage(srcCode).setTargetLanguage(tgtCode).build()
+                        .setSourceLanguage(src).setTargetLanguage(tgt).build()
                 )
             }
             translator.downloadModelIfNeeded(conditions)
                 .addOnSuccessListener {
-                    translator.translate(text)
-                        .addOnSuccessListener { translated ->
-                            translationCache[cacheKey] = translated
-                            Log.i(TAG, "MLKit [$sourceLang→$targetLang]: '$text' → '$translated'")
-                            onResult(translated)
-                        }
-                        .addOnFailureListener { onResult(text) }
+                    translator.translate(input)
+                        .addOnSuccessListener { done(it) }
+                        .addOnFailureListener { done(input) }
                 }
-                .addOnFailureListener { onResult(text) }  // model not downloaded — return original
+                .addOnFailureListener {
+                    // Download failed (e.g. transient network) — the model may
+                    // already be on-device, so still attempt the translation
+                    // before falling through as an honest passthrough.
+                    translator.translate(input)
+                        .addOnSuccessListener { done(it) }
+                        .addOnFailureListener { done(input) }
+                }
         }
 
-        if (!needsPivot) {
-            doDirectTranslation()
-        } else {
-            // Pivot: src→en→target
-            val step1Key = "$sourceLang|en"
-            val step1 = mlkitTranslatorCache.getOrPut(step1Key) {
-                com.google.mlkit.nl.translate.Translation.getClient(
-                    com.google.mlkit.nl.translate.TranslatorOptions.Builder()
-                        .setSourceLanguage(srcCode).setTargetLanguage(enCode).build()
-                )
-            }
-            val step2Key = "en|$targetLang"
-            val step2 = mlkitTranslatorCache.getOrPut(step2Key) {
-                com.google.mlkit.nl.translate.Translation.getClient(
-                    com.google.mlkit.nl.translate.TranslatorOptions.Builder()
-                        .setSourceLanguage(enCode).setTargetLanguage(tgtCode).build()
-                )
-            }
-            step1.downloadModelIfNeeded(conditions)
-                .addOnSuccessListener {
-                    step2.downloadModelIfNeeded(conditions)
-                        .addOnSuccessListener {
-                            step1.translate(text)
-                                .addOnSuccessListener { engText ->
-                                    step2.translate(engText)
-                                        .addOnSuccessListener { finalText ->
-                                            translationCache[cacheKey] = finalText
-                                            Log.i(TAG, "MLKit pivot [$sourceLang→en→$targetLang]: '$text' → '$finalText'")
-                                            onResult(finalText)
-                                        }
-                                        .addOnFailureListener { onResult(engText) } // speak English if step2 fails
-                                }
-                                .addOnFailureListener { onResult(text) }
-                        }
-                        .addOnFailureListener { onResult(text) } // step2 model not ready
+        // 0. C++ semantic engine FIRST — the designed primary path (see the
+        //    function docs above): deterministic parse→realize translation
+        //    across ALL 11 mission languages, including ml/or/pa for which
+        //    ML Kit has no model at all. It needs no model download, so it
+        //    also covers the window before ML Kit models are ready — the
+        //    reason early messages went out untranslated in the field demo.
+        //    Free-form text comes back unchanged and falls through to the
+        //    ML Kit cascade below.
+        if (org.isro.itantra.semantic.SemanticBridge.isLibraryLoaded) {
+            try {
+                val sem = org.isro.itantra.semantic.SemanticBridge
+                    .translateText(text, sourceLang, targetLang)
+                if (sem.isNotBlank() && sem != text) {
+                    finish(sem)
+                    return
                 }
-                .addOnFailureListener { onResult(text) } // step1 model not ready
+            } catch (t: Throwable) {
+                Log.w(TAG, "SemanticBridge.translateText failed (${t.message}) — using ML Kit cascade")
+            }
+        }
+
+        when {
+            // 1. No ML Kit model on either side — direct offline gloss.
+            srcCode == null && tgtCode == null -> {
+                val gloss = org.isro.itantra.translation.PivotTranslator
+                    .translate(text, sourceLang, targetLang)
+                finish(gloss ?: honestFallback())
+            }
+
+            // 2. Source has no model — gloss source→English offline,
+            //    then ML Kit English→target (identity when target is English).
+            srcCode == null -> {
+                val engText = org.isro.itantra.translation.PivotTranslator
+                    .translate(text, sourceLang, "en")
+                when {
+                    engText == null -> finish(honestFallback())
+                    targetLang == "en" -> finish(engText)
+                    // tgtCode is provably non-null here: the both-null case
+                    // was handled by the first branch (srcCode == null above).
+                    else -> mlKitHop(enCode, tgtCode!!, engText) { finish(it) }
+                }
+            }
+
+            // 3. Target has no model — ML Kit source→English, then gloss
+            //    English→target.
+            tgtCode == null -> {
+                fun glossFromEnglish(engText: String) {
+                    val gloss = org.isro.itantra.translation.PivotTranslator
+                        .translate(engText, "en", targetLang)
+                    finish(gloss ?: honestFallback())
+                }
+                if (sourceLang == "en") glossFromEnglish(text)
+                else mlKitHop(srcCode, enCode, text) { glossFromEnglish(it) }
+            }
+
+            // 4. Direct hop between English and a supported language.
+            sourceLang == "en" || targetLang == "en" -> {
+                mlKitHop(srcCode, tgtCode, text) { finish(it) }
+            }
+
+            // 5. Both supported, neither English — ML Kit English pivot.
+            else -> {
+                mlKitHop(srcCode, enCode, text) { engText ->
+                    mlKitHop(enCode, tgtCode, engText) { finish(it) }
+                }
+            }
         }
     }
 
@@ -1649,18 +1826,27 @@ class MainActivity : AppCompatActivity() {
 
         // Fire async translation — updates the UI and plays TTS when translation arrives
         translateWithMlKit(text, sourceLang, targetLang) { translated ->
-            translationCache[cacheKey] = translated
+            // Cache-poisoning guard: only genuine translations are stored.
+            // Failures return the original text or a "[lang] …" label —
+            // caching those would make later messages show (and speak)
+            // untranslated text as if it were translated.
+            if (isRealTranslation(translated, text, sourceLang)) {
+                translationCache[cacheKey] = translated
+            }
             runOnUiThread {
-                // Update status text if it still shows the placeholder
-                val current = statusText.text.toString()
-                if (current.contains("[$sourceLang]")) {
-                    val updated = current
-                        .replace("[$sourceLang] $text", translated)
-                        .replace("\n[$sourceLang] $text", "\n$translated")
-                    statusText.text = updated
+                // Replace the placeholder only when a real translation exists;
+                // otherwise keep the honest "[lang] original" label on screen.
+                if (isRealTranslation(translated, text, sourceLang)) {
+                    val current = statusText.text.toString()
+                    if (current.contains("[$sourceLang]")) {
+                        val updated = current
+                            .replace("[$sourceLang] $text", translated)
+                            .replace("\n[$sourceLang] $text", "\n$translated")
+                        statusText.text = updated
+                    }
                 }
                 // FIX 2: Play TTS in receiver's target language once translation is ready
-                if (speakAloud && translated.isNotBlank() && !translated.startsWith("[$sourceLang]")) {
+                if (speakAloud && isRealTranslation(translated, text, sourceLang)) {
                     playTTS(translated, targetLang, isAlert)
                 }
             }
@@ -1678,15 +1864,19 @@ class MainActivity : AppCompatActivity() {
      * Once downloaded (~20MB per language), all translation is fully offline forever.
      */
     private fun preDownloadTranslationModels() {
-        val allLangs = listOf("hi", "kn", "te", "mr", "ta", "bn", "gu", "ml", "or", "pa")
+        // Honest model list: ML Kit supports exactly 8 of our 11 languages —
+        // English (the pivot/median language) plus these 7 Indic languages.
+        // ml/or/pa have no ML Kit model; their pairs use the offline
+        // PivotTranslator gloss and are never queued for download here.
+        val mlKitLangs = listOf("hi", "ta", "te", "mr", "bn", "kn", "gu")
         val conditions = com.google.mlkit.common.model.DownloadConditions.Builder().build()
         val enCode = mlkitLanguageCode("en") ?: return
-        val uniqueCodes = allLangs.mapNotNull { mlkitLanguageCode(it) }.toSet()
+        val uniqueCodes = mlKitLangs.mapNotNull { mlkitLanguageCode(it) }.toSet()
         val totalModels = uniqueCodes.size * 2
         var doneCount = 0
 
         runOnUiThread {
-            statusText.text = "⏳ Loading ${totalModels} language models for offline translation..."
+            statusText.text = "⏳ Loading $totalModels translation models (English pivot × ${uniqueCodes.size} languages)…"
         }
 
         for (langCode in uniqueCodes) {
@@ -1698,7 +1888,7 @@ class MainActivity : AppCompatActivity() {
                     Log.i(TAG, "MLKit ready: $langCode→en")
                     doneCount++
                     if (doneCount == totalModels) runOnUiThread {
-                        statusText.text = "✅ All language models ready — multilingual works offline"
+                        statusText.text = "✅ Offline translation ready (en pivot) — ml/or/pa use offline gloss"
                     }
                 }
                 .addOnFailureListener { e -> Log.w(TAG, "MLKit fail $langCode→en: ${e.message}") }
@@ -1711,12 +1901,12 @@ class MainActivity : AppCompatActivity() {
                     Log.i(TAG, "MLKit ready: en→$langCode")
                     doneCount++
                     if (doneCount == totalModels) runOnUiThread {
-                        statusText.text = "✅ All language models ready — multilingual works offline"
+                        statusText.text = "✅ Offline translation ready (en pivot) — ml/or/pa use offline gloss"
                     }
                 }
                 .addOnFailureListener { e -> Log.w(TAG, "MLKit fail en→$langCode: ${e.message}") }
         }
-        Log.i(TAG, "MLKit: pre-downloading $totalModels models covering all 10-language combinations")
+        Log.i(TAG, "MLKit: pre-downloading $totalModels models (en↔${uniqueCodes.size} languages); ml/or/pa fall back to offline gloss")
     }
 
     /**
@@ -2062,6 +2252,7 @@ class MainActivity : AppCompatActivity() {
                 sttDecoderPath = decPath,
                 vocabJsonPath = vocabPath
             )
+            nativeSttReady = success
             if (success) {
                 android.util.Log.i(TAG, "Native STT Core initialized successfully with ALL official AI4Bharat models!")
             } else {

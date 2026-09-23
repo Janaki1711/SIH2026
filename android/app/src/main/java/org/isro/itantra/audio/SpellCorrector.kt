@@ -14,6 +14,13 @@ class SpellCorrector(private val context: Context) {
     @Volatile
     private var currentLang: String = "en"
 
+    // Minimum believable dictionary size — real wordlists have thousands of
+    // entries; the corrupted hi/kn asset stubs parse to a handful of mojibake
+    // lines (see loadDictionary).
+    private companion object {
+        const val MIN_DICT_WORDS = 50
+    }
+
     // Alphabets for edits (insertions and replacements)
     private val alphabets = mapOf(
         "en" to "abcdefghijklmnopqrstuvwxyz",
@@ -61,12 +68,24 @@ class SpellCorrector(private val context: Context) {
                 }
             }
             reader.close()
-            Log.i("SpellCorrector", "Loaded $fileName with ${dict.size} words and ${pDict.size} phonetic keys.")
+            // Corruption guard: hi_dict.txt (128 bytes) and kn_dict.txt (28 bytes)
+            // are truncated stubs, not real dictionaries. Storing their mojibake
+            // would let autocorrect "fix" correct words into garbage. Anything
+            // under MIN_DICT_WORDS is treated as missing — we still cache the
+            // (empty) entry so we don't re-parse the stub on every switch, and
+            // correct() returns words unchanged for empty dictionaries.
+            if (dict.size >= MIN_DICT_WORDS) {
+                dictionaries[langCode] = dict
+                phoneticDictionaries[langCode] = pDict
+                Log.i("SpellCorrector", "Loaded $fileName with ${dict.size} words and ${pDict.size} phonetic keys.")
+            } else {
+                dictionaries[langCode] = HashMap()
+                phoneticDictionaries[langCode] = HashMap()
+                Log.w("SpellCorrector", "$fileName looks truncated/corrupt (${dict.size} entries) — autocorrect disabled for '$langCode'.")
+            }
         } catch (e: Exception) {
             Log.w("SpellCorrector", "Dictionary $langCode not found. Skipping autocorrect for this language.")
         }
-        dictionaries[langCode] = dict
-        phoneticDictionaries[langCode] = pDict
     }
 
     /**

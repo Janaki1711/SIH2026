@@ -121,8 +121,8 @@ def parse(text: str, language: str = "en") -> SemanticMessage:
     2. Runs TinyML contextual classifier on ambiguous spans.
     3. Fuses predictions and preserves raw text for unseen proper nouns.
     """
-    # 1. Baseline parse
-    msg = semantic_parser._parse_core(text)
+    # 1. Baseline parse (language is threaded through for source-language context)
+    msg = semantic_parser._parse_core(text, language)
 
     # 2. Extract candidate spans for TinyML resolution
     candidates = _extract_candidate_spans(text)

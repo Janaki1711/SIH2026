@@ -44,4 +44,19 @@ object SemanticBridge {
         wireBytes: ByteArray,
         targetLang: String
     ): String
+
+    /**
+     * Translate [text] from [srcLang] into [tgtLang] using the on-device M3
+     * semantic engine (parse → semantic IR → realize) across all 10 mission
+     * languages — including ml/or/pa, for which ML Kit has no model.
+     *
+     * Free-form text is returned unchanged (honest passthrough) so callers
+     * can fall through to their ML Kit cascade without mistaking the
+     * passthrough for a translation.
+     */
+    external fun translateText(
+        text: String,
+        srcLang: String,
+        tgtLang: String
+    ): String
 }
