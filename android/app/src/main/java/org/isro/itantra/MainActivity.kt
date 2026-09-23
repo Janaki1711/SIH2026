@@ -72,7 +72,8 @@ class MainActivity : AppCompatActivity() {
         )
         pttAudioAdapter = org.isro.itantra.runtime.PttAudioAdapter(stateMachine)
         pttAudioAdapter.onTranscriptionResult = { text ->
-            runOnUiThread { statusText.text = text }
+            // Guard: statusText may not be initialized yet if initPTTFoundation runs before setContentView
+            if (::statusText.isInitialized) runOnUiThread { statusText.text = text }
         }
         
         val serviceIntent = Intent(this, org.isro.itantra.service.RadioDaemonService::class.java)
@@ -1098,12 +1099,24 @@ class MainActivity : AppCompatActivity() {
             val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             if (!matches.isNullOrEmpty() && matches[0].isNotBlank()) {
                 lastRecognizedText = matches[0]
-                // Measure end-to-end STT latency from mic tap to result
                 lastSttLatencyMs = System.currentTimeMillis() - sttStartTimeMs
                 val selectedLangName = if (::langSpinner.isInitialized && langSpinner.selectedItem != null)
                     langSpinner.selectedItem.toString() else "English (India)"
                 val selectedLangCode = languageMap[selectedLangName]?.substringBefore("-") ?: "en"
                 Log.i(TAG, "STT_RESULT lang=$selectedLangCode latency=${lastSttLatencyMs}ms text='${matches[0]}'")
+
+                // Code-mixed speech guard: if selected lang is non-Devanagari Indic (te/kn/ta/ml/bn/gu/or)
+                // but STT returned Devanagari text, the user probably spoke English/Hindi —
+                // flag it in status but still transmit (receiver will handle whatever came through)
+                val hasDevanagari = matches[0].any { it.code in 0x0900..0x097F }
+                val devanagariLangs = setOf("hi", "mr")  // these expect Devanagari
+                if (hasDevanagari && selectedLangCode !in devanagariLangs && selectedLangCode != "en") {
+                    Log.w(TAG, "CODE_MIX_WARN: got Devanagari for lang=$selectedLangCode — user may have spoken in Hindi/English")
+                    runOnUiThread {
+                        if (::statusText.isInitialized)
+                            statusText.text = "⚠️ Tip: speak in ${selectedLangName.substringBefore(" (")} for best results"
+                    }
+                }
 
                 if (!isTransmitted) {
                     isTransmitted = true
@@ -1876,7 +1889,8 @@ class MainActivity : AppCompatActivity() {
         var doneCount = 0
 
         runOnUiThread {
-            statusText.text = "⏳ Loading $totalModels translation models (English pivot × ${uniqueCodes.size} languages)…"
+            if (::statusText.isInitialized)
+                statusText.text = "⏳ Loading $totalModels translation models (English pivot × ${uniqueCodes.size} languages)…"
         }
 
         for (langCode in uniqueCodes) {
@@ -1888,7 +1902,7 @@ class MainActivity : AppCompatActivity() {
                     Log.i(TAG, "MLKit ready: $langCode→en")
                     doneCount++
                     if (doneCount == totalModels) runOnUiThread {
-                        statusText.text = "✅ Offline translation ready (en pivot) — ml/or/pa use offline gloss"
+                        if (::statusText.isInitialized) statusText.text = "✅ Offline translation ready"
                     }
                 }
                 .addOnFailureListener { e -> Log.w(TAG, "MLKit fail $langCode→en: ${e.message}") }
@@ -1901,7 +1915,7 @@ class MainActivity : AppCompatActivity() {
                     Log.i(TAG, "MLKit ready: en→$langCode")
                     doneCount++
                     if (doneCount == totalModels) runOnUiThread {
-                        statusText.text = "✅ Offline translation ready (en pivot) — ml/or/pa use offline gloss"
+                        if (::statusText.isInitialized) statusText.text = "✅ Offline translation ready"
                     }
                 }
                 .addOnFailureListener { e -> Log.w(TAG, "MLKit fail en→$langCode: ${e.message}") }
