@@ -91,6 +91,27 @@ class MainActivity : AppCompatActivity() {
         private const val TAG = "iTantra_MainActivity"
         private const val PERMISSION_REQUEST_CODE = 100
         private const val VAD_SILENCE_TIMEOUT_MS = 10000L // 10-second VAD silence threshold
+        // Indic sessions: how long native ONNX transmission waits for the
+        // en-IN detector verdict before proceeding (code-mixed speech fix).
+        private const val EN_DETECTOR_GRACE_MS = 900L
+        // Lexical support for looksLikeEnglish() (en-IN detector gate).
+        private val EN_SINGLE_WORD_WHITELIST = setOf(
+            "help", "fire", "water", "accident", "emergency", "hospital",
+            "police", "stuck", "hurt", "injured", "blood", "please", "come",
+            "now", "run", "out", "save", "stop", "yes", "ok", "okay",
+            "hello", "namaste", "janaki"
+        )
+        private val ENGLISH_STOPWORDS = setOf(
+            "i", "im", "i'm", "am", "is", "are", "was", "be", "been",
+            "the", "a", "an", "my", "me", "we", "you", "your", "he", "she",
+            "it", "they", "us", "in", "on", "at", "to", "of", "and", "or",
+            "for", "with", "have", "has", "can", "not", "no", "yes", "ok",
+            "need", "help", "please", "water", "fire", "where", "what",
+            "how", "this", "that", "there", "here", "now", "go", "come",
+            "out", "house", "home", "name", "stuck", "hurt", "hospital",
+            "police", "save", "emergency", "accident", "okay", "hello",
+            "are", "you", "do", "did", "get", "got", "all", "right", "ok"
+        )
     }
 
     private lateinit var netStatusText: android.widget.LinearLayout
@@ -120,6 +141,12 @@ class MainActivity : AppCompatActivity() {
     // model assets) initialized successfully — gates native capture and the
     // protection of native sessions against Google-recognizer failures
     @Volatile private var nativeSttReady = false
+    // en-IN detector leg (Indic sessions): Google listens in English while
+    // native ONNX transcribes the selected Indic language. `settled` flips on
+    // the first Google verdict (result or error) so native doesn't wait out
+    // its grace window; `active` marks the session phase these apply to.
+    @Volatile private var sttDetectorActive = false
+    @Volatile private var sttDetectorSettled = true
     @Volatile private var sttStartTimeMs = 0L          // when startRecording() called
     @Volatile private var lastSttLatencyMs = 0L         // ms from mic tap to onResults
     @Volatile private var isWalkieTalkieMode = true
@@ -1041,6 +1068,11 @@ class MainActivity : AppCompatActivity() {
             // force repeated re-taps. Ignore the Google failure and let the
             // native transcript arrive at stop time.
             if (isIndic && nativeSttReady) {
+                // Verdict for the en-IN detector leg: Google failed to hear
+                // English (NO_MATCH on Indic speech, timeout, etc.) — settle
+                // immediately so the native transcript doesn't wait out its
+                // grace window.
+                sttDetectorSettled = true
                 Log.i(TAG, "[STT] Google leg error $error ignored — native ONNX continues (lang=$langCode, transmitted=$isTransmitted)")
                 return
             }
@@ -1105,6 +1137,33 @@ class MainActivity : AppCompatActivity() {
                 val selectedLangCode = languageMap[selectedLangName]?.substringBefore("-") ?: "en"
                 Log.i(TAG, "STT_RESULT lang=$selectedLangCode latency=${lastSttLatencyMs}ms text='${matches[0]}'")
 
+                // en-IN detector verdict (Indic sessions only). Google heard
+                // something while native ONNX was transcribing the selected
+                // language: if it confidently looks like English, the user
+                // spoke English under an Indic selection (the common
+                // code-mixed case) — send that clean English text instead of
+                // the native engine's phonetic-Devanagari rendering of it.
+                // Anything else settles the detector and lets the native
+                // transcript win. Setting isTransmitted here also releases the
+                // native thread waiting in its grace window.
+                if (selectedLangCode != "en" && nativeSttReady && sttDetectorActive) {
+                    sttDetectorSettled = true
+                    val heard = matches[0]
+                    if (looksLikeEnglish(heard)) {
+                        Log.i(TAG, "[STT] en-detector: confident English under lang=$selectedLangCode → send as en: '$heard'")
+                        if (!isTransmitted) {
+                            isTransmitted = true
+                            runOnUiThread {
+                                if (::statusText.isInitialized) statusText.text = "🎙️ English detected — sending"
+                            }
+                            transmitMessage(heard, "en")
+                        }
+                    } else {
+                        Log.i(TAG, "[STT] en-detector: not confident English ('$heard') — native ONNX transcript wins")
+                    }
+                    return
+                }
+
                 // Code-mixed speech guard: if selected lang is non-Devanagari Indic (te/kn/ta/ml/bn/gu/or)
                 // but STT returned Devanagari text, the user probably spoke English/Hindi —
                 // flag it in status but still transmit (receiver will handle whatever came through)
@@ -1141,6 +1200,37 @@ class MainActivity : AppCompatActivity() {
     private fun resetSilenceTimer() {
         silenceHandler.removeCallbacks(silenceRunnable)
         silenceHandler.postDelayed(silenceRunnable, VAD_SILENCE_TIMEOUT_MS)
+    }
+
+    /**
+     * Confidence gate for the en-IN detector leg: does this Google STT result
+     * look like the user actually spoke English?
+     *
+     * Requires the text to be overwhelmingly Latin letters, then a lexical
+     * check: a single word must be an unambiguous emergency/English word;
+     * two-to-four words need ≥2 common-English hits; longer sentences need a
+     * ≥1/3 hit ratio. This rejects cross-language hallucinations (Google
+     * "recognizing" Telugu speech as random English) while accepting real
+     * code-mixed phrases like "I am Janaki, how are you" or "help me".
+     */
+    private fun looksLikeEnglish(text: String): Boolean {
+        val trimmed = text.trim()
+        val letters = trimmed.filter { it.isLetter() }
+        if (letters.isEmpty()) return false
+        val latin = letters.count { (it in 'a'..'z') || (it in 'A'..'Z') }
+        if (latin.toDouble() / letters.length < 0.9) return false
+
+        val words = trimmed.split(Regex("\\s+"))
+            .map { w -> w.lowercase().trim(',', '.', '?', '!', ';', ':', '"', '\'') }
+            .filter { it.any { c -> c.isLetter() } }
+        if (words.isEmpty()) return false
+
+        // Single word: only unambiguous cases.
+        if (words.size == 1) return words[0] in EN_SINGLE_WORD_WHITELIST
+
+        val stop = ENGLISH_STOPWORDS
+        val hits = words.count { stop.contains(it) }
+        return if (words.size <= 4) hits >= 2 else hits * 3 >= words.size
     }
 
     /**
@@ -1270,7 +1360,10 @@ class MainActivity : AppCompatActivity() {
         // transcript while the Google recognizer below runs as a parallel
         // source. Whichever yields a valid result first transmits (guarded by
         // isTransmitted).
-        if (langCode != "en" && nativeSttReady) startNativeIndicSTT(langCode)
+        val enDetectorActive = langCode != "en" && nativeSttReady
+        sttDetectorActive = enDetectorActive
+        sttDetectorSettled = !enDetectorActive
+        if (enDetectorActive) startNativeIndicSTT(langCode)
 
         // Destroy + recreate + startListening all in sequence on the current (UI) thread
         // No runOnUiThread needed — we ARE on the UI thread already
@@ -1279,24 +1372,32 @@ class MainActivity : AppCompatActivity() {
             speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
             speechRecognizer?.setRecognitionListener(buildRecognitionListener())
 
-            // Use the sender's selected language for STT.
-            // For languages where offline packs may be missing, PREFER_OFFLINE still works
-            // for English; for Indic, Android will attempt the language and fall back gracefully.
-            val sttLang = langTag  // e.g. "hi-IN", "kn-IN", "te-IN", "en-IN"
+            // English sessions recognize as en-IN. Indic sessions with the
+            // native engine ready use Google as an en-IN DETECTOR leg: Google
+            // cannot hear Indic on this device (errors 11/12), but its
+            // always-available English recognition catches code-mixed speech
+            // — the user speaking English while an Indic language is selected,
+            // which used to become phonetic-Devanagari garbage and translate
+            // to word salad. Native ONNX still owns genuine Indic speech;
+            // onResults() transmits Google's output only when it confidently
+            // looks English.
+            val sttLang = if (enDetectorActive) "en-IN" else langTag
             val speechIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, sttLang)
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, sttLang)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-                // Force offline ONLY for English, whose offline pack is always
-                // present. Forcing it for Indic (pack may not exist) made Google
-                // STT error out instantly — the broken non-English voice input.
-                if (langCode == "en") putExtra("android.speech.extra.PREFER_OFFLINE", true)
+                // Force offline only where the pack is guaranteed: English
+                // sessions and the en-IN detector leg (same proven config).
+                // Never for a genuine Indic-language request — forcing offline
+                // for a language whose pack may not exist made Google STT
+                // error out instantly.
+                if (langCode == "en" || enDetectorActive) putExtra("android.speech.extra.PREFER_OFFLINE", true)
             }
 
             speechRecognizer?.startListening(speechIntent)
-            Log.i(TAG, "[STT] startListening(sttLang=$sttLang selectedLang=$langTag)")
+            Log.i(TAG, "[STT] startListening(sttLang=$sttLang selectedLang=$langTag enDetector=$enDetectorActive)")
         } catch (e: Throwable) {
             Log.e(TAG, "[STT] startListening error: ${e.message}")
             statusText.text = "Microphone error. Try again."
@@ -1382,8 +1483,24 @@ class MainActivity : AppCompatActivity() {
 
         // Native transcript for Indic — runs the ONNX inference over the
         // captured buffer and transmits if Google hasn't already (race-guarded
-        // by isTransmitted). English uses the Google path only.
-        if (langCode != "en" && nativeSttReady) tryNativeSTTResult(langCode)
+        // by isTransmitted). English uses the Google path only. When the
+        // en-IN detector leg is still pending, hold native transmission for a
+        // short grace window so confident English from Google can win the race
+        // (code-mixed speech fix); native proceeds as soon as the detector
+        // settles or the window expires — latency is bounded either way.
+        if (langCode != "en" && nativeSttReady) {
+            if (sttDetectorActive && !sttDetectorSettled && !isTransmitted) {
+                Thread {
+                    val deadline = System.currentTimeMillis() + EN_DETECTOR_GRACE_MS
+                    while (!sttDetectorSettled && !isTransmitted && System.currentTimeMillis() < deadline) {
+                        try { Thread.sleep(50) } catch (ie: InterruptedException) { break }
+                    }
+                    tryNativeSTTResult(langCode)
+                }.start()
+            } else {
+                tryNativeSTTResult(langCode)
+            }
+        }
     }
 
     /** Get transcription result from ONNX native STT engine and transmit if not already done */
