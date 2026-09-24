@@ -1,6 +1,7 @@
 #include "NativeSTTBridge.hpp"
 #include "SileroVAD.hpp"
 #include "IndicSTTEngine.hpp"
+#include "WhisperSTTEngine.hpp"
 #include <android/log.h>
 #include <cstring>
 #include <vector>
@@ -11,6 +12,7 @@
 #define LOG_TAG "NativeSTTBridge"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
+#define LOGW(...) __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__)
 
 static std::vector<float> g_accumulatedSpeechBuffer;
 static std::vector<float> g_rawAudioBuffer;
@@ -20,6 +22,19 @@ static std::mutex g_audioMutex;
 // Global Pointers for the ONNX Engines
 static std::unique_ptr<SileroVAD> g_vadEngine;
 static std::unique_ptr<IndicSTTEngine> g_sttEngine;
+
+// Whisper (te/ta/kn/ml) — lazy-initialized on first gated transcription so
+// hi/mr/bn/pa/gu/or users never pay the ~43 MB model load or its RAM cost.
+static std::mutex g_whisperMutex;          // guards lazy init + transcribe
+static std::string g_whisperModelPath;     // set from Kotlin, no load here
+static std::unique_ptr<WhisperSTTEngine> g_whisperEngine;
+static bool g_whisperInitFailed = false;   // don't retry a failing load every utterance
+
+// Language gate from the CER benchmark: only these four were gated to the
+// parambharat model; all other app languages keep the conformer encoder.
+static bool useWhisperFor(const std::string& lang) {
+    return lang == "te" || lang == "ta" || lang == "kn" || lang == "ml";
+}
 
 static std::string JStringToString(JNIEnv* env, jstring jstr) {
     if (!jstr) return "";
@@ -57,6 +72,36 @@ JNIEXPORT jboolean JNICALL Java_org_isro_itantra_audio_NativeSTTBridge_initNativ
         return JNI_FALSE;
     } catch (...) {
         LOGE("Unknown error during native engine init.");
+        return JNI_FALSE;
+    }
+}
+
+// Called from Kotlin with the ggml model path (copied from assets). Stores the
+// path only — the model is actually loaded lazily on the first te/ta/kn/ml
+// transcription, so app startup and non-whisper languages stay unaffected.
+JNIEXPORT jboolean JNICALL Java_org_isro_itantra_audio_NativeSTTBridge_setWhisperModel(
+    JNIEnv *env,
+    jclass clazz,
+    jstring modelPath
+) {
+    try {
+        std::string path = JStringToString(env, modelPath);
+        if (path.empty()) {
+            LOGW("setWhisperModel: empty path — whisper disabled, conformer fallback only.");
+            return JNI_FALSE;
+        }
+        {
+            std::lock_guard<std::mutex> lock(g_whisperMutex);
+            g_whisperModelPath = path;
+            g_whisperEngine.reset();       // force reload on next use
+            g_whisperInitFailed = false;
+        }
+        LOGI("setWhisperModel: %s (lazy load on first te/ta/kn/ml utterance)", path.c_str());
+        return JNI_TRUE;
+    } catch (const std::exception& e) {
+        LOGE("setWhisperModel failed: %s", e.what());
+        return JNI_FALSE;
+    } catch (...) {
         return JNI_FALSE;
     }
 }
@@ -208,12 +253,35 @@ JNIEXPORT jstring JNICALL Java_org_isro_itantra_audio_NativeSTTBridge_stopAudioC
         }
 
         std::string resultText = "";
-        if (g_sttEngine) {
-            // Run the actual ONNX Inference!
-            resultText = g_sttEngine->transcribeBuffer(finalBuffer, langStr);
-        } else {
-            size_t durationMs = finalBuffer.size() / 16;
-            resultText = "VAD Active Speech Detected: " + std::to_string(durationMs) + " ms voice audio captured in [" + langStr + "] by C++ Engine";
+        if (useWhisperFor(langStr) && !g_whisperModelPath.empty()) {
+            // Gate-passed whisper path for te/ta/kn/ml. Empty result = collapse
+            // guard rejected it (or init failed) → fall back to conformer below.
+            std::lock_guard<std::mutex> wlock(g_whisperMutex);
+            if (!g_whisperEngine && !g_whisperInitFailed) {
+                auto engine = std::make_unique<WhisperSTTEngine>();
+                if (engine->init(g_whisperModelPath)) {
+                    g_whisperEngine = std::move(engine);
+                    LOGI("WhisperSTTEngine loaded lazily for [%s]", langStr.c_str());
+                } else {
+                    g_whisperInitFailed = true;
+                    LOGW("WhisperSTTEngine init failed — conformer fallback for all languages.");
+                }
+            }
+            if (g_whisperEngine) {
+                resultText = g_whisperEngine->transcribe(finalBuffer, langStr);
+                if (resultText.empty()) {
+                    LOGW("whisper output empty/rejected for [%s] — falling back to conformer", langStr.c_str());
+                }
+            }
+        }
+        if (resultText.empty()) {
+            if (g_sttEngine) {
+                // Run the actual ONNX Inference!
+                resultText = g_sttEngine->transcribeBuffer(finalBuffer, langStr);
+            } else {
+                size_t durationMs = finalBuffer.size() / 16;
+                resultText = "VAD Active Speech Detected: " + std::to_string(durationMs) + " ms voice audio captured in [" + langStr + "] by C++ Engine";
+            }
         }
         
         return env->NewStringUTF(resultText.c_str());
@@ -235,6 +303,10 @@ JNIEXPORT void JNICALL Java_org_isro_itantra_audio_NativeSTTBridge_releaseNative
         g_vadChunkBuffer.clear();
         g_vadEngine.reset();
         g_sttEngine.reset();
+        {
+            std::lock_guard<std::mutex> wlock(g_whisperMutex);
+            g_whisperEngine.reset();
+        }
         LOGI("Native Audio STT Core released.");
     } catch (...) {}
 }

@@ -897,6 +897,11 @@ class MainActivity : AppCompatActivity() {
             Log.e(TAG, "Native engine startup warning: ${e.message}")
         }
 
+        // Dev hook: file-driven STT test (no human on the mic needed).
+        try { runSttFileTest() } catch (e: Throwable) {
+            Log.e(TAG, "STT file test hook: ${e.message}")
+        }
+
         // Request permissions if needed
         try {
             checkAndRequestAudioPermission()
@@ -2344,11 +2349,12 @@ class MainActivity : AppCompatActivity() {
         try {
             val file = java.io.File(filesDir, assetName)
             val minSizes = mapOf(
-                "ctc_decoder.onnx" to 20_000_000L,
                 "encoder.onnx" to 100_000_000L,
                 "silero_vad.onnx" to 2_000_000L,
                 "tokens.txt" to 50_000L,
-                "vocab.json" to 50_000L
+                "vocab.json" to 50_000L,
+                // parambharat/whisper-tiny-south-indic ggml q8_0 (~43.5 MB)
+                "whisper_tiny_si_q8_0.bin" to 40_000_000L
             )
             val minRequired = minSizes[assetName] ?: 10L
             if (file.exists() && file.length() >= minRequired) {
@@ -2373,14 +2379,15 @@ class MainActivity : AppCompatActivity() {
             // Extract the necessary files from the APK to internal storage so C++ can read them
             val vadPath = copyAssetToStorage("silero_vad.onnx")
             val encPath = copyAssetToStorage("encoder.onnx")
-            val decPath = copyAssetToStorage("ctc_decoder.onnx")
+            // No CTC decoder asset: encoder.onnx emits direct log_probs, so the
+            // dead 23 MB decoder was dropped to fund the whisper model.
             val tokensPath = copyAssetToStorage("tokens.txt")
             val vocabPath = if (tokensPath.isNotEmpty()) tokensPath else copyAssetToStorage("vocab.json")
             
             val success = NativeSTTBridge.safeInit(
                 vadModelPath = vadPath,
                 sttEncoderPath = encPath,
-                sttDecoderPath = decPath,
+                sttDecoderPath = "",
                 vocabJsonPath = vocabPath
             )
             nativeSttReady = success
@@ -2389,9 +2396,86 @@ class MainActivity : AppCompatActivity() {
             } else {
                 android.util.Log.i(TAG, "Running in hybrid emulator mode. Native C++ engine ready for real device/standard 4KB emulator.")
             }
+
+            // parambharat/whisper-tiny-south-indic (ggml q8_0) — CER-gated path
+            // for te/ta/kn/ml. Path only; model lazy-loads on first use.
+            val whisperPath = copyAssetToStorage("whisper_tiny_si_q8_0.bin")
+            if (whisperPath.isNotEmpty()) {
+                NativeSTTBridge.safeSetWhisperModel(whisperPath)
+            } else {
+                android.util.Log.w(TAG, "Whisper model asset missing — te/ta/kn/ml fall back to conformer.")
+            }
         } catch (e: Throwable) {
             android.util.Log.w(TAG, "Native STT init notice: ${e.message}")
         }
+    }
+
+    // Dev hook for human-less STT verification:
+    //   adb shell "run-as org.isro.itantra sh -c 'cat > files/stt_test.wav'" < greet.wav
+    //   adb shell am start -n org.isro.itantra/.MainActivity \
+    //     --es stt_test_wav files/stt_test.wav --es stt_test_lang te
+    // Pushes the file through the exact native PTT path
+    // (startAudioCapture -> pushAudioPCM -> stopAudioCaptureAndTranscribe) and
+    // logs the transcript + inference time. No mic, no UI, no transmission.
+    private fun runSttFileTest() {
+        val relPath = intent.getStringExtra("stt_test_wav") ?: return
+        val lang = intent.getStringExtra("stt_test_lang") ?: "te"
+        val f = if (relPath.startsWith("/")) java.io.File(relPath) else java.io.File(filesDir, relPath)
+        Log.i(TAG, "STT file test: ${f.absolutePath} lang=$lang")
+        if (!f.exists() || !f.canRead()) {
+            Log.e(TAG, "STT_FILE_TEST error: file not found/unreadable")
+            return
+        }
+        Thread {
+            try {
+                val bytes = f.readBytes()
+
+                // Locate PCM payload: walk RIFF chunks if this is a WAV,
+                // otherwise treat as raw s16le.
+                var offset = 0
+                if (bytes.size > 44 && bytes[0] == 'R'.code.toByte() && bytes[1] == 'I'.code.toByte() &&
+                    bytes[2] == 'F'.code.toByte() && bytes[3] == 'F'.code.toByte()
+                ) {
+                    var pos = 12
+                    while (pos + 8 <= bytes.size) {
+                        val id = String(bytes, pos, 4, Charsets.US_ASCII)
+                        val sz = (bytes[pos + 4].toInt() and 0xFF) or
+                                 ((bytes[pos + 5].toInt() and 0xFF) shl 8) or
+                                 ((bytes[pos + 6].toInt() and 0xFF) shl 16) or
+                                 ((bytes[pos + 7].toInt() and 0xFF) shl 24)
+                        if (id == "data") { offset = pos + 8; break }
+                        pos += 8 + sz + (sz and 1)
+                    }
+                    if (offset == 0) offset = 44
+                }
+
+                val nSamples = (bytes.size - offset) / 2
+                if (nSamples < 1600) {
+                    Log.e(TAG, "STT_FILE_TEST error: too few samples ($nSamples)")
+                    return@Thread
+                }
+                val pcm = ShortArray(nSamples)
+                for (i in 0 until nSamples) {
+                    val lo = bytes[offset + i * 2].toInt() and 0xFF
+                    val hi = bytes[offset + i * 2 + 1].toInt()
+                    pcm[i] = ((hi shl 8) or lo).toShort()
+                }
+
+                NativeSTTBridge.safeStartAudioCapture()
+                var i = 0
+                while (i < nSamples) {
+                    val n = minOf(3200, nSamples - i)   // 200 ms chunks
+                    NativeSTTBridge.safePushAudioPCM(pcm.copyOfRange(i, i + n), n)
+                    i += n
+                }
+                val t0 = System.currentTimeMillis()
+                val res = NativeSTTBridge.safeStopAudioCaptureAndTranscribe(lang)
+                val dt = System.currentTimeMillis() - t0
+                Log.i(TAG, "STT_FILE_TEST lang=$lang audioMs=${nSamples / 16} inferMs=$dt result=[$res]")
+            } catch (e: Throwable) {
+                Log.e(TAG, "STT_FILE_TEST error: ${e.message}")
+            }
+        }.start()
     }
 
     private fun getSelectedLangCode(): String {

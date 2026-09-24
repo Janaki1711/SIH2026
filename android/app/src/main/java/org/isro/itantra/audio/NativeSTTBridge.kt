@@ -76,6 +76,16 @@ object NativeSTTBridge {
         }
     }
 
+    fun safeSetWhisperModel(modelPath: String): Boolean {
+        if (!isLibraryLoaded) return false
+        return try {
+            setWhisperModel(modelPath)
+        } catch (e: Throwable) {
+            Log.w(TAG, "safeSetWhisperModel notice: ${e.message}")
+            false
+        }
+    }
+
     @JvmStatic
     external fun initNativeEngine(
         vadModelPath: String,
@@ -83,6 +93,9 @@ object NativeSTTBridge {
         sttDecoderPath: String,
         vocabJsonPath: String
     ): Boolean
+
+    @JvmStatic
+    external fun setWhisperModel(modelPath: String): Boolean
 
     @JvmStatic
     external fun startAudioCapture(): Boolean

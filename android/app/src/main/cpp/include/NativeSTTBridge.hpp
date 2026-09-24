@@ -8,6 +8,10 @@ extern "C" {
         JNIEnv *env, jclass clazz, jstring vadModelPath, jstring sttEncoderPath, jstring sttDecoderPath, jstring vocabJsonPath
     );
 
+    JNIEXPORT jboolean JNICALL Java_org_isro_itantra_audio_NativeSTTBridge_setWhisperModel(
+        JNIEnv *env, jclass clazz, jstring modelPath
+    );
+
     JNIEXPORT jboolean JNICALL Java_org_isro_itantra_audio_NativeSTTBridge_startAudioCapture(
         JNIEnv *env, jclass clazz
     );

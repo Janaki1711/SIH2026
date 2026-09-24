@@ -112,15 +112,21 @@ IndicSTTEngine::IndicSTTEngine(const std::string& encoderPath, const std::string
     }
 
     if (ctcDecoderPath.empty()) {
-        if (m_initError.empty()) m_initError = "Decoder path is empty.";
-        LOGE("Decoder path empty");
+        // Not fatal: the shipped encoder.onnx emits DIRECT CTC log_probs
+        // ([1, T, 5633] > 1024 branch), so the split-architecture decoder
+        // session is never invoked. Dropping the dead 23 MB asset funds the
+        // whisper model instead (see copyAssetToStorage / initNativeEngine).
+        // If an encoder ever emits hidden reps instead, transcribeBuffer
+        // returns an explicit error string for that case.
+        LOGI("CTC decoder path empty — OK (encoder emits direct log_probs).");
     } else {
         try {
             m_ctcSession = std::make_unique<Ort::Session>(m_env, ctcDecoderPath.c_str(), m_sessionOptions);
             LOGI("CTC Decoder model loaded from %s", ctcDecoderPath.c_str());
         } catch (const std::exception& e) {
-            if (m_initError.empty()) m_initError = "Decoder load failed: " + std::string(e.what());
-            LOGE("%s", m_initError.c_str());
+            // Decoder is unused by the shipped encoder; don't fail init over it.
+            LOGW("CTC Decoder load failed (non-fatal, unused): %s", e.what());
+            m_ctcSession.reset();
         }
     }
 

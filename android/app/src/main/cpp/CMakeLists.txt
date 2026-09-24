@@ -20,6 +20,33 @@ set_target_properties(onnxruntime PROPERTIES
     IMPORTED_NO_SONAME TRUE
 )
 
+# --- whisper.cpp (gate-passed STT for te/ta/kn/ml) ---
+# Pinned to the exact commit the CER gate was run against
+# (/tmp/opencode/sttlab/RESULTS.md: avg CER 0.169 vs conformer 0.368).
+# GGML CPU backend only; no examples/tests/server needed on-device.
+include(FetchContent)
+set(WHISPER_BUILD_TESTS    OFF CACHE BOOL "" FORCE)
+set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(WHISPER_BUILD_SERVER   OFF CACHE BOOL "" FORCE)
+set(WHISPER_STANDALONE     OFF CACHE BOOL "" FORCE)
+set(WHISPER_ALL_WARNINGS   OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    whispercpp
+    GIT_REPOSITORY https://github.com/ggerganov/whisper.cpp.git
+    GIT_TAG        d09f61a708f3487afa956ff578e60eae5e7a233c
+)
+FetchContent_MakeAvailable(whispercpp)
+
+# AGP builds the debug variant with CMAKE_BUILD_TYPE=Debug, which the NDK
+# compiles at -O0. That made whisper decode take 45 s for 5 s of audio
+# (vs 1.5 s optimized on the laptop). Force optimization on the
+# compute-heavy targets; the rest of the app may stay debug.
+foreach(_perf_target whisper ggml ggml-base ggml-cpu)
+    if(TARGET ${_perf_target})
+        target_compile_options(${_perf_target} PRIVATE -O2)
+    endif()
+endforeach()
+
 # Source files for Member 1 (Chhavi) Audio STT Core
 set(AUDIO_STT_SOURCES
     NativeSTTBridge.cpp
@@ -27,6 +54,7 @@ set(AUDIO_STT_SOURCES
     OboeAudioRecorder.cpp
     SileroVAD.cpp
     IndicSTTEngine.cpp
+    WhisperSTTEngine.cpp
 )
 
 # Build Shared Library libaudio_stt_core.so
@@ -35,12 +63,16 @@ add_library(
     SHARED
     ${AUDIO_STT_SOURCES}
 )
+# Same -O0 problem: buffer/AGC/UTF-8 guard loops in this lib run on every
+# utterance. Optimize them while keeping debug info (-g stays from Debug).
+target_compile_options(audio_stt_core PRIVATE -O2)
 
 # Link Libraries
 target_link_libraries(
     audio_stt_core
     oboe::oboe
     onnxruntime
+    whisper
     ${log-lib}
 )
 
