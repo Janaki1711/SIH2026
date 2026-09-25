@@ -82,6 +82,6 @@ LEFT SIDE CONTENT (65% WIDTH) — "System Architecture & Flow":
    - STT Execution: Quantized `whisper_tiny_si_q8_0.bin` (43.5 MB) (parambharat/whisper-tiny-south-indic), released already trained on south-Indic speech. Fine-tune on Kathbath/Vaani is P2 — not yet run.
 
 4. PACKET FRAMING & MESH PROTOCOL:
-   - Binary Packet Framing: [Header: 4B] | [SenderID: 8B] | [LangCode: 2B] | [MsgSeq: 4B] | [Payload: 64-128B] | [RS-FEC/CRC: 16B]
+   - Binary Packet Framing: [Wfbng hdr 40B = magic 1 | ttl 1 | seq 2 | origin 16 | target 16 | shard 2 | len 2] + [RS shard 10B] = 50 B/datagram [Measured, device 3353f694]
    - Forward Error Correction: Cauchy Reed-Solomon GF(2⁸), K=8/M=4, recovers any 4 of the 12 shards lost over noisy emergency links.
 ```
