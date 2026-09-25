@@ -43,11 +43,14 @@ class TestM1M3Integration(unittest.TestCase):
         """Validate Member 1's ONNX models, vocabularies, and dictionaries exist and are intact."""
         self.assertTrue(self.assets_dir.exists(), "Android assets directory must exist.")
         
-        # Check required model files
+        # Check required model files.
+        # ctc_decoder.onnx was removed in 46294c8 (23 MB, never loaded) and
+        # whisper_tiny_si_q8_0.bin ships instead for the te/ta/kn/ml gate —
+        # this list must track what the APK actually packages.
         required_files = [
             "silero_vad.onnx",
             "encoder.onnx",
-            "ctc_decoder.onnx",
+            "whisper_tiny_si_q8_0.bin",
             "vocab.json",
             "en_dict.txt",
             "hi_dict.txt",
@@ -57,6 +60,13 @@ class TestM1M3Integration(unittest.TestCase):
             fpath = self.assets_dir / fname
             self.assertTrue(fpath.exists(), f"Asset {fname} must exist.")
             self.assertGreater(fpath.stat().st_size, 0, f"Asset {fname} must not be empty.")
+
+        # Dropped assets must stay gone — a re-added ctc_decoder.onnx is 23 MB
+        # of dead weight in a ≤300 MB APK.
+        self.assertFalse(
+            (self.assets_dir / "ctc_decoder.onnx").exists(),
+            "ctc_decoder.onnx was removed in 46294c8 and must not return."
+        )
 
         # Check vocab coverage for 10 ISRO languages
         with open(self.assets_dir / "vocab.json", "r", encoding="utf-8") as f:
