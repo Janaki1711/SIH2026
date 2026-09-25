@@ -30,6 +30,12 @@ struct SemanticResult {
     std::vector<ExtractedEntity> extractedEntities;
     bool isFallback = false;
     bool isNegated = false;
+    // True only for decline/cancel-class negation ("do not need", "వద్దు",
+    // "बೇಡ"...). Bare absence ("no water", "నీరు లేదు") leaves this false so
+    // realize() renders the POSITIVE need instead of a "NOT required"
+    // cancellation. Absence of a resource in a disaster report means it is
+    // needed — only an explicit decline cancels.
+    bool isStrongNegation = false;
     std::string fallbackReason;
     std::vector<uint8_t> prosodyVector; // 16 bytes if present
     std::string modelBackendUsed = "DETERMINISTIC_FALLBACK"; // Clearly label backend
@@ -82,6 +88,7 @@ private:
 
     static uint32_t extractPersonCount(const std::string& text);
     static bool extractNegation(const std::string& text);
+    static bool extractStrongNegation(const std::string& text);
     static ActionCode extractActionAndIntent(const std::string& text, ActionCode& outAction);
     static HazardCode extractHazard(const std::string& text);
     static std::string detectLanguage(const std::string& text, const std::string& fallbackLang);

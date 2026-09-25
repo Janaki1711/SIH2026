@@ -902,6 +902,11 @@ class MainActivity : AppCompatActivity() {
             Log.e(TAG, "STT file test hook: ${e.message}")
         }
 
+        // Dev hook: human-less translation-pipeline verification.
+        try { runTranslateTest() } catch (e: Throwable) {
+            Log.e(TAG, "Translate test hook: ${e.message}")
+        }
+
         // Request permissions if needed
         try {
             checkAndRequestAudioPermission()
@@ -1837,9 +1842,22 @@ class MainActivity : AppCompatActivity() {
         // Deliver: cache only genuine translations (cache-poisoning guard).
         fun finish(result: String) {
             val real = isRealTranslation(result, text, sourceLang)
-            if (real) translationCache[cacheKey] = result
-            Log.i(TAG, "TRANSLATE [$sourceLang→$targetLang] real=$real: '$text' → '$result'")
-            onResult(result)
+            if (real) {
+                translationCache[cacheKey] = result
+                Log.i(TAG, "TRANSLATE [$sourceLang→$targetLang] real=true: '$text' → '$result'")
+                onResult(result)
+            } else {
+                val gloss = org.isro.itantra.translation.PivotTranslator
+                    .translate(text, sourceLang, targetLang)
+                if (gloss != null && gloss.isNotBlank() && gloss != text) {
+                    translationCache[cacheKey] = gloss
+                    Log.i(TAG, "TRANSLATE PIVOT GLOSS [$sourceLang→$targetLang]: '$text' → '$gloss'")
+                    onResult(gloss)
+                } else {
+                    Log.i(TAG, "TRANSLATE FALLBACK [$sourceLang→$targetLang]: '$text' → '${honestFallback()}'")
+                    onResult(honestFallback())
+                }
+            }
         }
 
         // One ML Kit hop between two supported language codes, with a
@@ -1868,15 +1886,28 @@ class MainActivity : AppCompatActivity() {
                 }
         }
 
-        // 0. C++ semantic engine FIRST — the designed primary path (see the
-        //    function docs above): deterministic parse→realize translation
+        // 0. Pattern & Name Protection Matcher FIRST — deterministic structural & name
+        //    transliteration across all 11 mission languages. Bypasses ML Kit model hallucinations
+        //    for introductions like "My name is X" / "ನನ್ನ ಹೆಸರು X" -> "నా పేరు X".
+        val patternMatch = org.isro.itantra.translation.PivotTranslator
+            .translatePattern(text, sourceLang, targetLang)
+        if (patternMatch != null && patternMatch.isNotBlank() && patternMatch != text) {
+            finish(patternMatch)
+            return
+        }
+
+        // 0b. C++ semantic engine — deterministic parse→realize translation
         //    across ALL 11 mission languages, including ml/or/pa for which
-        //    ML Kit has no model at all. It needs no model download, so it
-        //    also covers the window before ML Kit models are ready — the
-        //    reason early messages went out untranslated in the field demo.
-        //    Free-form text comes back unchanged and falls through to the
-        //    ML Kit cascade below.
-        if (org.isro.itantra.semantic.SemanticBridge.isLibraryLoaded) {
+        //    ML Kit has no model at all.
+        //    ENGLISH IS EXCLUDED HERE ON PURPOSE (en→all fix, Sep 2026): the
+        //    realize() templates substitute canonical intent sentences that
+        //    drop the speaker's slots ("Meet me at gate 4" → "Location info
+        //    received") and invent unmentioned items ("water rising" → "send
+        //    water AND food"). ML Kit en→xx is literal and high-quality, so
+        //    English always takes the direct ML Kit hop (branch 4) or the
+        //    token-gloss (branch 3, en→ml/or/pa) below. Non-English sources
+        //    keep the engine path untouched (south-language behavior frozen).
+        if (sourceLang != "en" && org.isro.itantra.semantic.SemanticBridge.isLibraryLoaded) {
             try {
                 val sem = org.isro.itantra.semantic.SemanticBridge
                     .translateText(text, sourceLang, targetLang)
@@ -2417,6 +2448,45 @@ class MainActivity : AppCompatActivity() {
     // Pushes the file through the exact native PTT path
     // (startAudioCapture -> pushAudioPCM -> stopAudioCaptureAndTranscribe) and
     // logs the transcript + inference time. No mic, no UI, no transmission.
+    // Dev hook for human-less translation-pipeline verification:
+    //   adb shell am start -n org.isro.itantra/.MainActivity \
+    //     --es translate_test "en|te|I need help immediately"
+    // Runs the EXACT receiver path (pattern → semantic engine → ML Kit
+    // cascade) and logs stage-by-stage results. No mic, no UI, no mesh.
+    private fun runTranslateTest() {
+        val spec = intent.getStringExtra("translate_test") ?: return
+        val parts = spec.split("|", limit = 3)
+        if (parts.size != 3) {
+            Log.e(TAG, "TRANSLATE_TEST error: expected src|tgt|text")
+            return
+        }
+        val (src, tgt, text) = parts
+        Log.i(TAG, "TRANSLATE_TEST: [$src→$tgt] '$text'")
+        Thread {
+            try {
+                val pat = org.isro.itantra.translation.PivotTranslator
+                    .translatePattern(text, src, tgt)
+                Log.i(TAG, "TRANSLATE_TEST stage0-pattern: [${pat ?: "none"}]")
+                var sem = "(skipped: source is English)"
+                if (src != "en" && org.isro.itantra.semantic.SemanticBridge.isLibraryLoaded) {
+                    sem = try {
+                        org.isro.itantra.semantic.SemanticBridge
+                            .translateText(text, src, tgt)
+                    } catch (t: Throwable) {
+                        "(semantic error: ${t.message})"
+                    }
+                }
+                Log.i(TAG, "TRANSLATE_TEST stage0b-semantic: [$sem]")
+                translateWithMlKit(text, src, tgt) { result ->
+                    val real = isRealTranslation(result, text, src)
+                    Log.i(TAG, "TRANSLATE_TEST FINAL [$src→$tgt] real=$real result=[$result]")
+                }
+            } catch (e: Throwable) {
+                Log.e(TAG, "TRANSLATE_TEST error: ${e.message}")
+            }
+        }.start()
+    }
+
     private fun runSttFileTest() {
         val relPath = intent.getStringExtra("stt_test_wav") ?: return
         val lang = intent.getStringExtra("stt_test_lang") ?: "te"
