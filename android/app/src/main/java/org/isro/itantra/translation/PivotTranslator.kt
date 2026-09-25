@@ -332,6 +332,87 @@ object PivotTranslator {
         idx
     }
 
+    private val NAME_PREFIXES: Map<String, List<String>> = mapOf(
+        "en" to listOf("my name is", "my name", "i am"),
+        "hi" to listOf("मेरा नाम", "मेरा नाम है"),
+        "ta" to listOf("என் பெயர்", "என் பேரு"),
+        "te" to listOf("నా పేరు"),
+        "mr" to listOf("माझे नाव", "माझं नाव"),
+        "bn" to listOf("আমার নাম"),
+        "kn" to listOf("ನನ್ನ ಹೆಸರು"),
+        "ml" to listOf("എന്റെ പേര്"),
+        "gu" to listOf("મારું નામ"),
+        "or" to listOf("ମୋର ନାମ"),
+        "pa" to listOf("ਮੇਰਾ ਨਾਂ", "ਮੇਰਾ ਨਾਮ")
+    )
+
+    private val TARGET_NAME_PREFIX: Map<String, String> = mapOf(
+        "en" to "My name is",
+        "hi" to "मेरा नाम",
+        "ta" to "என் பெயர்",
+        "te" to "నా పేరు",
+        "mr" to "माझे नाव",
+        "bn" to "আমার নাম",
+        "kn" to "ನನ್ನ ಹೆಸರು",
+        "ml" to "എന്റെ പേര്",
+        "gu" to "મારું નામ",
+        "or" to "ମୋର ନାମ",
+        "pa" to "ਮੇਰਾ ਨਾਂ"
+    )
+
+    private val SCRIPT_OFFSETS: Map<String, Int> = mapOf(
+        "hi" to 0x0900, "mr" to 0x0900, "bn" to 0x0980, "pa" to 0x0A00,
+        "gu" to 0x0A80, "or" to 0x0B00, "ta" to 0x0B80, "te" to 0x0C00,
+        "kn" to 0x0C80, "ml" to 0x0D00
+    )
+
+    /**
+     * Parallel Unicode offset transliteration between Indic scripts.
+     * All 10 Indian scripts share structural code point alignment in Unicode.
+     */
+    fun transliterateIndic(text: String, sourceLang: String, targetLang: String): String {
+        val srcBase = SCRIPT_OFFSETS[sourceLang] ?: return text
+        val tgtBase = SCRIPT_OFFSETS[targetLang] ?: return text
+        if (srcBase == tgtBase) return text
+
+        val sb = StringBuilder()
+        for (ch in text) {
+            val cp = ch.code
+            if (cp in srcBase..(srcBase + 0x7F)) {
+                val rel = cp - srcBase
+                val targetCp = tgtBase + rel
+                sb.append(targetCp.toChar())
+            } else {
+                sb.append(ch)
+            }
+        }
+        return sb.toString()
+    }
+
+    /**
+     * Pattern-matching translation for common conversational & disaster structures
+     * (e.g. "My name is X" / "ನನ್ನ ಹೆಸರು X" -> "నా పేరు X").
+     */
+    fun translatePattern(text: String, sourceLang: String, targetLang: String): String? {
+        if (text.isBlank() || sourceLang == targetLang) return null
+        val lower = text.lowercase().trim()
+
+        val prefixes = NAME_PREFIXES[sourceLang] ?: emptyList()
+        for (prefix in prefixes) {
+            if (lower.startsWith(prefix.lowercase())) {
+                val remainder = text.substring(prefix.length).trim()
+                val tgtPrefix = TARGET_NAME_PREFIX[targetLang] ?: "My name is"
+                val transliteratedName = if (sourceLang in SCRIPT_OFFSETS && targetLang in SCRIPT_OFFSETS) {
+                    transliterateIndic(remainder, sourceLang, targetLang)
+                } else {
+                    remainder
+                }
+                return "$tgtPrefix $transliteratedName".trim()
+            }
+        }
+        return null
+    }
+
     /**
      * Gloss [text] from [sourceLang] into [targetLang] via canonical concepts.
      *
@@ -340,6 +421,11 @@ object PivotTranslator {
      */
     fun translate(text: String, sourceLang: String, targetLang: String): String? {
         if (text.isBlank() || sourceLang == targetLang) return null
+        
+        // 1. Try structural pattern translation first
+        val patternResult = translatePattern(text, sourceLang, targetLang)
+        if (patternResult != null) return patternResult
+
         val srcIndex = INDEX[sourceLang] ?: return null
         val sb = StringBuilder()
         var last = 0
@@ -352,11 +438,21 @@ object PivotTranslator {
                 sb.append(outForm)
                 replaced++
             } else {
-                sb.append(m.value)
+                // Transliterate unrecognized tokens if both are Indic scripts
+                val tokenStr = m.value
+                if (sourceLang in SCRIPT_OFFSETS && targetLang in SCRIPT_OFFSETS) {
+                    sb.append(transliterateIndic(tokenStr, sourceLang, targetLang))
+                } else {
+                    sb.append(tokenStr)
+                }
             }
             last = m.range.last + 1
         }
         sb.append(text, last, text.length)
-        return if (replaced == 0) null else sb.toString()
+        return if (replaced == 0) {
+            if (sourceLang in SCRIPT_OFFSETS && targetLang in SCRIPT_OFFSETS) {
+                transliterateIndic(text, sourceLang, targetLang)
+            } else null
+        } else sb.toString()
     }
 }
