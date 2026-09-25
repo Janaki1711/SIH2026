@@ -148,7 +148,13 @@ class MainActivity : AppCompatActivity() {
     @Volatile private var sttDetectorActive = false
     @Volatile private var sttDetectorSettled = true
     @Volatile private var sttStartTimeMs = 0L          // when startRecording() called
-    @Volatile private var lastSttLatencyMs = 0L         // ms from mic tap to onResults
+    // ms from mic tap to transcript — set by BOTH legs: ML Kit onResults and the
+    // native whisper path. Previously only ML Kit wrote it, so te/ta/kn/ml
+    // utterances (which go native) reported STT: 0ms — a stale number, not data.
+    @Volatile private var lastSttLatencyMs = 0L
+    // Baseline for the real CPU% delta across telemetry ticks (see onCreate).
+    @Volatile private var lastTelemetryCpuTicks = 0L
+    @Volatile private var lastTelemetryCpuWallMs = 0L
     @Volatile private var isWalkieTalkieMode = true
     @Volatile private var connectedPeer: String = ""  // deduplicate connection events
     // Broadcast-only: no peer targeting. Roster maps nodeId → "lang|gps"
@@ -360,7 +366,7 @@ class MainActivity : AppCompatActivity() {
                         statusText.text = "📥 From ${displayNameFromCallsign(origin)} [$sourceLang→$targetLang]: translating…"
                     }
                     translateWithMlKit(rawText, sourceLang, targetLang) { translated ->
-                        val isReal = isRealTranslation(translated, rawText, sourceLang)
+                        val isReal = isUsableTranslation(translated, rawText, sourceLang)
                         val displayText = if (isReal) translated else rawText
                         // If translation succeeded → speak in target language
                         // If model not ready yet → speak original in English TTS (always available)
@@ -477,17 +483,33 @@ class MainActivity : AppCompatActivity() {
         Handler(Looper.getMainLooper()).post(object : Runnable {
             override fun run() {
                 try {
-                    val runtime = Runtime.getRuntime()
-                    val usedRamMb = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024)
+                    // App PSS — includes native heap (whisper/ONNX arenas).
+                    // JVM heap alone (total-free) omits it and reads far too
+                    // low next to the real footprint.
+                    val usedRamMb = (android.os.Debug.getPss() / 1024L)
 
-                    // Real CPU delta from /proc/pid/stat (background thread would be cleaner,
-                    // but this is lightweight enough for a 3s polling interval)
+                    // REAL CPU% from /proc/pid/stat — delta between this tick and
+                    // the previous one over the real wall-clock gap (~3 s). The
+                    // old code rendered `(jiffies % 22)`, i.e. a number with no
+                    // relationship to CPU use at all; that is why the telemetry
+                    // read as vague/unbelievable. First tick has no baseline yet
+                    // and reports "—" rather than inventing a figure.
                     val cpuStr = try {
                         val pid = android.os.Process.myPid()
                         val stat = java.io.File("/proc/$pid/stat").readText().split(" ")
-                        val totalTicks = (stat.getOrNull(13)?.toLongOrNull() ?: 0L) +
-                                         (stat.getOrNull(14)?.toLongOrNull() ?: 0L)
-                        "${(totalTicks % 22).coerceAtLeast(2)}%"  // jiffies mod gives variation
+                        val ticksNow = (stat.getOrNull(13)?.toLongOrNull() ?: 0L) +
+                                       (stat.getOrNull(14)?.toLongOrNull() ?: 0L)
+                        val wallNow = android.os.SystemClock.elapsedRealtime()
+                        val prevTicks = lastTelemetryCpuTicks
+                        val prevWall = lastTelemetryCpuWallMs
+                        lastTelemetryCpuTicks = ticksNow
+                        lastTelemetryCpuWallMs = wallNow
+                        val wallMs = wallNow - prevWall
+                        if (prevTicks > 0L && wallMs >= 500L) {
+                            // USER_HZ = 100 jiffies/s on Linux/Android.
+                            val pct = (ticksNow - prevTicks) * 100.0 / 100.0 / wallMs * 1000.0
+                            "${pct.toInt().coerceIn(0, 100)}%"
+                        } else "—"
                     } catch (e: Throwable) { "—" }
 
                     // Battery
@@ -905,6 +927,13 @@ class MainActivity : AppCompatActivity() {
         // Dev hook: human-less translation-pipeline verification.
         try { runTranslateTest() } catch (e: Throwable) {
             Log.e(TAG, "Translate test hook: ${e.message}")
+        }
+
+        // Dev hook: --es tts_probe "ml,or,pa,te,hi" reports what the TTS
+        // engine will really do for each locale (voice present vs silent
+        // fall back to en-IN). Gated on the extra so normal launches stay quiet.
+        try { runTtsVoiceProbe() } catch (e: Throwable) {
+            Log.e(TAG, "TTS voice probe hook: ${e.message}")
         }
 
         // Request permissions if needed
@@ -1521,6 +1550,13 @@ class MainActivity : AppCompatActivity() {
                 if (NativeSTTBridge.isLibraryLoaded) {
                     nativeMsg = NativeSTTBridge.safeStopAudioCaptureAndTranscribe(langCode)
                 }
+                // Real mic-tap → transcript latency for the native whisper path.
+                // Before this only the ML Kit onResults path (line ~1144) wrote
+                // lastSttLatencyMs, so on-device telemetry showed STT: 0ms for
+                // every te/ta/kn/ml utterance — a stale/absent number, not a
+                // measurement. sttStartTimeMs is stamped in startRecording().
+                lastSttLatencyMs = System.currentTimeMillis() - sttStartTimeMs
+                Log.i(TAG, "STT_NATIVE_RESULT lang=$langCode latency=${lastSttLatencyMs}ms")
                 val cleanMsg = nativeMsg.trim()
                 val processedMsg = convertIndicScript(cleanMsg, langCode)
                 val candidateText = when {
@@ -1802,6 +1838,48 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
+     * True for token-gloss output that is still mostly source-script — i.e.
+     * mixed-script noise rather than a translation:
+     *
+     *     "The fire department is near the fire station"
+     *       → "The തീ department is near the തീ station"
+     *
+     * PivotTranslator glosses recognised disaster concepts and copies every
+     * other word through verbatim, so partially-matching sentences come back
+     * with English words interleaved into Indic script. That is neither a
+     * translation nor an honest fallback: a Malayalam reader sees English
+     * fragments, and TTS reads the mixed string aloud as gibberish.
+     *
+     * Test: reject only when the result carries Indic script AND Latin
+     * letters dominate the Indic ones. A stray Latin proper noun inside an
+     * otherwise-Indic sentence ("എന്റെ പേര് Janaki") is correct and passes,
+     * because there the Indic letters still win.
+     *
+     * The 0x0900–0x0D7F range covers all ten Indic scripts used here
+     * (Devanagari→Malayalam: hi/mr/bn/gu/pa/or/ta/te/kn/ml).
+     */
+    private fun isMixedScriptGloss(result: String): Boolean {
+        var latin = 0
+        var indic = 0
+        for (ch in result) {
+            when {
+                ch in 'A'..'Z' || ch in 'a'..'z' -> latin++
+                ch.code in 0x0900..0x0D7F -> indic++
+            }
+        }
+        return indic > 0 && latin > indic
+    }
+
+    /**
+     * Combined gate used by every caller that decides whether to cache,
+     * display or speak a translation. Kept in one place so a new code path
+     * cannot accidentally drop the mixed-script test.
+     */
+    private fun isUsableTranslation(result: String, original: String, sourceLang: String): Boolean {
+        return isRealTranslation(result, original, sourceLang) && !isMixedScriptGloss(result)
+    }
+
+    /**
      * Async translation with English as the pivot/median language.
      * Cascade (first matching branch wins):
      *   1. Neither side has an ML Kit model (ml/or/pa ↔ ml/or/pa)
@@ -1841,7 +1919,11 @@ class MainActivity : AppCompatActivity() {
 
         // Deliver: cache only genuine translations (cache-poisoning guard).
         fun finish(result: String) {
-            val real = isRealTranslation(result, text, sourceLang)
+            // Mixed-script gloss output is not a translation — reject it here
+            // so it is neither cached nor spoken. Falls through to the gloss
+            // retry below, which applies the same test, then to the honest
+            // labelled original.
+            val real = isUsableTranslation(result, text, sourceLang)
             if (real) {
                 translationCache[cacheKey] = result
                 Log.i(TAG, "TRANSLATE [$sourceLang→$targetLang] real=true: '$text' → '$result'")
@@ -1849,12 +1931,14 @@ class MainActivity : AppCompatActivity() {
             } else {
                 val gloss = org.isro.itantra.translation.PivotTranslator
                     .translate(text, sourceLang, targetLang)
-                if (gloss != null && gloss.isNotBlank() && gloss != text) {
+                if (gloss != null && gloss.isNotBlank() && gloss != text &&
+                    !isMixedScriptGloss(gloss)) {
                     translationCache[cacheKey] = gloss
                     Log.i(TAG, "TRANSLATE PIVOT GLOSS [$sourceLang→$targetLang]: '$text' → '$gloss'")
                     onResult(gloss)
                 } else {
-                    Log.i(TAG, "TRANSLATE FALLBACK [$sourceLang→$targetLang]: '$text' → '${honestFallback()}'")
+                    Log.i(TAG, "TRANSLATE FALLBACK [$sourceLang→$targetLang]: '$text' → '${honestFallback()}'" +
+                            (if (gloss != null && isMixedScriptGloss(gloss)) " (rejected mixed-script gloss: '$gloss')" else ""))
                     onResult(honestFallback())
                 }
             }
@@ -1904,10 +1988,19 @@ class MainActivity : AppCompatActivity() {
         //    drop the speaker's slots ("Meet me at gate 4" → "Location info
         //    received") and invent unmentioned items ("water rising" → "send
         //    water AND food"). ML Kit en→xx is literal and high-quality, so
-        //    English always takes the direct ML Kit hop (branch 4) or the
-        //    token-gloss (branch 3, en→ml/or/pa) below. Non-English sources
-        //    keep the engine path untouched (south-language behavior frozen).
-        if (sourceLang != "en" && org.isro.itantra.semantic.SemanticBridge.isLibraryLoaded) {
+        //    English normally takes the direct ML Kit hop (branch 4).
+        //
+        //    ONE EXCEPTION — targets with no ML Kit model at all (ml/or/pa).
+        //    For those the only other option was the token-gloss, which
+        //    copies unmatched English words through verbatim and emits
+        //    mixed-script noise ("There is a തീ here, അയക്കുക സഹായം
+        //    ഉടൻ"). The engine is the only component that can realise a
+        //    whole sentence in ml/or/pa, so English is allowed through
+        //    exactly when tgtCode == null. Every ML-Kit-supported target
+        //    keeps the bypass, so the en→all fix is untouched; south
+        //    sources keep the engine path as before.
+        val engineAllowed = sourceLang != "en" || tgtCode == null
+        if (engineAllowed && org.isro.itantra.semantic.SemanticBridge.isLibraryLoaded) {
             try {
                 val sem = org.isro.itantra.semantic.SemanticBridge
                     .translateText(text, sourceLang, targetLang)
@@ -1996,13 +2089,13 @@ class MainActivity : AppCompatActivity() {
             // Failures return the original text or a "[lang] …" label —
             // caching those would make later messages show (and speak)
             // untranslated text as if it were translated.
-            if (isRealTranslation(translated, text, sourceLang)) {
+            if (isUsableTranslation(translated, text, sourceLang)) {
                 translationCache[cacheKey] = translated
             }
             runOnUiThread {
                 // Replace the placeholder only when a real translation exists;
                 // otherwise keep the honest "[lang] original" label on screen.
-                if (isRealTranslation(translated, text, sourceLang)) {
+                if (isUsableTranslation(translated, text, sourceLang)) {
                     val current = statusText.text.toString()
                     if (current.contains("[$sourceLang]")) {
                         val updated = current
@@ -2012,7 +2105,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 // FIX 2: Play TTS in receiver's target language once translation is ready
-                if (speakAloud && isRealTranslation(translated, text, sourceLang)) {
+                if (speakAloud && isUsableTranslation(translated, text, sourceLang)) {
                     playTTS(translated, targetLang, isAlert)
                 }
             }
@@ -2467,8 +2560,13 @@ class MainActivity : AppCompatActivity() {
                 val pat = org.isro.itantra.translation.PivotTranslator
                     .translatePattern(text, src, tgt)
                 Log.i(TAG, "TRANSLATE_TEST stage0-pattern: [${pat ?: "none"}]")
-                var sem = "(skipped: source is English)"
-                if (src != "en" && org.isro.itantra.semantic.SemanticBridge.isLibraryLoaded) {
+                // Mirrors the engine gate in translateWithMlKit: English is
+                // allowed through only when the target has no ML Kit model
+                // (ml/or/pa). Otherwise the stage log would claim "skipped"
+                // while the real path ran the engine (or vice versa).
+                val engineAllowed = src != "en" || mlkitLanguageCode(tgt) == null
+                var sem = if (engineAllowed) "(not run)" else "(skipped: English source, target has ML Kit model)"
+                if (engineAllowed && org.isro.itantra.semantic.SemanticBridge.isLibraryLoaded) {
                     sem = try {
                         org.isro.itantra.semantic.SemanticBridge
                             .translateText(text, src, tgt)
@@ -2478,11 +2576,46 @@ class MainActivity : AppCompatActivity() {
                 }
                 Log.i(TAG, "TRANSLATE_TEST stage0b-semantic: [$sem]")
                 translateWithMlKit(text, src, tgt) { result ->
-                    val real = isRealTranslation(result, text, src)
+                    val real = isUsableTranslation(result, text, src)
                     Log.i(TAG, "TRANSLATE_TEST FINAL [$src→$tgt] real=$real result=[$result]")
                 }
             } catch (e: Throwable) {
                 Log.e(TAG, "TRANSLATE_TEST error: ${e.message}")
+            }
+        }.start()
+    }
+
+    /**
+     * Dev hook: --es tts_probe "ml,or,pa,te,hi"
+     *
+     * Logs one TTS_VERDICT line per language. Android's setLanguage() can
+     * fail quietly and we then speak English for an Indic message — the
+     * receiver hears the wrong language and nothing in the log says so.
+     * This makes the verdict explicit instead of guessed from audio.
+     *
+     * The engine initialises asynchronously, so poll briefly for readiness
+     * rather than reporting "not ready" on a cold start.
+     */
+    private fun runTtsVoiceProbe() {
+        val spec = intent.getStringExtra("tts_probe") ?: return
+        val langs = spec.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        Log.i(TAG, "TTS_PROBE requested for $langs")
+        Thread {
+            val mgr = indicTTSManager
+            if (mgr == null) {
+                Log.e(TAG, "TTS_VERDICT error: IndicTTSManager not constructed")
+                return@Thread
+            }
+            // Cold start: TextToSpeech onInit can take a few seconds.
+            val deadline = System.currentTimeMillis() + 20_000
+            while (System.currentTimeMillis() < deadline) {
+                val first = try { mgr.probeVoice(langs.first()) } catch (t: Throwable) { "error: ${t.message}" }
+                if (!first.startsWith("TTS_NOT_READY")) break
+                Thread.sleep(500)
+            }
+            for (lang in langs) {
+                val v = try { mgr.probeVoice(lang) } catch (t: Throwable) { "error: ${t.message}" }
+                Log.i(TAG, "TTS_VERDICT lang=$lang $v")
             }
         }.start()
     }
@@ -2592,8 +2725,9 @@ class MainActivity : AppCompatActivity() {
     }
 
 
-    // Last measured CPU% — updated on a background thread, read on UI thread
-    @Volatile private var lastCpuPct: Int = 0
+    // Last measured CPU% — updated on a background thread, read on UI thread.
+    // -1 = "no sample yet" so the panel shows "—" instead of a fake 0%.
+    @Volatile private var lastCpuPct: Int = -1
 
     private fun updateDiagnosticsPanel(
         diagCpu: android.widget.TextView?,
@@ -2611,25 +2745,40 @@ class MainActivity : AppCompatActivity() {
                 // ── CPU: delta measurement between two /proc/pid/stat snapshots ──
                 val pid = android.os.Process.myPid()
                 try {
+                    // Wall time comes from our own clock, NOT /proc/uptime:
+                    // that file is EACCES for untrusted apps, and the old code
+                    // read it in the same try block, so the whole measurement
+                    // threw every time and the chip sat on "—" forever.
+                    // /proc/<self>/stat stays readable (own pid).
                     val stat1 = java.io.File("/proc/$pid/stat").readText().split(" ")
-                    val uptime1 = java.io.File("/proc/uptime").readText().split(" ")[0].toDoubleOrNull() ?: 0.0
+                    val wall1 = android.os.SystemClock.elapsedRealtime()
                     val u1 = (stat1.getOrNull(13)?.toLongOrNull() ?: 0L) + (stat1.getOrNull(14)?.toLongOrNull() ?: 0L)
                     Thread.sleep(500)   // 500ms window on BG thread — safe, accurate
                     val stat2 = java.io.File("/proc/$pid/stat").readText().split(" ")
-                    val uptime2 = java.io.File("/proc/uptime").readText().split(" ")[0].toDoubleOrNull() ?: 0.0
+                    val wall2 = android.os.SystemClock.elapsedRealtime()
                     val u2 = (stat2.getOrNull(13)?.toLongOrNull() ?: 0L) + (stat2.getOrNull(14)?.toLongOrNull() ?: 0L)
-                    val cpuDelta = (u2 - u1).toDouble() / 100.0
-                    val timeDelta = uptime2 - uptime1
-                    if (timeDelta > 0.01) {
-                        lastCpuPct = ((cpuDelta / timeDelta) * 100.0).toInt().coerceIn(0, 99)
+                    val cpuSec = (u2 - u1).toDouble() / 100.0     // USER_HZ = 100 ticks/s
+                    val wallSec = (wall2 - wall1).toDouble() / 1000.0
+                    if (wallSec > 0.01) {
+                        lastCpuPct = ((cpuSec / wallSec) * 100.0).toInt().coerceIn(0, 99)
+                        Log.d(TAG, "DIAG_CPU ticks=$u1→$u2 wallMs=${wall2 - wall1} pct=$lastCpuPct")
                     }
-                } catch (e: Throwable) { /* keep previous value */ }
+                } catch (e: Throwable) {
+                    // Previously silent, which left the chip stuck on "—" with no
+                    // way to tell a measurement from a failure. Log it.
+                    Log.w(TAG, "DIAG_CPU measurement failed: ${e.javaClass.simpleName}: ${e.message}")
+                }
 
                 // ── RAM ──
-                val am = getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager
-                val mi = android.app.ActivityManager.MemoryInfo()
-                am.getMemoryInfo(mi)
-                val ramUsed = ((mi.totalMem - mi.availMem) / (1024 * 1024)).toInt()
+                // App PSS (proportional set size): OUR process's real footprint
+                // including native heap (whisper/ONNX arenas, codecs).
+                // The old code reported (totalMem - availMem) — device-wide
+                // RAM in use — under a label implying app usage, so the chip
+                // read ~5.8 GB for a ~150 MB app. That mismatch is exactly
+                // why the numbers looked vague.
+                val ramUsed = try {
+                    (android.os.Debug.getPss() / 1024L).toInt()   // KB → MB
+                } catch (e: Throwable) { -1 }
 
                 // ── Battery ──
                 val battIntent = registerReceiver(null,
@@ -2662,8 +2811,10 @@ class MainActivity : AppCompatActivity() {
 
                 // ── Post all UI writes back to main thread ──
                 runOnUiThread {
-                    diagCpu?.text     = "${cpuNow}%"
-                    diagRam?.text     = "${ramUsed}MB"
+                    // "—" until a real sample exists: a 0% before the first
+                    // 500 ms window closes was a fake zero, not a measurement.
+                    diagCpu?.text     = if (cpuNow >= 0) "${cpuNow}%" else "—"
+                    diagRam?.text     = if (ramUsed >= 0) "${ramUsed}MB" else "—"
                     diagBattery?.text = "$batPct%${if (isCharging) " ⚡" else ""}"
                     diagBattery?.setTextColor(android.graphics.Color.parseColor(batColor))
                     diagTxRx?.text    = "$tx/$rx"
