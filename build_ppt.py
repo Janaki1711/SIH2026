@@ -202,7 +202,7 @@ def flow_arrow(x, y, w, h):
 
 def _flow_strip(y):
     steps = [("Speech", TEAL), ("VAD", "3A86FF"), ("STT", SAFFRON),
-             ("≤38B Token", "2BA84A"), ("Mesh Tx", "8338EC"),
+             ("UTF-8 Text", "2BA84A"), ("Mesh Tx", "8338EC"),
              ("TTS", "3A86FF"), ("Voice", TEAL)]
     bw, gap, h = int(1.5 * I), int(0.28 * I), int(0.72 * I)
     x = int(0.5 * I)
@@ -232,9 +232,9 @@ s2 = (
     + shape(int(4.6 * I), int(2.85 * I), int(3.95 * I), int(2.35 * I),
             [P_([T("OUR SOLUTION", 14, True, TEAL)])]
             + [P_([T("•  " + t, 11, False, WHITE)]) for t in [
-                "Silero pause-detect → dual-engine STT → sentence formation.",
-                "Speech → ≤38 B token, ≈0.5 kbps: one UDP packet.",
-                "Wi-Fi Direct / BT mesh; ChaCha20 + RS-FEC repair.",
+                "Silero VAD gate → PTT release → dual-engine STT (whisper/conformer).",
+                "Speech → UTF-8 transcript: 42 B vs 48,000 B PCM ≈1,100× less data.",
+                "Wi-Fi Direct / BT mesh; ChaCha20-Poly1305 + RS-FEC (K=8/M=4).",
                 "Receiver TTS in own language; SOS siren override.",
                 "PTT walkie-talkie / phone / SOS; 100% OSS, zero cloud."]],
             fill=CARD, line=TEAL)
@@ -248,11 +248,14 @@ s2 = (
                 "Single-model STT fails the south (CER 0.45–0.61)."]],
             fill=CARD, line=SAFFRON)
     + shape(int(0.5 * I), int(5.3 * I), int(12.33 * I), int(1.55 * I),
-            [P_([T("KEY VALUE PROPOSITION  •  ≈256–512× less RF (0.5 kbps msg vs 128–256 kbps raw)  •  "
-                    "CER 0.03–0.34  •  467 + 15 tests green  •  APK 270 MB  •  CPU-only", 12, True, SAFFRON)]),
-             P_([T("★ Fine-tuning roadmap: ", 11, True, WHITE),
-                 T("P1 shipped (south-indic)  →  P2 Kathbath 1,700 h + Vaani 7,000 h  →  "
-                   "P3 synthetic disaster vocabulary", 11, False, WHITE)])],
+            [P_([T("KEY VALUE PROPOSITION  •  42 B transcript vs 48,000 B PCM ≈1,100× less data  •  "
+                    "CER 0.03–0.34  •  467 + 15 tests green  •  APK 270 MB  •  CPU-only", 12, True, SAFFRON),
+                 T("   [all: Measured, device 3353f694, Sep 2026, India]", 10, False, WHITE)]),
+             P_([T("Wire [Measured]: ", 11, True, WHITE),
+                 T("50 B/datagram × 12 FEC shards = 6,600 B TX/msg (11 broadcast dests) ≈7× vs PCM; "
+                   "≤38 B semantic frame engine-tested (18–24 B) but NOT wired into TX — raw UTF-8 since b51be73. "
+                   "Fine-tune [Target, not yet run]: P1 shipped (south-indic) → P2 Kathbath 1,700 h + Vaani 7,000 h "
+                   "(AI4Bharat/ARTPARK, India) → P3 synthetic disaster vocabulary", 11, False, WHITE)])],
             fill="2A1A08", line=SAFFRON)
     + footer(2)
 )
@@ -262,7 +265,8 @@ s3 = (
     header("TECHNICAL APPROACH", "Sender → mesh → receiver")
     + shape(int(0.5 * I), TOP, int(12.33 * I), int(0.95 * I),
             [P_([T("16 kHz PCM  →  Silero VAD  →  Hybrid STT (Conformer / Whisper)  →  "
-                    "Semantic token ≤38 B  →  ChaCha20 + RS-FEC  →  UDP / Wi-Fi Direct / BT  →  "
+                    "UTF-8 transcript  →  ChaCha20-Poly1305 + RS-FEC (K=8, M=4)  →  "
+                    "UDP / Wi-Fi Direct / BT  →  "
                     "TTS  →  Voice / Siren",
                     13, True, WHITE)], align="ctr")],
             fill=CARD, line=TEAL)
@@ -274,7 +278,7 @@ s3 = (
                 ("AI on CPU only:",
                  "Silero VAD 2.3 MB + Conformer INT8 + whisper.cpp Q8_0; -O2, 4 threads."),
                 ("Store + forward:",
-                 "Protobuf frames, Room/SQLite audit log, background queue."),
+                 "hand-rolled binary frames, Room/SQLite audit log, background queue."),
             ], size=14),
             fill=CARD, line="24344F")
     + shape(COL_R["x"], int(3.25 * I), COL_R["w"], int(3.5 * I),
@@ -282,10 +286,10 @@ s3 = (
             + bullets([
                 ("Modes:",
                  "PTT walkie-talkie • normal chat • SOS siren broadcast."),
-                ("38-B frame:",
-                 "header (node, lang, priority, time) + payload + CRC32."),
+                ("Packet:",
+                 "40 B header (magic, ttl, seq, callsigns, shard idx) + RS shard; AEAD tag, no CRC."),
                 ("Survivability:",
-                 "RS(255,223) burst-loss recovery; Huffman tier; fragmentation."),
+                 "Cauchy RS GF(2⁸) K=8/M=4 — recovers any 4 of 12 shards lost."),
             ], size=14),
             fill=CARD, line="24344F")
     + footer(3)
@@ -299,25 +303,30 @@ s4 = (
             + bullets([
                 ("467 backend + 15 integration tests green;",
                  "Sep 2026 run (10 skipped); transport 4/4."),
-                ("≤38 B payload (code MAX_FRAME_SIZE), ≈0.5 kbps/msg;",
-                 "Dravidian CER 0.05–0.34; hi 0.03."),
-                ("APK 270 MB (≤300 cap);",
-                 "device 3353f694 ADB-verified; CPU-only, power draw Not Yet Tested."),
-                ("Scales:",
-                 "2-node PTT → 10-node team → multi-hop cluster."),
+                ("TX measured on 3353f694: 42 B transcript",
+                 "→ 50 B/datagram × 12 FEC shards = 6,600 B/msg (11 broadcast dests) "
+                 "vs 48,000 B PCM ≈7× wire / ≈1,100× at payload."),
+                ("≤38 B frame engine-tested (18–24 B) but NOT in TX;",
+                 "raw UTF-8 sent since b51be73 — semantic codes fabricated speech."),
+                ("CER 0.03–0.34 [Measured, STT_GATE_RESULTS.md, Sep 2026];",
+                 "APK 270 MB (≤300 cap); CPU-only, power draw Not Yet Tested."),
+                ("Scales [Target]:",
+                 "2-node PTT → 10-node team → multi-hop; multi-node Not Yet Tested."),
             ], size=13),
             fill=CARD, line="24344F")
     + shape(COL_R["x"], TOP, COL_R["w"], int(4.6 * I),
             [P_([T("RISKS → FIXES", 13, True, TEAL)], spaceAfter=150)]
             + bullets([
+                ("TX amplification [Measured] →",
+                 "11 broadcast dests × 12 shards = 6.6 kB/msg; fan-out de-dup open."),
+                ("Pause-trigger sentences [Target] →",
+                 "not built; PTT release + 10 s silence auto-stop today."),
                 ("Small RAM phones →",
                  "INT8/Q8_0 models + lazy load (gated langs only)."),
                 ("Dialect errors →",
                  "P2 fine-tune on Kathbath + Vaani corpora."),
-                ("Packet loss →",
-                 "RS-FEC parity + retries + fragmentation."),
-                ("Collisions / noise →",
-                 "CSMA/CA channel lock; VAD + noise gate pre-STT."),
+                ("Packet loss / collisions →",
+                 "Cauchy RS K=8/M=4 + CSMA/CA channel lock; VAD noise gate."),
             ], size=13),
             fill=CARD, line="24344F")
     + footer(4)
@@ -343,7 +352,7 @@ s5 = (
                 ("Privacy:",
                  "voice never leaves the phone; open-source auditable stack."),
                 ("Green:",
-                 "≈256–512× less RF (0.5 kbps msg vs 128–256 kbps raw); longer life for existing handsets."),
+                 "≈1,100× less data at payload (42 B vs 48,000 B PCM); wire 6.6 kB/msg incl. FEC; longer handset life."),
                 ("Atmanirbhar:",
                  "indigenous stack, works through total grid/internet blackout."),
             ], size=14),
@@ -361,7 +370,7 @@ s6 = (
                 "AI4Bharat IndicConformer + Kathbath (IIT-M).",
                 "ARTPARK-Vaani 7,000 h Indic corpus (IISc) — P2 tuning data.",
                 "parambharat/whisper-tiny-south-indic (HF) + whisper.cpp.",
-                "Silero VAD — speech gating pre-STT.",
+                "snakers4/silero-vad — speech gating pre-STT; no version string in shipped ONNX.",
             ], size=13),
             fill=CARD, line="24344F")
     + shape(COL_R["x"], TOP, COL_R["w"], int(4.6 * I),
@@ -369,7 +378,7 @@ s6 = (
             + bullets([
                 "MarketsandMarkets, Critical Communications, Global, 2024: $18.4B (2024) → $34.8B (2030), 11.2% CAGR.",
                 "TRAI Performance Indicators, India, 2024: ~1.19B wireless subscribers (Est., unverified here).",
-                "iTantra audit, Sep 2026: 467 backend + 15 integration tests green; ≤38 B payload.",
+                "iTantra audit, Sep 2026: 467 backend + 15 integration tests green; TX path measured 50 B/datagram × 12 FEC shards.",
                 "STT_GATE_RESULTS.md, Sep 2026: laptop CER gate + on-device parity.",
             ], size=13),
             fill=CARD, line="24344F")

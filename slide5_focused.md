@@ -24,7 +24,7 @@
 │  ┌─────────────────────────────────────────────────────────────┐  │    helmet radios, and IoT emergency beacons.      │  │
 │  │ 💰 Economic & Administrative Impact                         │  │                                                   │  │
 │  │ Replaces dedicated radio hardware w/ field phones;          │  │  • Defense-Grade Security Integration:            │  │
-│  │ 100x bandwidth savings (32 kB/s -> 0.32 kB/s text payload). │  │    Integrate Hardware Security Module (HSM) keys  │  │
+│  │ 1,100x less data at payload (42 B vs 48,000 B PCM).         │  │    Integrate Hardware Security Module (HSM) keys  │  │
 │  └─────────────────────────────────────────────────────────────┘  │    for tactical military battlefield operations.  │  │
 │  ┌─────────────────────────────────────────────────────────────┐  │                                                   │  │
 │  │ 🔒 Ethical & Data Privacy Impact                           │  │  • National Disaster Voice Standard:             │  │
@@ -58,7 +58,7 @@ LEFT COLUMN (50% WIDTH) — "IMPACTS" (Visual Badge Cards):
 
 3. Economic & Administrative Impact:
    - Replaces dedicated satellite/VHF radio hardware with existing Android handsets. Unit prices Not Yet Tested — do not print $ figures.
-   - 100x payload bandwidth compression (32 kB/s raw audio -> 0.32 kB/s text payload) enables low-bitrate channel transmission.
+   - ≈1,100× less data at payload (42 B vs 48,000 B PCM) enables transmission over low-bitrate and congested channels [Measured, device 3353f694, Sep 2026].
 
 4. Ethical & Data Privacy Impact:
    - 100% on-device edge AI execution ensures raw audio never leaves the user's handset or streams to cloud servers.

@@ -14,7 +14,7 @@
 │  │ ➔ Solution: 8-bit Model Quantization + C++ Native Execution │  │  │ • Target Hardware: Android 8.0+ budget      │  │
 │  │                                                             │  │  │   handsets (price N/Y/T).                   │  │
 │  │ Risk: Packet Loss over Wireless Emergency Links             │  │  │ • CPU Usage: live in-app diag panel         │  │
-│  │ ➔ Solution: Reed-Solomon RS(255,223) FEC + UDP Retry Queue  │  │  │   Not Yet Tested as an average.             │  │
+│  │ ➔ Solution: Cauchy RS K=8/M=4 FEC + broadcast retry         │  │  │   Not Yet Tested as an average.             │  │
 │  │                                                             │  │  │ • Power Draw: Not Yet Tested.               │  │
 │  │ Risk: Name Distortion Across Languages                      │  │  │   No mA figure printed.                     │  │
 │  │ ➔ Solution: PivotTranslator Parallel Indic Unicode Engine   │  │  │ • RAM: app PSS, live in panel.              │  │
@@ -26,9 +26,9 @@
 │  BOTTOM-LEFT CARD: EMPIRICAL        │  PROVEN DATASETS & SPECS    │  ┌─────────────────────────────────────────────┐  │
 │  FIELD MEASUREMENTS                 │  • Kathbath (1,700 hrs)     │  │ • Capex: replaces radio hardware            │  │
 │  ┌────────────────────────────────┐ │  • Vaani (7,000 hrs)        │  │   with existing handsets; N/Y/T.            │  │
-│  │ • STT CER: 0.03–0.34           │ │  • Silero VAD (2.3 MB)      │  │ • Opex Savings: 100x payload compression    │  │
-│  │ • Decode 0.4–4.4 s / 3.0 s     │ │  • Android Oboe NDK         │  │   (32 kB/s -> 0.32 kB/s text payload).      │  │
-│  │ • Payload ≤38 B ≈0.5 kbps      │ │  • ChaCha20-Poly1305 AEAD   │  │ • Market Size: $18.4 Billion in 2024        │  │
+│  │ • STT CER: 0.03–0.34           │ │  • Silero VAD (2.3 MB)      │  │ • Opex Savings: 1,100x less data            │  │
+│  │ • Decode 0.4–4.4 s / 3.0 s     │ │  • Android Oboe NDK         │  │   (42 B vs 48,000 B PCM, 1,100x).      │       │
+│  │ • 42 B text / 50 B wire        │ │  • ChaCha20-Poly1305 AEAD   │  │ • Market Size: $18.4 Billion in 2024        │  │
 │  │ • STT Model Footprint: 43.5 MB │ │  • Wi-Fi Direct Mesh        │  │   ($34.8 Billion by 2030 @ 11.2% CAGR).     │  │
 │  │ • Mesh latency <350 ms         │ │                             │  │ • Revenue Streams: B2G NDRF/Defense, B2B    │  │
 │  │ • CPU/power/RF/WER: N/Y/T      │ │                             │  │   Mining/Energy, OEM SDK, Support AMC.      │  │
@@ -53,7 +53,7 @@ Format cleanly as Risk ➔ Mitigation blocks:
 - Risk: Limited Memory & CPU on Budget Mobile Hardware
   ➔ Mitigation: 8-bit Model Quantization + ONNX Runtime C++ Native Execution.
 - Risk: High Packet Loss & RF Interference over Wireless Links
-  ➔ Mitigation: Reed-Solomon RS(255,223) Error Correction (recovers 16 lost bytes/packet) + UDP Retry Queue.
+  ➔ Mitigation: Cauchy Reed-Solomon GF(2⁸) FEC, K=8/M=4 (recovers any 4 of 12 shards lost) + broadcast retransmission.
 - Risk: Distortion of Proper Names Across Indian Languages
   ➔ Mitigation: Custom `PivotTranslator` Parallel Indic Unicode Script Engine (0x0C80 ➔ 0x0C00).
 - Risk: Channel Collisions & Overlap in Multi-Node Mesh
@@ -73,20 +73,20 @@ What is actually measured, and how:
 - STT model disk footprint: 43.5 MB (whisper_tiny_si_q8_0.bin, q8_0) + 197 MB conformer [Measured, APK assets].
 - VAD model disk footprint: 2.3 MB ONNX [Measured, assets/silero_vad.onnx = 2,327,524 B].
 - Mesh transport latency: <350 ms end-to-end [Measured, ADB benchmark, device 3353f694] — transport only, excludes STT/TTS.
-- Payload: ≤38 B frame, ≈0.5 kbps/msg [Measured, packet capture logs on UDP mesh].
+- TX path: 42 B transcript → 50 B/datagram × 12 FEC shards = 6,600 B/msg (11 broadcast dests) vs 48,000 B PCM ≈7× wire / ≈1,100× payload [Measured, ADB logcat, device 3353f694, Sep 2026]. ≤38 B frame engine-tested (18–24 B) but NOT in TX since b51be73.
 - CPU load, power draw, P2P RF range (80–120 m), aggregate WER: Not Yet Tested. Do NOT print numbers for these.
 
 BOTTOM-MIDDLE CARD — "Proven Datasets & Frameworks":
-- Fine-Tuned Whisper-Tiny ML Model
-- Kathbath (1,700 hrs) + Vaani (7,000 hrs) Speech Datasets
-- Silero VAD v4 Engine
+- Whisper-Tiny ML Model (parambharat release, south-Indic trained)
+- Kathbath (1,700 h) + Vaani (7,000 h) corpora — P2 fine-tune input, not yet run
+- Silero VAD (2,327,524 B; 512-sample = 32 ms chunks; version not stated in ONNX)
 - Android Oboe Low-Latency NDK
 - ChaCha20-Poly1305 AEAD Encryption Engine
 - Wi-Fi Direct P2P Protocol
 
 BOTTOM-RIGHT CARD (40% WIDTH) — "Economic Approach & Viability":
 - Capex Reduction: replaces dedicated satellite/VHF radios with existing Android handsets. Unit prices Not Yet Tested — do NOT print $ figures.
-- Opex Savings: 100x payload compression cuts transmission data volume from 32 kB/s to 0.32 kB/s.
+- Opex Savings: ≈1,100× less data at payload (42 B transcript vs 48,000 B PCM); wire incl. RS-FEC ≈7× [Measured, device 3353f694].
 - Critical Communications Market: $18.4 Billion in 2024 ($34.8 Billion by 2030 at 11.2% CAGR; Source: MarketsandMarkets 2024).
 - Revenue Streams:
   1. B2G Government Procurement: Custom deployment for NDRF, Police, and Defense.
