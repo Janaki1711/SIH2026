@@ -219,7 +219,7 @@ std::string TranslationBridge::realizeEnglish(const semantic::SemanticResult& re
     std::ostringstream oss;
     std::string loc = res.location.canonicalName.empty() ? "" : res.location.canonicalName;
 
-    if (res.isNegated && res.isStrongNegation) {
+    if (res.isNegated) {
         if (res.intent == semantic::ActionCode::EVACUATE) {
             oss << "Do NOT evacuate";
             if (!loc.empty()) oss << " " << loc;
@@ -375,7 +375,7 @@ std::string TranslationBridge::realizeHindi(const semantic::SemanticResult& res)
     std::ostringstream oss;
     std::string loc = getTargetLocationName(res.location.geoId, "hi");
 
-    if (res.isNegated && res.isStrongNegation) {
+    if (res.isNegated) {
         if (res.intent == semantic::ActionCode::EVACUATE) {
             if (!loc.empty()) oss << loc << " को खाली मत करो।";
             else oss << "क्षेत्र को खाली मत करो।";
@@ -491,7 +491,7 @@ std::string TranslationBridge::realizeGujarati(const semantic::SemanticResult& r
     std::string loc = getTargetLocationName(res.location.geoId, "gu");
     std::ostringstream oss;
 
-    if (res.isNegated && res.isStrongNegation) {
+    if (res.isNegated) {
         if (res.intent == semantic::ActionCode::EVACUATE) {
             if (!loc.empty()) oss << loc << " ખાલી કરશો નહીં.";
             else oss << "વિસ્તાર ખાલી કરશો નહીં.";
@@ -588,7 +588,7 @@ std::string TranslationBridge::realizeMarathi(const semantic::SemanticResult& re
     std::string loc = getTargetLocationName(res.location.geoId, "mr");
     std::ostringstream oss;
 
-    if (res.isNegated && res.isStrongNegation) {
+    if (res.isNegated) {
         if (res.intent == semantic::ActionCode::EVACUATE) {
             if (!loc.empty()) oss << loc << " परिसर रिकामा करू नका.";
             else oss << "परिसर रिकामा करू नका.";
@@ -685,7 +685,7 @@ std::string TranslationBridge::realizeKannada(const semantic::SemanticResult& re
     std::string loc = getTargetLocationName(res.location.geoId, "kn");
     std::ostringstream oss;
 
-    if (res.isNegated && res.isStrongNegation) {
+    if (res.isNegated) {
         if (res.intent == semantic::ActionCode::EVACUATE) {
             if (!loc.empty()) oss << loc << " ಪ್ರದೇಶವನ್ನು ಖಾಲಿ ಮಾಡಬೇಡಿ.";
             else oss << "ಪ್ರದೇಶವನ್ನು ಖಾಲಿ ಮಾಡಬೇಡಿ.";
@@ -782,7 +782,7 @@ std::string TranslationBridge::realizeMalayalam(const semantic::SemanticResult& 
     std::string loc = getTargetLocationName(res.location.geoId, "ml");
     std::ostringstream oss;
 
-    if (res.isNegated && res.isStrongNegation) {
+    if (res.isNegated) {
         if (res.intent == semantic::ActionCode::EVACUATE) {
             if (!loc.empty()) oss << loc << " പ്രദേശം ഒഴിപ്പിക്കരുത്.";
             else oss << "പ്രദേശം ഒഴിപ്പിക്കരുത്.";
@@ -879,7 +879,7 @@ std::string TranslationBridge::realizeTamil(const semantic::SemanticResult& res)
     std::string loc = getTargetLocationName(res.location.geoId, "ta");
     std::ostringstream oss;
 
-    if (res.isNegated && res.isStrongNegation) {
+    if (res.isNegated) {
         if (res.intent == semantic::ActionCode::EVACUATE) {
             if (!loc.empty()) oss << loc << " பகுதியிலிருந்து வெளியேற வேண்டாம்.";
             else oss << "வெளியேற வேண்டாம்.";
@@ -976,7 +976,7 @@ std::string TranslationBridge::realizeTelugu(const semantic::SemanticResult& res
     std::string loc = getTargetLocationName(res.location.geoId, "te");
     std::ostringstream oss;
 
-    if (res.isNegated && res.isStrongNegation) {
+    if (res.isNegated) {
         if (res.intent == semantic::ActionCode::EVACUATE) {
             if (!loc.empty()) oss << loc << " ప్రాంతాన్ని ఖాళీ చేయవద్దు.";
             else oss << "ఖాళీ చేయవద్దు.";
@@ -1073,7 +1073,7 @@ std::string TranslationBridge::realizeOdia(const semantic::SemanticResult& res) 
     std::string loc = getTargetLocationName(res.location.geoId, "or");
     std::ostringstream oss;
 
-    if (res.isNegated && res.isStrongNegation) {
+    if (res.isNegated) {
         if (res.intent == semantic::ActionCode::EVACUATE) {
             if (!loc.empty()) oss << loc << " ଖାଲି କରନ୍ତୁ ନାହିଁ।";
             else oss << "ସ୍ଥାନ ଖାଲି କରନ୍ତୁ ନାହିଁ।";
@@ -1170,7 +1170,7 @@ std::string TranslationBridge::realizeBengali(const semantic::SemanticResult& re
     std::string loc = getTargetLocationName(res.location.geoId, "bn");
     std::ostringstream oss;
 
-    if (res.isNegated && res.isStrongNegation) {
+    if (res.isNegated) {
         if (res.intent == semantic::ActionCode::EVACUATE) {
             if (!loc.empty()) oss << loc << " এলাকা খালি করবেন না।";
             else oss << "এলাকা খালি করবেন না।";
@@ -1269,7 +1269,7 @@ std::string TranslationBridge::realizePunjabi(const semantic::SemanticResult& re
     std::string loc = getTargetLocationName(res.location.geoId, "pa");
     std::ostringstream oss;
 
-    if (res.isNegated && res.isStrongNegation) {
+    if (res.isNegated) {
         if (res.intent == semantic::ActionCode::EVACUATE) {
             if (!loc.empty()) oss << loc << " ਖਾਲੀ ਨਾ ਕਰੋ.";
             else oss << "ਇਲਾਕਾ ਖਾਲੀ ਨਾ ਕਰੋ.";

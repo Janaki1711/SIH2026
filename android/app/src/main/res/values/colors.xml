@@ -1,0 +1,17 @@
+<resources>
+    <color name="itantra_navy">#142A3B</color>
+    <color name="itantra_blue">#1769AA</color>
+    <color name="itantra_blue_dark">#12518A</color>
+    <color name="itantra_blue_soft">#EAF2F8</color>
+    <color name="itantra_green">#19823B</color>
+    <color name="itantra_green_soft">#EAF4EC</color>
+    <color name="itantra_orange">#E97817</color>
+    <color name="itantra_orange_soft">#FFF2E5</color>
+    <color name="itantra_background">#F4F6F8</color>
+    <color name="itantra_surface">#FFFFFF</color>
+    <color name="itantra_border">#D8E0E7</color>
+    <color name="itantra_text">#1B2B38</color>
+    <color name="itantra_text_secondary">#536575</color>
+    <color name="itantra_muted">#758594</color>
+    <color name="itantra_error">#B42318</color>
+</resources>

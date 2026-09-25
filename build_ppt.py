@@ -303,9 +303,10 @@ s4 = (
             + bullets([
                 ("467 backend + 15 integration tests green;",
                  "Sep 2026 run (10 skipped); transport 4/4."),
-                ("TX measured on 3353f694: 42 B transcript",
-                 "→ 50 B/datagram × 12 FEC shards = 6,600 B/msg (11 broadcast dests) "
-                 "vs 48,000 B PCM ≈7× wire / ≈1,100× at payload."),
+                ("TX on 3353f694 (42 B text):",
+                 "50 B/datagram × 12 FEC shards = 6,600 B/msg (11 broadcast dests) "
+                 "vs 48,000 B PCM → ≈7× wire, ≈1,100× payload "
+                 "(English; Indic ≈3 B/char → 500–800×)."),
                 ("≤38 B frame engine-tested (18–24 B) but NOT in TX;",
                  "raw UTF-8 sent since b51be73 — semantic codes fabricated speech."),
                 ("CER 0.03–0.34 [Measured, STT_GATE_RESULTS.md, Sep 2026];",

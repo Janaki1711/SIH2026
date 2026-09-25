@@ -38,241 +38,81 @@ std::string TinyMLAgent::detectLanguage(const std::string& text, const std::stri
     return "en";
 }
 
-namespace {
-
-// Word-boundary test for keyword matching (UTF-8 safe, byte-level).
-// A match at [pos, pos+len) is a whole word only when both sides are a
-// delimiter: start/end of string, ASCII whitespace/punctuation, or an
-// Indic danda (U+0964/U+0965). Any ASCII letter/digit or any other
-// non-ASCII codepoint (Indic letters AND vowel signs) continues a word.
-// This stops "ಇಲ್ಲ" matching inside "ಇಲ್ಲಿ", "not" inside "notification",
-// "stop" inside "stoppage", and "cancel" inside "cancellation".
-bool isMarkerDelimBefore(const std::string& s, size_t pos) {
-    if (pos == 0) return true;
-    unsigned char c = static_cast<unsigned char>(s[pos - 1]);
-    if (c < 0x80) return !std::isalnum(c);
-    return false;  // previous char is non-ASCII: part of a longer word
-}
-
-bool isMarkerDelimAfter(const std::string& s, size_t end) {
-    if (end >= s.size()) return true;
-    unsigned char c = static_cast<unsigned char>(s[end]);
-    if (c < 0x80) return !std::isalnum(c);
-    // Indic danda U+0964 (E0 A5 A4) / U+0965 (E0 A5 A5) ends a sentence.
-    if (c == 0xE0 && end + 2 < s.size() + 1 &&
-        static_cast<unsigned char>(s[end + 1]) == 0xA5 &&
-        end + 2 < s.size() &&
-        (static_cast<unsigned char>(s[end + 2]) == 0xA4 ||
-         static_cast<unsigned char>(s[end + 2]) == 0xA5)) {
-        return true;
-    }
-    return false;  // vowel sign, letter, etc.: match continues a longer word
-}
-
-// Byte-exact marker search with word boundaries. English matching is done
-// by the caller on a lowercased copy; Indic markers match byte-exact
-// (lowercasing is a no-op on bytes >= 0x80, so one path serves both).
-bool hasMarker(const std::string& text, const std::string& marker) {
-    if (marker.empty()) return false;
-    size_t pos = 0;
-    while ((pos = text.find(marker, pos)) != std::string::npos) {
-        if (isMarkerDelimBefore(text, pos) &&
-            isMarkerDelimAfter(text, pos + marker.size())) {
-            return true;
-        }
-        ++pos;
-    }
-    return false;
-}
-
-std::string asciiLower(std::string s) {
-    for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    return s;
-}
-
-}  // namespace
-
 bool TinyMLAgent::extractNegation(const std::string& text) {
     std::string lower;
     lower.reserve(text.size());
     for (char c : text) lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
 
-    // All markers below are matched as WHOLE WORDS (hasMarker enforces
-    // boundaries on both sides). Trailing spaces from the old substring
-    // lists are dropped — the boundary test covers "no," "(no)" etc.
-
     // English negation markers
-    static const char* enNeg[] = {
-        "not", "don't", "dont", "do not", "no", "never", "cannot", "can't",
-        "cant", "stop", "cancel", "without", "no assistance", "no help",
-        "needs no", "need no", "not required", "no rescue", "isn't", "isnt",
-        "aren't", "arent", "wasn't", "wasnt", "weren't", "werent",
-        "haven't", "havent", "hasn't", "hasnt", "won't", "wont",
-    };
-    for (const char* m : enNeg) {
-        if (hasMarker(lower, m)) return true;
+    if (lower.find("not") != std::string::npos || lower.find("don't") != std::string::npos ||
+        lower.find("dont") != std::string::npos || lower.find("do not") != std::string::npos ||
+        lower.find("no ") != std::string::npos || lower.find("never") != std::string::npos ||
+        lower.find("cannot") != std::string::npos || lower.find("can't") != std::string::npos ||
+        lower.find("cant") != std::string::npos || lower.find("stop") != std::string::npos ||
+        lower.find("cancel") != std::string::npos || lower.find("without") != std::string::npos ||
+        lower.find("no assistance") != std::string::npos || lower.find("no help") != std::string::npos ||
+        lower.find("needs no") != std::string::npos || lower.find("need no") != std::string::npos ||
+        lower.find("not required") != std::string::npos || lower.find("no rescue") != std::string::npos) {
+        return true;
     }
 
     // Hindi / Marathi negation
-    static const char* hiNeg[] = {
-        "नहीं", "नही", "मत", "नाही", "नको", "नये",
-        "आवश्यकता नहीं", "गरज नाही", "पाठवू नका", "करू नका",
-    };
-    for (const char* m : hiNeg) {
-        if (hasMarker(text, m)) return true;
+    if (text.find("नहीं") != std::string::npos || text.find("नही") != std::string::npos ||
+        text.find("मत") != std::string::npos || text.find("नाही") != std::string::npos ||
+        text.find("नको") != std::string::npos || text.find("नये") != std::string::npos ||
+        text.find("आवश्यकता नहीं") != std::string::npos || text.find("गरज नाही") != std::string::npos ||
+        text.find("पाठवू नका") != std::string::npos || text.find("करू नका") != std::string::npos) {
+        return true;
     }
 
     // Gujarati negation
-    static const char* guNeg[] = {
-        "નથી", "નહીં", "ના", "જરૂર નથી",
-        "મોકલશો નહીં", "કરશો નહીં",
-    };
-    for (const char* m : guNeg) {
-        if (hasMarker(text, m)) return true;
+    if (text.find("નથી") != std::string::npos || text.find("નહીં") != std::string::npos ||
+        text.find("ના ") != std::string::npos || text.find("જરૂર નથી") != std::string::npos ||
+        text.find("મોકલશો નહીં") != std::string::npos || text.find("કરશો નહીં") != std::string::npos) {
+        return true;
     }
 
     // Tamil negation
-    static const char* taNeg[] = {
-        "இல்லை", "வேண்டாம்", "கூடாது", "தேவையில்லை",
-        "வேண்டா", "அனுப்ப வேண்டாம்",
-    };
-    for (const char* m : taNeg) {
-        if (hasMarker(text, m)) return true;
+    if (text.find("இல்லை") != std::string::npos || text.find("வேண்டாம்") != std::string::npos ||
+        text.find("கூடாது") != std::string::npos || text.find("தேவையில்லை") != std::string::npos ||
+        text.find("வேண்டா") != std::string::npos || text.find("அனுப்ப வேண்டாம்") != std::string::npos) {
+        return true;
     }
 
     // Telugu negation
-    static const char* teNeg[] = {
-        "లేదు", "వద్దు", "కాదు", "అవసరం లేదు",
-        "పంపవద్దు", "చేయవద్దు",
-    };
-    for (const char* m : teNeg) {
-        if (hasMarker(text, m)) return true;
+    if (text.find("లేదు") != std::string::npos || text.find("వద్దు") != std::string::npos ||
+        text.find("కాదు") != std::string::npos || text.find("అవసరం లేదు") != std::string::npos ||
+        text.find("పంపవద్దు") != std::string::npos || text.find("చేయవద్దు") != std::string::npos) {
+        return true;
     }
 
-    // Kannada negation ("ಇಲ್ಲ" must not fire inside "ಇಲ್ಲಿ" — boundary test)
-    static const char* knNeg[] = {
-        "ಇಲ್ಲ", "ಬೇಡ", "ಬಾರದು", "ಅಗತ್ಯವಿಲ್ಲ",
-        "ಕಳುಹಿಸಬೇಡಿ", "ಮಾಡಬೇಡಿ",
-    };
-    for (const char* m : knNeg) {
-        if (hasMarker(text, m)) return true;
+    // Kannada negation
+    if (text.find("ಇಲ್ಲ") != std::string::npos || text.find("ಬೇಡ") != std::string::npos ||
+        text.find("ಬಾರದು") != std::string::npos || text.find("ಅಗತ್ಯವಿಲ್ಲ") != std::string::npos ||
+        text.find("ಕಳುಹಿಸಬೇಡಿ") != std::string::npos || text.find("ಮಾಡಬೇಡಿ") != std::string::npos) {
+        return true;
     }
 
     // Malayalam negation
-    static const char* mlNeg[] = {
-        "ഇല്ല", "വേണ്ട", "അരുത്", "പാടില്ല",
-        "ആവശ്യമില്ല", "അയക്കരുത്", "ഒഴിപ്പിക്കരുത്",
-    };
-    for (const char* m : mlNeg) {
-        if (hasMarker(text, m)) return true;
+    if (text.find("ഇല്ല") != std::string::npos || text.find("വേണ്ട") != std::string::npos ||
+        text.find("അരുത്") != std::string::npos || text.find("പാടില്ല") != std::string::npos ||
+        text.find("ആവശ്യമില്ല") != std::string::npos || text.find("അയക്കരുത്") != std::string::npos ||
+        text.find("ഒഴിപ്പിക്കരുത്") != std::string::npos) {
+        return true;
     }
 
     // Odia negation
-    static const char* orNeg[] = {
-        "ନାହିଁ", "ନୁହେଁ", "ମନା", "ଆବଶ୍ୟକ ନାହିଁ",
-        "ପଠାନ୍ତୁ ନାହିଁ", "କରନ୍ତୁ ନାହିଁ",
-    };
-    for (const char* m : orNeg) {
-        if (hasMarker(text, m)) return true;
+    if (text.find("ନାହିଁ") != std::string::npos || text.find("ନୁହେଁ") != std::string::npos ||
+        text.find("ମନା") != std::string::npos || text.find("ଆବଶ୍ୟକ ନାହିଁ") != std::string::npos ||
+        text.find("ପଠାନ୍ତୁ ନାହିଁ") != std::string::npos || text.find("କରନ୍ତୁ ନାହିଁ") != std::string::npos) {
+        return true;
     }
 
     // Bengali negation
-    static const char* bnNeg[] = {
-        "দরকার নেই", "প্রয়োজন নেই", "পাঠাবেন না", "করবেন না",
-        "নেই", "না",
-    };
-    for (const char* m : bnNeg) {
-        if (hasMarker(text, m)) return true;
-    }
-
-    return false;
-}
-
-// Decline/cancel-class negation: the speaker explicitly refuses or stands
-// down ("do not need", "వద్దు", "ಬೇಡ"). Only these markers authorize the
-// "NOT required" realization. Bare absence ("no water", "నీరు లేదు") means
-// the resource is LACKED — i.e. needed — and must realize positive.
-bool TinyMLAgent::extractStrongNegation(const std::string& text) {
-    std::string lower;
-    lower.reserve(text.size());
-    for (char c : text) lower.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
-
-    static const char* enStrong[] = {
-        "don't need", "dont need", "do not need", "not needed",
-        "not required", "no need", "don't want", "do not want", "dont want",
-        "don't send", "do not send", "dont send", "no help", "no assistance",
-        "no rescue", "need no", "needs no", "cancel", "stand down",
-        "false alarm", "all clear", "all good", "all is well",
-        "no emergency", "never mind", "ignore that", "disregard",
-        "call off", "called off", "not necessary", "no longer needed",
-        "don't come", "do not come", "dont come",
-    };
-    for (const char* m : enStrong) {
-        if (hasMarker(lower, m)) return true;
-    }
-
-    static const char* hiStrong[] = {
-        "आवश्यकता नहीं", "जरूरत नहीं", "नहीं चाहिए", "मत भेजो", "नको",
-        "गरज नाही", "नाही पाहिजे",
-    };
-    for (const char* m : hiStrong) {
-        if (hasMarker(text, m)) return true;
-    }
-
-    static const char* guStrong[] = {
-        "જરૂર નથી", "મોકલશો નહીં", "જોઈતું નથી", "નથી જોઈતું",
-    };
-    for (const char* m : guStrong) {
-        if (hasMarker(text, m)) return true;
-    }
-
-    static const char* taStrong[] = {
-        "வேண்டாம்", "தேவையில்லை", "அனுப்ப வேண்டாம்", "தேவை இல்லை",
-    };
-    for (const char* m : taStrong) {
-        if (hasMarker(text, m)) return true;
-    }
-
-    static const char* teStrong[] = {
-        "అవసరం లేదు", "అక్కర్లేదు", "వద్దు", "పంపవద్దు", "చేయవద్దు",
-    };
-    for (const char* m : teStrong) {
-        if (hasMarker(text, m)) return true;
-    }
-
-    static const char* knStrong[] = {
-        "ಬೇಡ", "ಅಗತ್ಯವಿಲ್ಲ", "ಬೇಕಾಗಿಲ್ಲ", "ಕಳುಹಿಸಬೇಡಿ", "ಮಾಡಬೇಡಿ",
-    };
-    for (const char* m : knStrong) {
-        if (hasMarker(text, m)) return true;
-    }
-
-    static const char* mlStrong[] = {
-        "വേണ്ട", "ആവശ്യമില്ല", "അയക്കരുത്", "ഒഴിപ്പിക്കരുത്",
-    };
-    for (const char* m : mlStrong) {
-        if (hasMarker(text, m)) return true;
-    }
-
-    static const char* orStrong[] = {
-        "ଆବଶ୍ୟକ ନାହିଁ", "ଦରକାର ନାହିଁ", "ପଠାନ୍ତୁ ନାହିଁ",
-    };
-    for (const char* m : orStrong) {
-        if (hasMarker(text, m)) return true;
-    }
-
-    static const char* bnStrong[] = {
-        "দরকার নেই", "প্রয়োজন নেই", "লাগবে না", "পাঠাবেন না", "চাই না",
-    };
-    for (const char* m : bnStrong) {
-        if (hasMarker(text, m)) return true;
-    }
-
-    static const char* paStrong[] = {
-        "ਲੋੜ ਨਹੀਂ", "ਨਾ ਭੇਜੋ", "ਚਾਹੀਦਾ ਨਹੀਂ",
-    };
-    for (const char* m : paStrong) {
-        if (hasMarker(text, m)) return true;
+    if (text.find("দরকার নেই") != std::string::npos || text.find("প্রয়োজন নেই") != std::string::npos ||
+        text.find("পাঠাবেন না") != std::string::npos || text.find("করবেন না") != std::string::npos ||
+        text.find(" নেই") != std::string::npos || text.find(" না") != std::string::npos) {
+        return true;
     }
 
     return false;
@@ -760,9 +600,6 @@ SemanticResult TinyMLAgent::runDeterministicFallback(const std::string& text,
     res.isNegated = extractNegation(text);
     if (res.isNegated) {
         res.extractedEntities.push_back({"MODIFIER", "NEGATION", 1.0f});
-        // Decline-class only: bare absence ("no water", "నీరు లేదు") keeps
-        // isStrongNegation=false so realize() renders the POSITIVE need.
-        res.isStrongNegation = extractStrongNegation(text);
     }
 
     // 6. Urgency Classification

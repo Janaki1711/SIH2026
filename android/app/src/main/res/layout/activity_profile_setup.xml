@@ -30,7 +30,7 @@
         <TextView android:id="@+id/profileNodeIdText"
             android:layout_width="wrap_content" android:layout_height="wrap_content"
             android:text="----"
-            android:textColor="#0284C7" android:textSize="16sp" android:textStyle="bold"
+            android:textColor="@color/itantra_blue" android:textSize="16sp" android:textStyle="bold"
             android:fontFamily="monospace"/>
     </LinearLayout>
 
@@ -43,13 +43,13 @@
         android:layout_marginBottom="24dp" android:paddingHorizontal="14dp"/>
 
     <TextView android:id="@+id/profileError" android:layout_width="match_parent"
-        android:layout_height="wrap_content" android:textColor="#DC2626"
+        android:layout_height="wrap_content" android:textColor="@color/itantra_error"
         android:textSize="13sp" android:layout_marginBottom="12dp" android:visibility="gone"/>
 
     <Button android:id="@+id/profileSaveBtn" android:layout_width="match_parent"
         android:layout_height="52dp" android:text="GET STARTED"
         android:textColor="#FFFFFF" android:textSize="14sp" android:textStyle="bold"
-        android:backgroundTint="#16A34A" android:insetTop="0dp" android:insetBottom="0dp"/>
+        android:backgroundTint="@color/itantra_green" android:insetTop="0dp" android:insetBottom="0dp"/>
 
     <ProgressBar android:id="@+id/profileProgress" android:layout_width="36dp"
         android:layout_height="36dp" android:layout_gravity="center"

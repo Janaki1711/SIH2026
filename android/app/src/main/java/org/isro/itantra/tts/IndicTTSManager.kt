@@ -84,43 +84,6 @@ class IndicTTSManager(
         }
     }
 
-    /**
-     * Diagnostic: report what the TTS engine will actually do for [langCode].
-     *
-     * The important failure mode here is silent: setLanguage(ml) returns
-     * LANG_MISSING_DATA/LANG_NOT_SUPPORTED, we quietly switch to en-IN, and
-     * the receiver hears English for a Malayalam message — which reads as
-     * "Malayalam TTS is broken" with nothing in the log explaining why.
-     *
-     * Returns a one-line summary: setLanguage result, whether a matching
-     * voice exists, and the engine's verdict for the *requested* locale.
-     */
-    fun probeVoice(langCode: String): String {
-        val tts = androidTts ?: return "TTS_NOT_READY(no engine)"
-        if (!isTtsReady) return "TTS_NOT_READY(init pending)"
-        val loc = getLocaleForLang(langCode)
-        val langResult = tts.setLanguage(loc)
-        val langWord = when (langResult) {
-            TextToSpeech.LANG_MISSING_DATA -> "LANG_MISSING_DATA"
-            TextToSpeech.LANG_NOT_SUPPORTED -> "LANG_NOT_SUPPORTED"
-            TextToSpeech.LANG_AVAILABLE -> "LANG_AVAILABLE"
-            TextToSpeech.LANG_COUNTRY_AVAILABLE -> "LANG_COUNTRY_AVAILABLE"
-            TextToSpeech.LANG_COUNTRY_VAR_AVAILABLE -> "LANG_COUNTRY_VAR_AVAILABLE"
-            else -> "LANG_$langResult"
-        }
-        // Voices whose locale actually matches what we asked for.
-        val exact = try {
-            tts.voices?.count { v ->
-                !v.isNetworkConnectionRequired &&
-                    v.locale.language.equals(loc.language, ignoreCase = true)
-            } ?: -1
-        } catch (e: Throwable) { -1 }
-        // What we end up speaking if we fall back (see speak()).
-        val fallback = if (langResult < 0) "FALLBACK=en-IN" else "FALLBACK=none"
-        return "engine=android tts lang=$langCode req=${loc.toLanguageTag()} " +
-                "setLanguage=$langWord matchingVoices=$exact $fallback"
-    }
-
     fun speak(text: String, langCode: String, prosody: ProsodyVector = ProsodyVector()) {
         if (text.isBlank()) return
 

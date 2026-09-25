@@ -6,7 +6,7 @@
 
     <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
         android:text="iTantra" android:textSize="36sp" android:textStyle="bold"
-        android:textColor="#0284C7" android:gravity="center" android:layout_marginBottom="6dp"/>
+        android:textColor="@color/itantra_blue" android:gravity="center" android:layout_marginBottom="6dp"/>
 
     <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
         android:text="OFFLINE MULTILINGUAL COMMUNICATION"
@@ -27,7 +27,7 @@
         android:background="@drawable/input_bg" android:layout_marginBottom="12dp">
         <TextView android:layout_width="wrap_content" android:layout_height="match_parent"
             android:text="+91" android:textSize="15sp" android:textStyle="bold"
-            android:textColor="#0284C7" android:gravity="center" android:paddingHorizontal="14dp"/>
+            android:textColor="@color/itantra_blue" android:gravity="center" android:paddingHorizontal="14dp"/>
         <View android:layout_width="1dp" android:layout_height="match_parent" android:background="#E2E8F0"/>
         <EditText android:id="@+id/loginPhoneInput" android:layout_width="0dp"
             android:layout_height="match_parent" android:layout_weight="1"
@@ -51,13 +51,13 @@
 
 
     <TextView android:id="@+id/loginError" android:layout_width="match_parent"
-        android:layout_height="wrap_content" android:textColor="#DC2626"
+        android:layout_height="wrap_content" android:textColor="@color/itantra_error"
         android:textSize="13sp" android:layout_marginBottom="10dp" android:visibility="gone"/>
 
     <Button android:id="@+id/loginContinueBtn" android:layout_width="match_parent"
         android:layout_height="52dp" android:text="CONTINUE"
         android:textColor="#FFFFFF" android:textSize="14sp" android:textStyle="bold"
-        android:backgroundTint="#0284C7" android:insetTop="0dp" android:insetBottom="0dp"/>
+        android:backgroundTint="@color/itantra_blue" android:insetTop="0dp" android:insetBottom="0dp"/>
 
     <ProgressBar android:id="@+id/loginProgress" android:layout_width="36dp"
         android:layout_height="36dp" android:layout_gravity="center"
