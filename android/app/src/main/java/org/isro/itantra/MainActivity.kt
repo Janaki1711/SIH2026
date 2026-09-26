@@ -1067,6 +1067,13 @@ class MainActivity : AppCompatActivity() {
                 stopRecordingAndTranscribe()
             }
         }
+        // Demo mode: show the guide on every MainActivity creation, i.e. after
+        // every login. maybeStart() would gate it behind the completed flag and
+        // show it only once per install.
+        org.isro.itantra.ui.OnboardingGuide.start(
+            this,
+            findViewById(R.id.mainRoot)
+        )
     } // end onCreate
 
     private fun setupSpeechRecognizer() {
