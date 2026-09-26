@@ -1782,8 +1782,13 @@ class MainActivity : AppCompatActivity() {
      *
      * Pipeline: sourceLang text → normalize → identify known emergency phrases → render in targetLang
      *
-     * This function is only called when the C++ SemanticBridge (M3 engine) is NOT loaded.
-     * When SemanticBridge IS loaded, translation is handled entirely in C++ by TranslationBridge.cpp.
+     * The C++ SemanticBridge (M3 engine) is deliberately NOT on this path.
+     * realize() replaced the speaker's words with a canonical intent sentence,
+     * so it reported "send water AND food" for "I need water" and "I have
+     * grown up" for "I'm fine" — a fabricated message in a disaster channel.
+     * All translation therefore runs through the ML Kit cascade + offline
+     * gloss (translateWithMlKit), which falls back to the labelled original
+     * whenever no genuine translation is produced.
      */
     /**
      * FIX 2: MULTILINGUAL TRANSLATION — On-device offline translation using Google MLKit.
@@ -1987,39 +1992,27 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // 0b. C++ semantic engine — deterministic parse→realize translation
-        //    across ALL 11 mission languages, including ml/or/pa for which
-        //    ML Kit has no model at all.
-        //    ENGLISH IS EXCLUDED HERE ON PURPOSE (en→all fix, Sep 2026): the
-        //    realize() templates substitute canonical intent sentences that
-        //    drop the speaker's slots ("Meet me at gate 4" → "Location info
-        //    received") and invent unmentioned items ("water rising" → "send
-        //    water AND food"). ML Kit en→xx is literal and high-quality, so
-        //    English normally takes the direct ML Kit hop (branch 4).
+        // 0b. The C++ semantic engine is NOT on the translate path.
+        //    realize() substitutes a canonical intent sentence for what the
+        //    speaker actually said: it drops the speaker's slots ("Meet me
+        //    at gate 4" → "Location info received") and invents unmentioned
+        //    items ("water rising" → "send water AND food"). The intent
+        //    classifier also fires on non-requests, so a question ("where
+        //    is water") and a status ("I'm fine" → "I have grown up") come
+        //    back as a different sentence entirely. The isFallback/UNKNOWN
+        //    guard only rejects entity-only parses, not a misclassified
+        //    intent, so it cannot stop that.
         //
-        //    ONE EXCEPTION — targets with no ML Kit model at all (ml/or/pa).
-        //    For those the only other option was the token-gloss, which
-        //    copies unmatched English words through verbatim and emits
-        //    mixed-script noise ("There is a തീ here, അയക്കുക സഹായം
-        //    ഉടൻ"). The engine is the only component that can realise a
-        //    whole sentence in ml/or/pa, so English is allowed through
-        //    exactly when tgtCode == null. Every ML-Kit-supported target
-        //    keeps the bypass, so the en→all fix is untouched; south
-        //    sources keep the engine path as before.
-        val engineAllowed = sourceLang != "en" || tgtCode == null
-        if (engineAllowed && org.isro.itantra.semantic.SemanticBridge.isLibraryLoaded) {
-            try {
-                val sem = org.isro.itantra.semantic.SemanticBridge
-                    .translateText(text, sourceLang, targetLang)
-                if (sem.isNotBlank() && sem != text) {
-                    finish(sem)
-                    return
-                }
-            } catch (t: Throwable) {
-                Log.w(TAG, "SemanticBridge.translateText failed (${t.message}) — using ML Kit cascade")
-            }
-        }
-
+        //    Routing non-English sources through it hijacked every pair the
+        //    ML Kit cascade handles well (te→kn, ta→kn, te→hi, hi→te all
+        //    returned the same canned phrase regardless of input) and gave
+        //    ml/or/pa a fluent fabrication instead of the honest labelled
+        //    original. Fabricating a message in a disaster channel is
+        //    worse than an honest fallback, so the cascade below — which
+        //    was already written to cover all five cases — now always runs.
+        //    ml/or/pa reach their target through the offline gloss, and
+        //    when that is mixed-script noise isUsableTranslation rejects it
+        //    and finish() falls back to "[$sourceLang] $text".
         when {
             // 1. No ML Kit model on either side — direct offline gloss.
             srcCode == null && tgtCode == null -> {
@@ -2567,21 +2560,10 @@ class MainActivity : AppCompatActivity() {
                 val pat = org.isro.itantra.translation.PivotTranslator
                     .translatePattern(text, src, tgt)
                 Log.i(TAG, "TRANSLATE_TEST stage0-pattern: [${pat ?: "none"}]")
-                // Mirrors the engine gate in translateWithMlKit: English is
-                // allowed through only when the target has no ML Kit model
-                // (ml/or/pa). Otherwise the stage log would claim "skipped"
-                // while the real path ran the engine (or vice versa).
-                val engineAllowed = src != "en" || mlkitLanguageCode(tgt) == null
-                var sem = if (engineAllowed) "(not run)" else "(skipped: English source, target has ML Kit model)"
-                if (engineAllowed && org.isro.itantra.semantic.SemanticBridge.isLibraryLoaded) {
-                    sem = try {
-                        org.isro.itantra.semantic.SemanticBridge
-                            .translateText(text, src, tgt)
-                    } catch (t: Throwable) {
-                        "(semantic error: ${t.message})"
-                    }
-                }
-                Log.i(TAG, "TRANSLATE_TEST stage0b-semantic: [$sem]")
+                // The engine is not on the translate path (see 0b in
+                // translateWithMlKit); logged so this stage line can never
+                // disagree with what the real path did.
+                Log.i(TAG, "TRANSLATE_TEST stage0b-semantic: [(not on translate path)]")
                 translateWithMlKit(text, src, tgt) { result ->
                     val real = isUsableTranslation(result, text, src)
                     Log.i(TAG, "TRANSLATE_TEST FINAL [$src→$tgt] real=$real result=[$result]")
