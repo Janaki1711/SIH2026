@@ -1,0 +1,16 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Theme.SIH2026" parent="Theme.Material3.Light.NoActionBar">
+        <item name="colorPrimary">@color/itantra_blue</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorSecondary">@color/itantra_green</item>
+        <item name="colorTertiary">@color/itantra_orange</item>
+        <item name="android:colorAccent">@color/itantra_blue</item>
+        <item name="android:statusBarColor">@color/itantra_background</item>
+        <item name="android:windowLightNavigationBar" tools:targetApi="27">true</item>
+        <item name="android:windowLightStatusBar" tools:targetApi="23">true</item>
+        <item name="android:navigationBarColor">@color/itantra_background</item>
+        <item name="android:windowBackground">@color/itantra_background</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+    </style>
+</resources>

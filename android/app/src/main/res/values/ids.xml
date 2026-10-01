@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item type="id" name="rgMode"/>
+    <item type="id" name="rbWalkieTalkie"/>
+    <item type="id" name="rbPhoneMode"/>
+    <item type="id" name="spinnerLanguage"/>
+    <item type="id" name="etSpeechText"/>
+    <item type="id" name="btnPresetHi"/>
+    <item type="id" name="btnPresetTa"/>
+    <item type="id" name="btnPresetTe"/>
+    <item type="id" name="btnPresetKn"/>
+    <item type="id" name="btnPresetMl"/>
+    <item type="id" name="btnPresetMr"/>
+    <item type="id" name="btnPresetGu"/>
+    <item type="id" name="btnPresetBn"/>
+    <item type="id" name="btnPresetOr"/>
+    <item type="id" name="btnPresetEn"/>
+    <item type="id" name="btnPlayAudio"/>
+    <item type="id" name="btnPttTalk"/>
+    <item type="id" name="btnEmergencySos"/>
+    <item type="id" name="tvPayloadSize"/>
+    <item type="id" name="tvLatency"/>
+    <item type="id" name="tvTransceiverState"/>
+</resources>

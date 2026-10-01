@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:background="#F8FAFC"
+    android:paddingHorizontal="28dp" android:gravity="center_vertical">
+
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="Set up your profile" android:textSize="22sp" android:textStyle="bold"
+        android:textColor="#0F172A" android:layout_marginBottom="8dp"/>
+
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="This is how you will appear to others"
+        android:textSize="14sp" android:textColor="#64748B" android:layout_marginBottom="32dp"/>
+
+    <EditText android:id="@+id/profileNameInput" android:layout_width="match_parent"
+        android:layout_height="52dp" android:background="@drawable/input_bg"
+        android:hint="Your display name" android:textColorHint="#94A3B8"
+        android:textColor="#0F172A" android:textSize="15sp" android:singleLine="true"
+        android:paddingHorizontal="14dp" android:layout_marginBottom="16dp"/>
+
+    <!-- Node ID — read-only, generated at login -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical"
+        android:background="@drawable/input_bg" android:paddingHorizontal="14dp"
+        android:layout_marginBottom="16dp">
+        <TextView android:layout_width="0dp" android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Your mesh node ID"
+            android:textColor="#64748B" android:textSize="13sp"/>
+        <TextView android:id="@+id/profileNodeIdText"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="----"
+            android:textColor="@color/itantra_blue" android:textSize="16sp" android:textStyle="bold"
+            android:fontFamily="monospace"/>
+    </LinearLayout>
+
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="Preferred language" android:textSize="13sp" android:textStyle="bold"
+        android:textColor="#374151" android:layout_marginBottom="6dp"/>
+
+    <Spinner android:id="@+id/profileLangSpinner" android:layout_width="match_parent"
+        android:layout_height="52dp" android:background="@drawable/input_bg"
+        android:layout_marginBottom="24dp" android:paddingHorizontal="14dp"/>
+
+    <TextView android:id="@+id/profileError" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:textColor="@color/itantra_error"
+        android:textSize="13sp" android:layout_marginBottom="12dp" android:visibility="gone"/>
+
+    <Button android:id="@+id/profileSaveBtn" android:layout_width="match_parent"
+        android:layout_height="52dp" android:text="GET STARTED"
+        android:textColor="#FFFFFF" android:textSize="14sp" android:textStyle="bold"
+        android:backgroundTint="@color/itantra_green" android:insetTop="0dp" android:insetBottom="0dp"/>
+
+    <ProgressBar android:id="@+id/profileProgress" android:layout_width="36dp"
+        android:layout_height="36dp" android:layout_gravity="center"
+        android:layout_marginTop="12dp" android:visibility="gone"/>
+</LinearLayout>

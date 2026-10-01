@@ -1,0 +1,20 @@
+# Minimum-version pins. The original exact pins were only satisfiable on
+# older Python: on Python 3.14 several had no wheels (grpcio-tools==1.66.0
+# attempted a full source build and failed), and the provisioned environment
+# runs newer minor releases. Lower bounds install cleanly without forcing
+# downgrades of a working environment.
+fastapi>=0.115.0
+uvicorn[standard]>=0.30.0
+websockets>=13.0
+python-multipart>=0.0.9
+# packet_schema_pb2.py (protoc 5.29.3 gencode) validates runtime >= 5.29.3 —
+# a 5.28.0 runtime would be rejected at import time by
+# google.protobuf.runtime_version.ValidateProtobufRuntimeVersion.
+protobuf>=5.29.3
+# grpcio-tools (dev-only protoc codegen; nothing imports grpc at runtime) at
+# 1.66.0 has no Python 3.14 wheels and fails to compile from source. Install
+# it separately when regenerating packet_schema_pb2.py:
+#   pip install "grpcio-tools>=1.66.0"
+psutil>=6.0.0
+aiofiles>=24.1.0
+cryptography>=42.0.0

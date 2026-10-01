@@ -1,0 +1,74 @@
+syntax = "proto3";
+option optimize_for = LITE_RUNTIME;
+
+package itantra.protocol;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PriorityLevel
+//
+// WHY THIS EXISTS:
+//   A tri-level triage system mirrors real emergency communication doctrine.
+//   ROUTINE   → normal status messages
+//   TACTICAL  → coordinated movement/action
+//   LIFE_SAFETY_ALERT → immediate life-threatening event
+//
+// PHASE 1: We simply set this field.
+// FUTURE:  The radio transport layer (M4) will use this to determine
+//          packet transmission priority and retry policy.
+// ─────────────────────────────────────────────────────────────────────────────
+enum PriorityLevel {
+    ROUTINE = 0;
+    TACTICAL = 1;
+    LIFE_SAFETY_ALERT = 2;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VoicePacket
+//
+// WHY THIS EXISTS:
+//   This is the single unit of transmission in the iTantra M3 protocol.
+//   Every message — regardless of language, compression state, or transport
+//   medium — travels as a VoicePacket.
+//
+// PHASE 1:
+//   compressed_payload stores raw UTF-8 bytes.
+//   prosody_vector is empty (reserved for Phase 4 TTS prosody control).
+//
+// FUTURE:
+//   compressed_payload ← tokenized + arithmetic-coded payload
+//   prosody_vector     ← pitch/rate/emphasis vector for IndicTTS
+// ─────────────────────────────────────────────────────────────────────────────
+message VoicePacket {
+
+    // Sync word. Allows receiver to identify iTantra M3 packets.
+    // Value: 0x41475931 ("AGY1")
+    uint32 magic_header = 1;
+
+    // Monotonically increasing counter. Enables packet-loss detection.
+    uint32 sequence_number = 2;
+
+    // UNIX epoch in milliseconds. Set by sender.
+    uint64 timestamp_ms = 3;
+
+    // Triage priority level. See PriorityLevel above.
+    PriorityLevel priority = 4;
+
+    // Operator identifier. Example: "RESCUE_01", "CMD_ALPHA"
+    string source_callsign = 5;
+
+    // BCP-47 language tag. Example: "hi" (Hindi), "mr" (Marathi), "en"
+    string source_language = 6;
+
+    // Phase 1: raw UTF-8 text bytes.
+    // Phase 2+: tokenized + arithmetic-coded semantic payload.
+    // Interface is INTENTIONALLY stable across phases.
+    bytes compressed_payload = 7;
+
+    // Phase 4 reserved: prosody control vector for IndicTTS synthesis (16 bytes).
+    bytes prosody_vector = 8;
+
+    // CRC16-CCITT checksum for end-to-end frame verification.
+    uint32 crc16_checksum = 9;
+}
+
+

@@ -1,0 +1,321 @@
+"""
+tinyml_agent.py — Multi-Task TinyML Semantic Agent
+
+Extracts intent, action, hazard, location entities (using GeoResolver),
+person count, and vocal urgency triage. Produces a complete SemanticResult.
+"""
+
+import re
+from typing import Dict, Any, List, Optional
+from semantic_codebook import ActionCode, UrgencyCode, HazardCode, GeoID, CompressionTier
+from geo_resolver import GeoResolver, LocationEntity
+
+class SemanticResult:
+    def __init__(
+        self,
+        original_text: str,
+        detected_language: str = "en",
+        intent: ActionCode = ActionCode.UNKNOWN,
+        action: ActionCode = ActionCode.UNKNOWN,
+        hazard: HazardCode = HazardCode.NONE,
+        location: Optional[LocationEntity] = None,
+        person_count: int = 0,
+        urgency: UrgencyCode = UrgencyCode.ROUTINE,
+        confidence: float = 1.0,
+        compression_tier: CompressionTier = CompressionTier.TIER_1_MACRO,
+        extracted_entities: Optional[List[Dict[str, Any]]] = None,
+        is_fallback: bool = False,
+        is_negated: bool = False,
+        fallback_reason: str = "",
+        prosody_vector: Optional[bytes] = None,
+        model_backend_used: str = "DETERMINISTIC_LOCAL_FALLBACK"
+    ):
+        self.original_text = original_text
+        self.detected_language = detected_language
+        self.intent = intent
+        self.action = action
+        self.hazard = hazard
+        self.location = location or LocationEntity("", GeoID.UNKNOWN, 0.0)
+        self.person_count = person_count
+        self.urgency = urgency
+        self.confidence = confidence
+        self.compression_tier = compression_tier
+        self.extracted_entities = extracted_entities or []
+        self.is_fallback = is_fallback
+        self.is_negated = is_negated
+        self.fallback_reason = fallback_reason
+        self.prosody_vector = prosody_vector or bytes(16)
+        self.model_backend_used = model_backend_used
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "original_text": self.original_text,
+            "detected_language": self.detected_language,
+            "intent": self.intent.name,
+            "action": self.action.name,
+            "hazard": self.hazard.name,
+            "location": self.location.to_dict(),
+            "person_count": self.person_count,
+            "urgency": self.urgency.name,
+            "confidence": round(self.confidence, 3),
+            "compression_tier": int(self.compression_tier.value),
+            "tier_name": self.compression_tier.name,
+            "extracted_entities": self.extracted_entities,
+            "is_fallback": self.is_fallback,
+            "is_negated": self.is_negated,
+            "fallback_reason": self.fallback_reason,
+            "has_prosody": len(self.prosody_vector) == 16,
+            "model_backend_used": self.model_backend_used,
+        }
+
+
+class TinyMLAgent:
+    _instance = None
+
+    @classmethod
+    def get_instance(cls):
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+
+    def __init__(self):
+        self.geo_resolver = GeoResolver.get_instance()
+        self.ml_model = None  # Placeholder for real INT8 model backend if available
+
+    def analyze(self, text: str, source_language: str = "en", optional_prosody: Optional[bytes] = None) -> SemanticResult:
+        if self.ml_model and hasattr(self.ml_model, "is_loaded") and self.ml_model.is_loaded():
+            res = self.ml_model.predict(text, source_language)
+            if res:
+                if optional_prosody:
+                    res.prosody_vector = optional_prosody[:16].ljust(16, b'\x00')
+                return res
+
+        return self._run_deterministic_fallback(text, source_language, optional_prosody)
+
+    def _extract_negation(self, text: str) -> bool:
+        lower = text.lower()
+        # English
+        if any(w in lower for w in [
+            "not", "don't", "dont", "do not", "no ", "never", "cannot", "can't", "cant",
+            "stop", "cancel", "without", "no assistance", "no help", "needs no", "need no",
+            "not required", "no rescue"
+        ]):
+            return True
+        # Hindi / Marathi
+        if any(w in text for w in ["नहीं", "नही", "मत", "नाही", "नको", "नये", "आवश्यकता नहीं", "गरज नाही", "पाठवू नका", "करू नका"]):
+            return True
+        # Gujarati
+        if any(w in text for w in ["નથી", "નહીં", "ના ", "જરૂર નથી", "મોકલશો નહીં", "કરશો નહીં"]):
+            return True
+        # Tamil
+        if any(w in text for w in ["இல்லை", "வேண்டாம்", "கூடாது", "தேவையில்லை", "வேண்டா", "அனுப்ப வேண்டாம்"]):
+            return True
+        # Telugu
+        if any(w in text for w in ["లేదు", "వద్దు", "కాదు", "అవసరం లేదు", "పంపవద్దు", "చేయవద్దు"]):
+            return True
+        # Kannada
+        if any(w in text for w in ["ಇಲ್ಲ", "ಬೇಡ", "ಬಾರದು", "ಅಗತ್ಯವಿಲ್ಲ", "ಕಳುಹಿಸಬೇಡಿ", "ಮಾಡಬೇಡಿ"]):
+            return True
+        # Malayalam
+        if any(w in text for w in ["ഇല്ല", "വേണ്ട", "അരുത്", "പാടില്ല", "ആവശ്യമില്ല", "അയക്കരുത്", "ഒഴിപ്പിക്കരുത്"]):
+            return True
+        # Odia
+        if any(w in text for w in ["ନାହିଁ", "ନୁହେଁ", "ମନା", "ଆବଶ୍ୟକ ନାହିଁ", "ପଠାନ୍ତୁ ନାହିଁ", "କରନ୍ତୁ ନାହିଁ"]):
+            return True
+        # Bengali
+        if any(w in text for w in ["দরকার নেই", "প্রয়োজন নেই", "পাঠাবেন না", "করবেন না", " নেই", " না"]):
+            return True
+        return False
+
+    def _run_deterministic_fallback(self, text: str, source_language: str, prosody: Optional[bytes]) -> SemanticResult:
+        res = SemanticResult(
+            original_text=text,
+            detected_language=self._detect_language(text, source_language),
+            model_backend_used="DETERMINISTIC_LOCAL_FALLBACK"
+        )
+
+        if prosody:
+            res.prosody_vector = prosody[:16].ljust(16, b'\x00') if len(prosody) < 16 else prosody[:16]
+
+        # 1. Location Entity Resolution
+        res.location = self.geo_resolver.resolve_location(text)
+        if res.location.geo_id != GeoID.UNKNOWN:
+            res.extracted_entities.append({"key": "LOCATION", "value": res.location.canonical_name, "confidence": res.location.confidence})
+
+        # 2. Intent & Action Extraction
+        res.intent, res.action = self._extract_action_and_intent(text)
+        if res.intent != ActionCode.UNKNOWN:
+            res.extracted_entities.append({"key": "INTENT", "value": res.intent.name, "confidence": 0.92})
+
+        # 3. Hazard Extraction
+        res.hazard = self._extract_hazard(text)
+        if res.hazard != HazardCode.NONE:
+            res.extracted_entities.append({"key": "HAZARD", "value": res.hazard.name, "confidence": 0.95})
+
+        # 4. Person Count Extraction
+        res.person_count = self._extract_person_count(text)
+        if res.person_count > 0:
+            res.extracted_entities.append({"key": "PERSON_COUNT", "value": str(res.person_count), "confidence": 0.98})
+
+        # 5. Negation Extraction
+        res.is_negated = self._extract_negation(text)
+        if res.is_negated:
+            res.extracted_entities.append({"key": "MODIFIER", "value": "NEGATION", "confidence": 1.0})
+
+        # 6. Urgency Classification
+        res.urgency = self._classify_urgency(text, res.intent, res.hazard, res.prosody_vector)
+
+        # 7. Tier Selection
+        if res.intent == ActionCode.UNKNOWN and res.hazard == HazardCode.NONE and res.location.geo_id == GeoID.UNKNOWN:
+            res.is_fallback = True
+            res.fallback_reason = "Unrecognized semantic intent / natural conversational statement"
+            res.confidence = 0.85
+            res.compression_tier = CompressionTier.TIER_3_FALLBACK
+        elif res.location.geo_id != GeoID.UNKNOWN or res.person_count > 0 or res.is_negated:
+            res.is_fallback = False
+            res.confidence = 0.90
+            res.compression_tier = CompressionTier.TIER_2_STRUCTURED
+        else:
+            res.is_fallback = False
+            res.confidence = 0.95
+            res.compression_tier = CompressionTier.TIER_1_MACRO
+
+        return res
+
+    def _detect_language(self, text: str, fallback_lang: str) -> str:
+        if fallback_lang and fallback_lang != "auto":
+            return fallback_lang
+        for ch in text:
+            code = ord(ch)
+            if 0x0900 <= code <= 0x097F:
+                return "hi"
+            if 0x0980 <= code <= 0x09FF:
+                return "bn"
+            if 0x0A80 <= code <= 0x0AFF:
+                return "gu"
+            if 0x0B00 <= code <= 0x0B7F:
+                return "or"
+            if 0x0B80 <= code <= 0x0BFF:
+                return "ta"
+            if 0x0C00 <= code <= 0x0C7F:
+                return "te"
+            if 0x0C80 <= code <= 0x0CFF:
+                return "kn"
+            if 0x0D00 <= code <= 0x0D7F:
+                return "ml"
+        return "en"
+
+    def _extract_person_count(self, text: str) -> int:
+        # Scrub landmark tokens
+        scrubbed = re.sub(r'(?i)\b(sector|block|gate|room|ward|zone|building|nh|highway|lane|door)\s*#?\s*\d+\b', ' ', text)
+        scrubbed = re.sub(r'(?i)(सेक्टर|સેક્ટર|செக்டர்|సెక్టర్|ಸೆಕ್ಟರ್|സെക്ടർ|ସେକ୍ଟର|সেক্টর)\s*\d+', ' ', scrubbed)
+
+        num_words = {
+            "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
+            "एक": 1, "दो": 2, "दोन": 2, "तीन": 3, "चार": 4, "पांच": 5, "पाँच": 5, "पाच": 5,
+            "छह": 6, "सात": 7, "आठ": 8, "नौ": 9, "दस": 10,
+            "ஒன்று": 1, "இரண்டு": 2, "மூன்று": 3, "நான்கு": 4, "ஐந்து": 5,
+            "ఒకటి": 1, "రెండు": 2, "మూడు": 3, "నాలుగు": 4, "ఐదు": 5,
+            "ಒಂದು": 1, "ಎರಡು": 2, "ಮೂರು": 3, "ನಾಲ್ಕು": 4, "ಐದು": 5,
+            "એક": 1, "બે": 2, "ત્રણ": 3, "ચાર": 4, "પાંચ": 5,
+            "ഒന്ന്": 1, "രണ്ട്": 2, "മൂന്ന്": 3, "നാല്": 4, "അഞ്ച്": 5,
+            "এক": 1, "দুই": 2, "তিন": 3, "চার": 4, "পাঁচ": 5,
+            "ଏକ": 1, "ଦୁଇ": 2, "ତିନି": 3, "ଚାରି": 4, "ପାଞ୍ଚ": 5
+        }
+        for w, c in num_words.items():
+            if w in scrubbed.lower():
+                return c
+
+        m = re.search(r'(?i)\b(\d+)\s*(people|persons|trapped|victims|casualties|men|women|children|teams|team|workers|doctors|ambulances|जवान|लोग|व्यक्तियों|डॉक्टर|रुग्णवाहिका|લોકો|লোক|ମଣିଷ|പേർ|பேர்|మంది|ಜನರು|ଜଣ|জন)?\b', scrubbed)
+        if m:
+            try:
+                val = int(m.group(1))
+                if 0 < val <= 1000:
+                    return val
+            except Exception:
+                pass
+        return 0
+
+    def _extract_hazard(self, text: str) -> HazardCode:
+        tl = text.lower()
+        if any(w in tl for w in ["flood", "flooding", "बाढ़", "पाणी", "வெள்ளம்", "వరదలు", "ಪ್ರವಾಹ"]):
+            return HazardCode.FLOOD
+        if any(w in tl for w in ["fire", "blaze", "आग", "தீ", "ಬೆಂಕಿ"]):
+            return HazardCode.FIRE
+        if any(w in tl for w in ["earthquake", "भूकंप"]):
+            return HazardCode.EARTHQUAKE
+        if any(w in tl for w in ["landslide", "भूस्खलन"]):
+            return HazardCode.LANDSLIDE
+        if any(w in tl for w in ["collapse", "collapsed", "गिर गया"]):
+            return HazardCode.BUILDING_COLLAPSE
+        if any(w in tl for w in ["explosion", "blast", "धमाका", "विस्फोट"]):
+            return HazardCode.EXPLOSION
+        if any(w in tl for w in ["gas leak", "toxic"]):
+            return HazardCode.GAS_LEAK
+        return HazardCode.NONE
+
+    def _extract_action_and_intent(self, text: str) -> tuple[ActionCode, ActionCode]:
+        tl = text.lower()
+        if any(w in tl for w in ["rescue", "help", "trapped", "stuck", "मदद", "मदत", "बचाओ", "वाचवा", "फंसे", "உதவி", "காப்பாற்று", "సహాయం", "ಸಹಾಯ", "ರಕ್ಷಿಸಿ", "send help", "મદદ", "બચાવો", "ફસાયા", "സഹായം", "രക്ഷിക്കൂ", "കുടുങ്ങി", "ସାହାଯ୍ୟ", "ରକ୍ଷା କର", "ଫସି", "সাহায্য", "বাঁচাও", "আটকে"]):
+            if any(w in tl for w in ["boat", "नाव", "होडी", "બોટ", "படகு", "పడవ", "ದೋಣಿ", "ബോട്ട്", "ଡଙ୍ଗା", "নৌকা"]):
+                return ActionCode.RESCUE_REQUEST, ActionCode.BOAT
+            if any(w in tl for w in ["team", "दल", "पथक", "ટીમ", "குழு", "బృందం", "ತಂಡ", "സംഘം", "ଦଳ", "দল", "भेजो", "पाठवा", "send", "ಅನುಪ್ಪು", "ಕಳುಹಿಸಿ", "మోకलो", "അയക്കുക", "ପଠାଅ", "পাঠান"]):
+                return ActionCode.RESCUE_REQUEST, ActionCode.SEND_TEAM
+            return ActionCode.RESCUE_REQUEST, ActionCode.RESCUE_REQUEST
+
+        if any(w in tl for w in [
+            "evacuate", "evacuation", "खाली करो", "खाली करा", "निकालो", "रिकामे करा", "रिकामे",
+            "બહાર નીકળો", "ખાલી કરો", "ખાલી", "வெளியேறு", "வெளியேற்று", "வெளியேற்ற", "ఖాళీ చేయండి", "ఖాళీ",
+            "తరలించండి", "ಖಾಲಿ ಮಾಡಿ", "ಖಾಲಿ", "ಹೊರಡಿ", "ഒഴിഞ്ഞുപോകുക", "ഒഴിപ്പിക്കുക", "ഒഴിപ്പിക്ക",
+            "ଖାଲି କର", "ଖାଲି", "ସ୍ଥାନାନ୍ତର", "খালি করুন", "খালি", "অপসারণ"
+        ]):
+            return ActionCode.EVACUATE, ActionCode.EVACUATE
+
+        if any(w in tl for w in [
+            "medical", "doctor", "ambulance", "ambulances", "injured", "चिकित्सा", "घायल",
+            "रुग्णवाहिका", "ડોક્ટર", "દર્દી", "மருத்துவர்", "ஆம்புலன்ஸ்", "వైద్యుడు", "అంబులెన్స్",
+            "ವೈದ್ಯ", "ಆಂಬ್ಯುಲೆನ್ಸ್", "ഡോക്ടർ", "ആംബുലൻസ്", "ଡାକ୍ତର", "ଆମ୍ବୁଲାନ୍ସ", "ডাক্তার", "অ্যাম্বুলেন্স"
+        ]):
+            return ActionCode.MEDICAL, ActionCode.MEDICAL
+
+        if any(w in tl for w in ["supplies", "food", "water", "ration", "राशन", "पानी", "अन्न", "पाणी", "ખોરાક", "પાણી", "உணவு", "தண்ணீர்", "ఆహారం", "నీరు", "ಆಹಾರ", "ನೀರು", "ഭക്ഷണം", "വെള്ളം", "ଖାଦ୍ୟ", "ଜଳ", "খাবার", "জল"]):
+            return ActionCode.SUPPLIES, ActionCode.SUPPLIES
+
+        if any(w in tl for w in ["team is ready", "team ready", "ready", "dispatch team", "send team", "रवाना", "तैयार", "தயார்", "సిద్ధం", "ಸಿದ್ಧ", "സജ്ജം", "ପ୍ରସ୍ତୁତ", "প্রস্তুত"]):
+            return ActionCode.SEND_TEAM, ActionCode.SEND_TEAM
+
+        if any(w in tl for w in ["search", "missing", "खोजो", "गायब", "शोधा", "શોધો", "தேடுங்கள்", "వెతకండి", "ಹುಡುಕಿ", "തിരയുക", "ଖୋଜନ୍ତୁ", "খুঁজুন"]):
+            return ActionCode.SEARCH, ActionCode.SEARCH
+
+        if any(w in tl for w in ["alert", "warning", "चेतावनी", "इशारा", "ચેતવણી", "எச்சரிக்கை", "హెచ్చరిక", "ಎಚ್ಚರಿಕೆ", "മുന്നറിയിപ്പ്", "ଚେତାବନୀ", "সতর্কতা"]):
+            return ActionCode.ALERT, ActionCode.ALERT
+
+        if any(w in tl for w in ["moving", "advance", "आगे बढ़", "पुढे चला", "આગળ વધો", "முன்னேறுங்கள்", "ముందుకు సాగండి", "ಮುಂದೆ ಸಾಗಿ", "മുന്നോട്ട് പോകുക", "ଆଗକୁ ବଢ଼ନ୍ତୁ", "এগিয়ে যান"]):
+            return ActionCode.MOVE, ActionCode.MOVE
+
+        if any(w in tl for w in ["report", "status", "सूचना", "स्थिती", "સ્થિતિ", "அறிக்கை", "నివేదిక", "ವರದಿ", "റിപ്പോർട്ട്", "ରିପୋର୍ଟ", "রিপোর্ট"]):
+            return ActionCode.REPORT, ActionCode.REPORT
+
+        return ActionCode.UNKNOWN, ActionCode.UNKNOWN
+
+    def _classify_urgency(self, text: str, intent: ActionCode, hazard: HazardCode, acoustic_prosody: bytes) -> UrgencyCode:
+        if acoustic_prosody and len(acoustic_prosody) >= 16:
+            if acoustic_prosody[0] >= 0xD0:
+                return UrgencyCode.CRITICAL_SOS
+            elif acoustic_prosody[0] >= 0x80:
+                return UrgencyCode.TACTICAL
+
+        tl = text.lower()
+        if (any(w in tl for w in ["immediately", "immediate", "urgent", "sos", "critical", "right now", "asap", "emergency", "तुरंत", "फौरन", "आपातकाल", "உடனடியாக", "వెంటనే", "ತಕ್ಷಣ"])
+            or intent in (ActionCode.RESCUE_REQUEST, ActionCode.SOS)
+            or hazard in (HazardCode.FLOOD, HazardCode.FIRE, HazardCode.EXPLOSION)):
+            return UrgencyCode.CRITICAL_SOS
+
+        if any(w in tl for w in ["quickly", "fast", "soon", "जल्दी"]) or intent in (ActionCode.EVACUATE, ActionCode.MOVE, ActionCode.SEARCH):
+            return UrgencyCode.TACTICAL
+
+        return UrgencyCode.ROUTINE
+
+
+def analyze_transcript(text: str, source_language: str = "en", optional_prosody: Optional[bytes] = None) -> SemanticResult:
+    return TinyMLAgent.get_instance().analyze(text, source_language, optional_prosody)

@@ -1,0 +1,119 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'com.google.devtools.ksp'
+}
+
+// Redirect build directories outside OneDrive to prevent Windows file lock conflicts if directory exists
+
+android {
+    namespace 'org.isro.itantra'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "org.isro.itantra"
+        minSdk 24
+        targetSdk 35
+        versionCode 1
+        versionName "1.0"
+
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        
+        externalNativeBuild {
+            cmake {
+                cppFlags "-std=c++20"
+                arguments "-DANDROID_STL=c++_shared", "-DCMAKE_SHARED_LINKER_FLAGS=-Wl,-z,max-page-size=16384"
+            }
+        }
+        
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file("src/main/cpp/CMakeLists.txt")
+            version "3.22.1"
+
+        }
+    }
+
+    buildFeatures {
+        compose true
+        viewBinding true
+        prefab true
+    }
+
+    testOptions {
+        unitTests.returnDefaultValues = true
+    }
+
+    ndkVersion "30.0.16138531"
+
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.8"
+    }
+}
+
+dependencies {
+    def room_version = "2.6.1"
+    implementation "androidx.room:room-runtime:$room_version"
+    implementation "androidx.room:room-ktx:$room_version"
+    ksp "androidx.room:room-compiler:$room_version"
+
+    def compose_bom = platform('androidx.compose:compose-bom:2024.02.00')
+    implementation compose_bom
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.ui:ui-graphics'
+    implementation 'androidx.compose.ui:ui-tooling-preview'
+    implementation 'androidx.compose.material3:material3'
+    implementation 'androidx.activity:activity-compose:1.8.2'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
+    implementation 'androidx.core:core-ktx:1.12.0'
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    
+    // Google Oboe for low-latency native audio capture
+    implementation 'com.google.oboe:oboe:1.8.0'
+
+    // Microsoft ONNX Runtime Mobile for C++ NDK inference
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.18.0'
+
+    // MLKit Translation — offline on-device translation for all Indian languages
+    // Models (~20MB each) downloaded once on first use, then fully offline
+    implementation 'com.google.mlkit:translate:17.0.3'
+
+    // MLKit Language ID — detect which language the user is speaking
+    // Tiny model (~1MB), works offline, no download needed
+    implementation 'com.google.mlkit:language-id:17.0.6'
+    
+    testImplementation 'junit:junit:4.13.2'
+    implementation 'org.bouncycastle:bcprov-jdk18on:1.77'
+    testImplementation 'org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3'
+    testImplementation 'org.bouncycastle:bcprov-jdk18on:1.77'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
+}
+
+
+
+
+
