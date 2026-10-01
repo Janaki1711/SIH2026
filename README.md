@@ -14,17 +14,26 @@ An infrastructure-free, on-device Edge-AI Walkie-Talkie system that allows low-p
 
 ---
 
-## 📑 Core Documentation Links
-* 📘 **[Detailed Technical Architecture Report](TECHNICAL_REPORT.md)** — Comprehensive mathematical formulations, cryptographic design, FEC proofs, and wire protocol.
-* 📊 **[Official Submission Presentation (PPTX)](Algo_Avengers_SIH2026.pptx)** — Complete 6-slide presentation deck.
-* 📈 **[Empirical STT Gate & Accuracy Results](STT_GATE_RESULTS.md)** — Language-by-language CER benchmarks across 10 Indic languages.
-* 🛠️ **[Developer Guide & Architecture Handoff](DEVELOPMENT_README.md)** — Android NDK, JNI bridges, and native build details.
+## 🧭 Evaluator & Judge Quick Navigation Guide (Where to Look for What)
+
+| What You Are Looking For | Where to Look | Description |
+| :--- | :--- | :--- |
+| 📊 **Official Presentation Deck** | **[`Algo_Avengers_SIH2026.pptx`](Algo_Avengers_SIH2026.pptx)** | Official 6-slide SIH Idea submission deck with visuals, hardware metrics & roadmap. |
+| 📘 **Deep Technical Report** | **[`TECHNICAL_REPORT.md`](TECHNICAL_REPORT.md)** | Mathematical proofs, ChaCha20-Poly1305 AEAD, Cauchy Reed-Solomon FEC, and wire specs. |
+| 📱 **Android Production Code** | **[`android/`](android/)** | Full Kotlin app, Material 3 UI, ViewModels, Room DB, and P2P mesh sockets. |
+| ⚡ **C++ Native ML & Audio NDK** | **[`android/app/src/main/cpp/`](android/app/src/main/cpp/)** | Native Whisper-Tiny STT, Silero VAD v4 INT8, Oboe low-latency audio capture & JNI. |
+| 🧠 **On-Device Quantized Models**| **[`android/app/src/main/assets/`](android/app/src/main/assets/)** | Whisper-Tiny INT8 GGML (`43.5 MB`), Silero VAD (`2.3 MB`), and vocabularies. |
+| 🌐 **10 Indic Script Engine** | **[`PivotTranslator`](android/app/src/main/java/com/algoavengers/itantra/)** | Parallel Unicode offset engine (`0x0C80` $\rightarrow$ `0x0C00`) with zero cloud latency. |
+| 📈 **STT Accuracy & Gate Results**| **[`STT_GATE_RESULTS.md`](STT_GATE_RESULTS.md)** | Empirical language-by-language CER benchmarks across 10 Scheduled Indian Languages. |
+| 📡 **P2P Mesh Network Manager** | **[`WfbngManager.kt`](android/app/src/main/java/com/algoavengers/itantra/)** | Wi-Fi Direct P2P Group Owner topology, UDP multicast, and packet assembly. |
+| 💻 **Mesh Packet Simulator** | **[`web-demo/`](web-demo/)** | Full React + FastAPI 2-node web simulator for inspecting transmitted wire datagrams. |
+| 🛠️ **Developer & Build Handoff** | **[`DEVELOPMENT_README.md`](DEVELOPMENT_README.md)** | Step-by-step local Android Studio / CLI build instructions and architecture overview. |
 
 ---
 
 ## ⚡ The Problem & Our Innovation
 
-### 1. The Challenge
+### 1. The Core Challenge
 * **Raw Audio is Too Heavy**: Standard voice codecs (Opus/AMR at $16\text{–}32\text{ kbps}$, PCM at $128\text{–}256\text{ kbps}$) completely collapse low-bitrate radio and congested mesh channels.
 * **Telecom Infrastructure Blackouts**: Natural disasters and remote terrains isolate first responders and citizens due to fallen cell towers and severed power grids.
 * **Language & Literacy Exclusion**: Text messaging excludes non-literate citizens; standard analog walkie-talkies lack real-time multilingual translation.
@@ -37,7 +46,7 @@ An infrastructure-free, on-device Edge-AI Walkie-Talkie system that allows low-p
 
 ---
 
-## 🏗️ System Architecture
+## 🏗️ End-to-End System Pipeline
 
 ```
    [ User Speech (16 kHz PCM) ]
@@ -76,18 +85,18 @@ An infrastructure-free, on-device Edge-AI Walkie-Talkie system that allows low-p
 
 All benchmarks were measured on a physical quad-core ARM64 test device (**ID: `3353f694`**):
 
-| Subsystem / Metric | Measured Performance | Budget / SLA Target | Status |
-| :--- | :--- | :--- | :---: |
-| **CPU Utilization (Active STT)** | **7.2% average** (ARM64 NEON INT8) | $<15\%$ CPU limit | **VERIFIED** |
-| **System Memory (RAM)** | **148 MB** during active dual inference | $<250\text{ MB}$ footprint | **VERIFIED** |
-| **Battery Consumption Rate** | **2.4% / hour** (Continuous PTT usage) | $<5\%/\text{hr}$ power drain | **VERIFIED** |
-| **Active Current Draw** | **42 mA active** (Baseline idle: $18\text{ mA}$) | $<65\text{ mA}$ draw | **VERIFIED** |
-| **End-to-End Latency** | **~320 ms** (Capture ➔ STT ➔ Mesh ➔ TTS) | $<500\text{ ms}$ voice delay | **VERIFIED** |
-| **Utterance Payload Size** | **18 – 38 Bytes** per sentence | $<50\text{ Bytes}$ frame size | **VERIFIED** |
-| **Bandwidth Reduction** | **$50\text{–}100\times$ less data** vs 16–32 kbps voice | $>20\times$ compression | **VERIFIED** |
-| **Wi-Fi Direct P2P Range** | **85 – 110 m** line-of-sight per hop | $>50\text{ m}$ range | **VERIFIED** |
-| **Node Discovery SLA** | **<3.8 seconds** autonomous ad-hoc pairing | $<10\text{ s}$ setup time | **VERIFIED** |
-| **Speech Accuracy (CER)** | **0.03 – 0.18 CER** across 10 Indic languages | $<0.25\text{ CER}$ accuracy | **VERIFIED** |
+| Subsystem / Metric | Measured Performance | Budget / SLA Target | Verification Method | Status |
+| :--- | :--- | :--- | :--- | :---: |
+| **CPU Utilization (Active STT)** | **7.2% average** | $<15\%$ CPU limit | ARM64 NEON INT8 `/proc/pid/stat` | **PASS** |
+| **System Memory (RAM)** | **148 MB** | $<250\text{ MB}$ footprint | Dual-Engine active PSS sample | **PASS** |
+| **Battery Consumption Rate** | **2.4% / hour** | $<5\%/\text{hr}$ power drain | Continuous PTT active profile | **PASS** |
+| **Active Current Draw** | **42 mA active** | $<65\text{ mA}$ draw | Baseline phone idle: $18\text{ mA}$ | **PASS** |
+| **End-to-End Latency** | **~320 ms** | $<500\text{ ms}$ voice delay | Capture ➔ STT ➔ Mesh ➔ TTS | **PASS** |
+| **Utterance Payload Size** | **18 – 38 Bytes** | $<50\text{ Bytes}$ frame size | Single UDP datagram (<300 bps) | **PASS** |
+| **Bandwidth Reduction** | **$50\text{–}100\times$ less data** | $>20\times$ compression | vs 16–32 kbps continuous voice | **PASS** |
+| **Wi-Fi Direct P2P Range** | **85 – 110 m** | $>50\text{ m}$ range | Line-of-sight per mesh hop | **PASS** |
+| **Node Discovery SLA** | **<3.8 seconds** | $<10\text{ s}$ setup time | Autonomous P2P Wi-Fi Direct | **PASS** |
+| **Speech Accuracy (CER)** | **0.03 – 0.18 CER** | $<0.25\text{ CER}$ accuracy | Across 10 Indic languages | **PASS** |
 
 ---
 
@@ -112,18 +121,18 @@ All benchmarks were measured on a physical quad-core ARM64 test device (**ID: `3
 
 ```
 SIH2026/
-├── android/                         # Complete Android Application (Kotlin + C++ NDK)
-│   ├── app/src/main/java/          # App UI, ViewModels, Room DB, WfbngManager mesh
-│   ├── app/src/main/cpp/           # Native STT Bridge, Silero VAD, Semantic Tokenizer
+├── Algo_Avengers_SIH2026.pptx       # Official 6-Slide Submission Presentation Deck
+├── TECHNICAL_REPORT.md              # Deep Technical System Architecture Report
+├── STT_GATE_RESULTS.md              # Empirical Speech Recognition Accuracy Matrix
+├── DEVELOPMENT_README.md            # Android NDK & Engineering Handoff Guide
+├── android/                         # Complete Android Production Code (Kotlin + C++ NDK)
+│   ├── app/src/main/java/          # UI ViewModels, Room DB, WfbngManager mesh
+│   ├── app/src/main/cpp/           # Native Whisper STT, Silero VAD, Tokenizer
 │   └── app/src/main/assets/        # Quantized INT8 Models (Whisper, Silero VAD)
 ├── src/                             # Portable C++ Core (Framing, FEC, Crypto, Protocol)
 ├── proto/                           # Protocol Buffer Definitions (WfbngPacket schemas)
-├── docs/                            # Documentation, Diagrams, and Presentation Deck
-│   └── Algo_Avengers_SIH2026.pptx  # Official Submission Presentation Deck
+├── docs/                            # Presentation artifacts & archived notes
 ├── web-demo/                        # 2-Node Mesh Simulator & Web Packet Inspector
-├── TECHNICAL_REPORT.md              # Deep Technical System Architecture Report
-├── STT_GATE_RESULTS.md              # Empirical Speech Recognition Benchmarks
-├── DEVELOPMENT_README.md            # NDK & Android Engineering Handoff Guide
 └── test_*.py                        # Protocol, Cryptography & End-to-End Test Suite
 ```
 
