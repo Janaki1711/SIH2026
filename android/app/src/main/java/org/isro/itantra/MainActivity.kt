@@ -1067,6 +1067,14 @@ class MainActivity : AppCompatActivity() {
                 stopRecordingAndTranscribe()
             }
         }
+        // "?" header button replays the guide on demand — handy when a demo
+        // take goes wrong and the flag would otherwise suppress it.
+        findViewById<android.widget.Button?>(R.id.btnHelp)?.setOnClickListener {
+            org.isro.itantra.ui.OnboardingGuide.start(
+                this,
+                findViewById(R.id.mainRoot)
+            )
+        }
         // Demo mode: show the guide on every MainActivity creation, i.e. after
         // every login. maybeStart() would gate it behind the completed flag and
         // show it only once per install.

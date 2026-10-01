@@ -26,13 +26,13 @@
         android:singleLine="true" android:layout_marginBottom="12dp" android:fontFamily="monospace"/>
 
     <TextView android:id="@+id/otpError" android:layout_width="match_parent"
-        android:layout_height="wrap_content" android:textColor="#DC2626"
+        android:layout_height="wrap_content" android:textColor="@color/itantra_error"
         android:textSize="13sp" android:layout_marginBottom="12dp" android:visibility="gone"/>
 
     <Button android:id="@+id/otpVerifyBtn" android:layout_width="match_parent"
         android:layout_height="52dp" android:text="VERIFY"
         android:textColor="#FFFFFF" android:textSize="14sp" android:textStyle="bold"
-        android:backgroundTint="#0284C7" android:insetTop="0dp" android:insetBottom="0dp"
+        android:backgroundTint="@color/itantra_blue" android:insetTop="0dp" android:insetBottom="0dp"
         android:layout_marginBottom="10dp"/>
 
     <Button android:id="@+id/otpResendBtn" android:layout_width="match_parent"

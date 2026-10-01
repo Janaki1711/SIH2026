@@ -41,6 +41,11 @@ object OnboardingGuide {
             "Nearby iTantra phones on the same hotspot appear here. Wait for a peer before starting your communication demo."
         ),
         Step(
+            R.id.sosActions,
+            "Quick emergency alerts",
+            "These send a preset medical, flood, fire, or SOS alert immediately to all peers. Use only when the matching alert is needed."
+        ),
+        Step(
             R.id.startButton,
             "Talk, then tap to send",
             "Tap once to start recording. Speak clearly, then tap again to stop and send. The button shows when it is listening or processing."
