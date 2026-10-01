@@ -120,7 +120,7 @@ def header(kicker, title):
 def footer(n):
     I = EMU
     return shape(int(0.5 * I), int(7.0 * I), int(12.33 * I), int(0.3 * I),
-                 [P_([T(f"Team iTantra  •  SIH2026 / ISRO-01  •  {n} / 6", 10, False, MUTED)],
+                 [P_([T(f"Algo Avengers  •  SIH26173 / ISRO  •  {n} / 6", 10, False, MUTED)],
                      align="r")])
 
 
@@ -168,7 +168,7 @@ TOP = int(2.1 * I)
 s1 = (
     bar(int(0.7 * I), int(1.1 * I), int(0.9 * I), int(0.1 * I), SAFFRON)
     + shape(int(0.7 * I), int(1.4 * I), int(11.9 * I), int(0.5 * I),
-            [P_([T("SIH 2026  •  PROBLEM STATEMENT ISRO-01  •  TEAM iTANTRA",
+            [P_([T("SIH 2026  •  PROBLEM STATEMENT SIH26173  •  TEAM ALGO AVENGERS",
                     14, True, SAFFRON)])])
     + shape(int(0.7 * I), int(1.95 * I), int(11.9 * I), int(1.4 * I),
             [P_([T("iTantra", 54, True, WHITE)])])
@@ -506,7 +506,7 @@ CORE = (
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
     '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" '
     'xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/">'
-    "<dc:title>iTantra — SIH 2026</dc:title><dc:creator>Team iTantra</dc:creator>"
+    "<dc:title>iTantra — SIH 2026</dc:title><dc:creator>Algo Avengers</dc:creator>"
     "</cp:coreProperties>")
 
 APP = (

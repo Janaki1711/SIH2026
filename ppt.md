@@ -1,23 +1,24 @@
-# iTantra — SIH Presentation Content (6-Slide Template)
+# iTantra — SIH 2026 Final Presentation Content (6-Slide Standard Deck)
 
 ---
 
 ## SLIDE 1 — TITLE SLIDE
 
-* **Project Title**: iTantra — Offline Multilingual Low-Bitrate Walkie-Talkie & Mesh Voice Communication System
-* **Problem Statement ID**: SIH1608
+* **Project Title**: iTantra — Indian Multilingual TTS & STT Aided Neural Transceiver Radio Access for Low Bitrate Links
+* **Problem Statement ID**: SIH26173
+* **Problem Statement Title**: iTantra — Indian Multilingual TTS & STT Aided Neural Transceiver Radio Access for low bitrate links
 * **Problem Statement**: Vocal audio is data-intensive and difficult to transmit over low data-rate links in disaster and remote scenarios. Transmitting audio is critical over text for inclusivity across all literacy levels. Build an Android App with lightweight, accurate offline STT and TTS models for 10 Indian Languages running on low-power devices to instantly record, transcribe, compress, transmit over Wi-Fi Direct/Bluetooth/UDP mesh, and synthesize voice notes with minimal latency.
-* **Theme**: Disaster Management & Emergency Communication / Smart Automation
+* **Theme**: Smart Automation / Disaster Management & Emergency Communication
 * **PS Category**: Software
-* **Team ID**: SIH2026-TEAM-ITANTRA
-* **Team Name**: Code-Ons
+* **Team ID**: 172340
+* **Team Name**: Algo Avengers
 
 ---
 
 ## SLIDE 2 — IDEA (SIH Template Layout)
 
 > **HEADER**:
-> * **Team Name**: Code-Ons (Top-Left Circle)
+> * **Team Name**: Algo Avengers (Top-Left Circle)
 > * **Main Title**: **iTANTRA** — Offline Edge-AI Multilingual Semantic Walkie-Talkie for Disaster Mesh Networks
 > * **Event Logo**: SMART INDIA HACKATHON 2026 (Top-Right Logo)
 
@@ -171,7 +172,7 @@ flowchart TD
 ## SLIDE 5 — IMPACT AND BENEFITS (2-Column Visual Layout)
 
 > **HEADER**:
-> * **Team Name**: Code-Ons (Top-Left Circle)
+> * **Team Name**: Algo Avengers (Top-Left Circle)
 > * **Main Title**: **IMPACT AND BENEFITS**
 > * **Tagline**: *"OFFLINE VOICE RESILIENCE: CONNECTING LIVES WHEN NETWORKS COLLAPSE"*
 > * **Event Logo**: SMART INDIA HACKATHON 2026 (Top-Right Logo)
